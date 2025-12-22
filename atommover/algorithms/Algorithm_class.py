@@ -7,6 +7,7 @@
 
 import numpy as np
 
+
 class Algorithm:
     """ 
     Parent class for all algorithms. 
@@ -98,10 +99,10 @@ class Algorithm:
             state = state.reshape(np.shape(target))
 
         if n_species == 1:
-            if np.array_equal(state[start_row:end_row, start_col:end_col],target[start_row:end_row, start_col:end_col]):
+            if np.array_equal(state[start_row:end_row + 1, start_col:end_col + 1],target[start_row:end_row + 1, start_col:end_col + 1]):
                 success_flag = True
         elif n_species == 2:
-            if np.array_equal(state[start_row:end_row, start_col:end_col,:],target[start_row:end_row, start_col:end_col,:]):
+            if np.array_equal(state[start_row:end_row + 1, start_col:end_col + 1,:],target[start_row:end_row + 1, start_col:end_col + 1,:]):
                 success_flag = True
         
         return success_flag
