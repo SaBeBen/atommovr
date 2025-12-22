@@ -402,7 +402,7 @@ class Benchmarking():
                 
         for shot in range(self.n_shots):
             # getting initial and final target configs
-            initial_config = self.init_config_storage[shot][:self.tweezer_array.shape[0], :self.tweezer_array.shape[1]]
+            initial_config = self.init_config_storage[shot][:self.tweezer_array.shape[0], :self.tweezer_array.shape[1]].copy()
             self.tweezer_array.matrix = initial_config.reshape([self.tweezer_array.shape[0], self.tweezer_array.shape[1], self.tweezer_array.n_species])
             if self.istargetlist:
                 if pattern == Configurations.RANDOM:
@@ -445,7 +445,7 @@ class Benchmarking():
                 wrong_places.append(int(np.sum(np.abs(self.tweezer_array.matrix - self.tweezer_array.target))))
             else:
                 start_row, end_row, start_col, end_col = get_effective_target_grid(self.tweezer_array.target)
-                wrong_places.append(int(np.sum(np.abs(self.tweezer_array.matrix[start_row:end_row, start_col:end_col] - self.tweezer_array.target[start_row:end_row, start_col:end_col]))))
+                wrong_places.append(int(np.sum(np.abs(self.tweezer_array.matrix[start_row:end_row + 1, start_col:end_col + 1] - self.tweezer_array.target[start_row:end_row + 1, start_col:end_col + 1]))))
             # Count atoms in array
             atoms_in_arrays.append(int(np.sum(self.tweezer_array.matrix)))
             atoms_in_targets.append(int(np.sum(self.tweezer_array.target)))
