@@ -15,7 +15,7 @@ os.makedirs(output_dir, exist_ok=True)
 extra_compile_args = []
 if sys.platform == "win32":
     # MSVC specific flags (example: disable warning C4100: unreferenced formal parameter)
-    extra_compile_args=['-Wno-unused-parameter', '-Wno-unused-variable', '-Wno-parentheses']
+    extra_compile_args=['/wd4100', '/wd4101']
 else:
     # GCC/Clang flags
     extra_compile_args = [
@@ -38,7 +38,7 @@ c_extension = Extension(
     ],
     include_dirs=["extern"],
     extra_compile_args=extra_compile_args,
-    libraries=["m"],
+    libraries=[] if sys.platform == "win32" else ["m"],
 )
 
 class BuildSharedLibrary(build_ext):

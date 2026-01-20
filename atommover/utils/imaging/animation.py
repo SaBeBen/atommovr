@@ -231,7 +231,7 @@ def make_single_species_gif(single_species_array, move_list, params: PhysicalPar
         # # simulating atom loss NB: this is now done in `ErrorModel` (see atommover.utils.errormodels)
         # matrix, loss_flag = atom_loss(matrix, t_move, params.lifetime)
 
-    with imageio.get_writer(f'./figs/{savename}.gif', mode='I', duration = duration) as writer:
+    with imageio.get_writer(f'./figs/resorting/{savename}.gif', mode='I', duration = duration) as writer:
         for i in range(len(move_list)+1):
             filename = f'./figs/frames/frame{i}.png'
             image = imageio.imread(filename)

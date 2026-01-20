@@ -4,10 +4,14 @@ import copy
 import math
 import random
 import numpy as np
-from collections import deque, Counter
+from collections import Counter
 
 from atommover.utils.core import PhysicalParams, ArrayGeometry, Configurations, random_loading, generate_middle_fifty
-from atommover.utils.animation import dual_species_image, single_species_image
+try:
+    from atommover.utils.imaging.animation import dual_species_image, single_species_image
+except Exception:  # pragma: no cover - optional imaging dependency
+    dual_species_image = None
+    single_species_image = None
 from atommover.utils.move_utils import MoveType
 from atommover.utils.ErrorModel import ErrorModel
 from atommover.utils.errormodels import ZeroNoise
@@ -17,7 +21,8 @@ class AtomArray:
     """
         Base object representing the state of the atom array.
 
-        ## Parameters
+        Parameters
+        ----------
         shape : list[int,int]
             the number of columns and rows in the atom array.
         n_species : int
@@ -30,7 +35,8 @@ class AtomArray:
         geom : ArrayGeometry
             the geometry of the array.
 
-        ## Example usage
+        Example usage
+        ----------
         ```
         n_cols, n_rows = 10,10
         n_species = 1
@@ -52,6 +58,11 @@ class AtomArray:
         self.target = np.zeros([self.shape[0], self.shape[1], self.n_species])
         self.target_Rb = np.zeros([self.shape[0], self.shape[1]])
         self.target_Cs = np.zeros([self.shape[0], self.shape[1]])
+        self.angle = None
+
+    def get_random_state(self) -> int:
+        """ Returns the random seed used to initialize the internal random number generator. """
+        return random.getstate()
 
     def __setattr__(self, key, value):
         if key == "shape":
@@ -64,26 +75,126 @@ class AtomArray:
         super().__setattr__(key, value)
         
 
-    def load_tweezers(self):
+    # def load_tweezers(self):
+    #     """
+    #     Simulates uniform stochastic loading for single- or dual-species atom arrays.
+    #     Loading probability (default 60%) can be set with `AtomArray.params.loading_prob`
+    #     """
+    #     if self.n_species == 1:
+    #         self.matrix[:,:,:] = random_loading(self.shape, self.params.loading_prob).reshape(self.shape[0], self.shape[1],1)
+    #     if self.n_species == 2:
+    #         dual_species_prob = 2 - 2*math.sqrt(1-self.params.loading_prob)
+    #         self.matrix[:,:,0] = random_loading(self.shape, dual_species_prob/2)
+    #         self.matrix[:,:,1] = random_loading(self.shape, dual_species_prob/2)
+
+    #         # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
+    #         for i in range(len(self.matrix)):
+    #             for j in range(len(self.matrix[0])):
+    #                 if self.matrix[i][j][0] == 1 and self.matrix[i][j][1] == 1:
+    #                     random_index = random.randint(0, 1)
+    #                     self.matrix[i][j][random_index] = 0
+        
+    #     self.last_loaded_config = copy.deepcopy(self.matrix)
+
+    def load_tweezers(self, extract_angle: bool = False, angle_method: str | None = None, image_kwargs: dict | None = None, image = None):
         """
         Simulates uniform stochastic loading for single- or dual-species atom arrays.
-        Loading probability (default 60%) can be set with `AtomArray.params.loading_prob`
-        """
-        if self.n_species == 1:
-            self.matrix[:,:,:] = random_loading(self.shape, self.params.loading_prob).reshape(self.shape[0], self.shape[1],1)
-        if self.n_species == 2:
-            dual_species_prob = 2 - 2*math.sqrt(1-self.params.loading_prob)
-            self.matrix[:,:,0] = random_loading(self.shape, dual_species_prob/2)
-            self.matrix[:,:,1] = random_loading(self.shape, dual_species_prob/2)
+        Loading probability (default 60%) can be set with `AtomArray.params.loading_prob`.
+        Optionally estimates the array rotation angle from a generated image and stores it in `self.angle`
+        for downstream usage.
 
-            # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
-            for i in range(len(self.matrix)):
-                for j in range(len(self.matrix[0])):
-                    if self.matrix[i][j][0] == 1 and self.matrix[i][j][1] == 1:
-                        random_index = random.randint(0, 1)
-                        self.matrix[i][j][random_index] = 0
-        
-        self.last_loaded_config = copy.deepcopy(self.matrix)
+        Parameters
+        ----------
+        extract_angle : bool
+            Whether to estimate the array rotation angle from a generated image.
+            If True, the estimated angle (degrees) is stored in `self.angle`.
+
+        angle_method : str or None
+            Method to use for angle estimation. Passed to `extract_grid_from_image`.
+            If None, no angle estimation is performed.
+
+        image_kwargs : dict or None
+            Additional keyword arguments passed to `render_realistic_image` when
+            generating the image for angle extraction.
+
+        Returns
+        -------
+        None
+        """
+
+        # If an image (numpy array or path) is provided, attempt to extract the grid
+        # and angle from it, and set the internal `matrix` accordingly.
+        used_image_for_load = False
+        if image is not None:
+            try:
+                from atommover.utils.imaging import extract_grid_from_image
+                grid_shape = (self.shape[0], self.shape[1])
+                binary, meta = extract_grid_from_image(image, grid_shape=grid_shape, method="blob", angle_method=angle_method)
+
+                if self.n_species == 1:
+                    self.matrix = binary.reshape(self.shape[0], self.shape[1], 1).astype(int)
+                else:
+                    self.matrix = np.zeros((self.shape[0], self.shape[1], self.n_species), dtype=int)
+                    self.matrix[:, :, 0] = binary.astype(int)
+
+                self.last_loaded_config = copy.deepcopy(self.matrix)
+                self.last_loaded_image = image
+                try:
+                    self.angle = float(meta.get("angle_deg", 0.0))
+                except Exception:
+                    self.angle = None
+                used_image_for_load = True
+            except Exception as e:
+                try:
+                    import logging
+                    logging.getLogger("atommover").warning(f"Image-based loading failed, falling back to stochastic load: {e}")
+                except Exception:
+                    pass
+
+        # If we didn't load from an image, perform the previous stochastic loading
+        if not used_image_for_load:
+            if self.n_species == 1:
+                self.matrix[:,:,:] = random_loading(self.shape, self.params.loading_prob).reshape(self.shape[0], self.shape[1],1)
+            if self.n_species == 2:
+                dual_species_prob = 2 - 2*math.sqrt(1-self.params.loading_prob)
+                self.matrix[:,:,0] = random_loading(self.shape, dual_species_prob/2)
+                self.matrix[:,:,1] = random_loading(self.shape, dual_species_prob/2)
+
+                # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
+                for i in range(len(self.matrix)):
+                    for j in range(len(self.matrix[0])):
+                        if self.matrix[i][j][0] == 1 and self.matrix[i][j][1] == 1:
+                            random_index = random.randint(0, 1)
+                            self.matrix[i][j][random_index] = 0
+
+            self.last_loaded_config = copy.deepcopy(self.matrix)
+
+            # If extract_angle was requested, generate a synthetic image and estimate angle
+            if extract_angle:
+                # default image kwargs
+                if image_kwargs is None:
+                    image_kwargs = {}
+                try:
+                    try:
+                        img = self.render_realistic_image(**image_kwargs)
+                    except TypeError:
+                        img = self.render_realistic_image()
+
+                    self.last_loaded_image = img
+                    from atommover.utils.imaging import extract_grid_from_image
+                    grid_shape = (self.shape[0], self.shape[1])
+                    _, meta = extract_grid_from_image(img, grid_shape=grid_shape, method="blob", angle_method=angle_method)
+                    try:
+                        self.angle = float(meta.get("angle_deg", 0.0))
+                    except Exception:
+                        self.angle = None
+                except Exception as e:
+                    try:
+                        import logging
+                        logging.getLogger("atommover").warning(f"Angle extraction failed: {e}")
+                    except Exception:
+                        pass
+                    self.angle = None
 
     def generate_target(self, pattern: Configurations = Configurations.CHECKERBOARD, middle_size: list = [], occupation_prob: float = 0.5):
         if self.n_species == 1:
@@ -170,7 +281,6 @@ class AtomArray:
                     else:
                         self.target_Rb[i,j] = 1
 
-            
         self.target = np.stack([self.target_Rb, self.target_Cs], axis=2)
     
     def move_atoms(self, move_list: list) -> list:
@@ -441,10 +551,81 @@ class AtomArray:
                         self.matrix[move.from_row][move.from_col][1] -= 1
         return failed_moves, flags
 
+    def _split_move_batch_safely(self, move_set: list) -> list[list]:
+        """Split a parallel move batch into collision-safe sub-batches.
+
+        A move can be scheduled in the same sub-batch if its destination is
+        empty in the current occupancy snapshot and no other move targets the
+        same destination or source in that sub-batch.
+        """
+        if not move_set:
+            return []
+
+        n_rows, n_cols = self.shape[0], self.shape[1]
+        if self.n_species == 1:
+            occupancy = self.matrix[:, :, 0].copy()
+        else:
+            occupancy = (self.matrix[:, :, 0] + self.matrix[:, :, 1] > 0).astype(int)
+
+        remaining = list(move_set)
+        sub_batches: list[list] = []
+        safety_cap = len(remaining) * 2 + 10
+
+        while remaining:
+            batch: list = []
+            used_sources: set[tuple[int, int]] = set()
+            used_targets: set[tuple[int, int]] = set()
+            next_remaining: list = []
+
+            for move in remaining:
+                from_pos = (move.from_row, move.from_col)
+                to_pos = (move.to_row, move.to_col)
+
+                if from_pos in used_sources:
+                    next_remaining.append(move)
+                    continue
+
+                in_bounds = 0 <= move.to_row < n_rows and 0 <= move.to_col < n_cols
+                if in_bounds:
+                    if occupancy[move.to_row, move.to_col] != 0 or to_pos in used_targets:
+                        next_remaining.append(move)
+                        continue
+
+                batch.append(move)
+                used_sources.add(from_pos)
+                if in_bounds:
+                    used_targets.add(to_pos)
+
+            if not batch:
+                # Fallback to avoid infinite loops; execute one move sequentially.
+                batch = [remaining[0]]
+                next_remaining = remaining[1:]
+
+            # Update occupancy as if the batch executed.
+            for move in batch:
+                if 0 <= move.from_row < n_rows and 0 <= move.from_col < n_cols:
+                    occupancy[move.from_row, move.from_col] = 0
+                if 0 <= move.to_row < n_rows and 0 <= move.to_col < n_cols:
+                    occupancy[move.to_row, move.to_col] = 1
+
+            sub_batches.append(batch)
+            remaining = next_remaining
+            safety_cap -= 1
+            if safety_cap <= 0:
+                break
+
+        if remaining:
+            # Execute any leftovers sequentially as a last resort.
+            sub_batches.extend([[move] for move in remaining])
+
+        return sub_batches
+
     def image(self, move_list: list = [], plotted_species: str = 'all', savename = ''):
-        f"""
+        """
         Takes a snapshot of the atom array.
-        ## Parameters
+        
+        Parameters
+        ----------
         move_list : list
             any moves that you want to plot
         plotted_species : str 
@@ -458,6 +639,8 @@ class AtomArray:
                 move_list = [move_list]
         
         if self.n_species == 1:
+            if single_species_image is None:
+                raise ImportError("Imaging dependencies are unavailable; cannot render single-species image.")
             single_species_image(self.matrix, move_list = move_list, savename = savename)
         elif self.n_species == 2:
             if type(self) != np.ndarray:
@@ -465,6 +648,8 @@ class AtomArray:
             else:
                 plotted_arrays = self
 
+            if dual_species_image is None:
+                raise ImportError("Imaging dependencies are unavailable; cannot render dual-species image.")
             if plotted_species.lower() == 'all':
                 dual_species_image(plotted_arrays, move_list = move_list, savename = savename)
             elif plotted_species.lower() == SPECIES1NAME.lower():
@@ -476,9 +661,62 @@ class AtomArray:
 
     def plot_target_config(self):
         if self.n_species == 1:
+            if single_species_image is None:
+                raise ImportError("Imaging dependencies are unavailable; cannot render single-species image.")
             single_species_image(self.target)
         elif self.n_species == 2:
+            if dual_species_image is None:
+                raise ImportError("Imaging dependencies are unavailable; cannot render dual-species image.")
             dual_species_image(self.target)
+
+    def render_realistic_image(self, sigma: float = 1.5, brightness: float = 1.0, image_shape: tuple[int,int] = (256,256), noise_level: float = 0.02, stripe_intensity: float = 0.003, angle: float = 0.0) -> np.ndarray:
+        """
+        Synthesize a more realistic camera-like image of the current atom array using
+        Gaussian PSFs and simple noise/modeling from atommover.utils.imaging.generation with a certain angle.
+
+        Returns a 2D numpy array image.
+
+        Parameters
+        ----------
+        sigma : float
+            standard deviation of the Gaussian PSF in pixels.
+        brightness : float
+            brightness factor for the image synthesis.
+        image_shape : tuple[int,int]
+            shape of the output image in pixels (height, width).
+        noise_level : float
+            standard deviation of Gaussian noise added to the image.
+        stripe_intensity : float
+            intensity of stripe noise added to the image.
+        angle : float
+            rotation angle of the grid in degrees.
+
+        Returns
+        -------
+        img : np.ndarray
+            synthesized 2D image of the atom array.
+        """
+        try:
+            from atommover.utils.imaging.generation import generate_gaussian_image_from_binary_grid
+        except Exception as e:
+            raise ImportError("Imaging generation module not available") from e
+
+        # For dual-species, sum occupancy across species
+        if self.n_species == 2:
+            grid = (self.matrix[:,:,0] + self.matrix[:,:,1] > 0).astype(int)
+        else:
+            grid = self.matrix[:,:,0].astype(int)
+
+        img = generate_gaussian_image_from_binary_grid(
+            grid,
+            sigma=sigma,
+            brightness_factor=brightness,
+            image_shape=image_shape,
+            noise_level=noise_level,
+            stripe_intensity=stripe_intensity,
+            angle=angle
+        )
+        return img
 
     def evaluate_moves(self,move_list: list) -> 'tuple[float, list]':
         # making reference time
@@ -488,13 +726,14 @@ class AtomArray:
 
         # iterating through moves and updating internal state matrix
         for move_ind, move_set in enumerate(move_list):
+            safe_batches = self._split_move_batch_safely(move_set)
+            for safe_set in safe_batches:
+                # performing the move
+                [failed_moves, flags], move_time = self.move_atoms(safe_set)
+                N_parallel_moves += 1
+                N_non_parallel_moves += len(safe_set)
 
-            # performing the move
-            [failed_moves, flags], move_time = self.move_atoms(move_set)
-            N_parallel_moves += 1
-            N_non_parallel_moves += len(move_set)
-
-            # calculating the time to complete the move set in parallel
-            t_total += move_time
+                # calculating the time to complete the move set in parallel
+                t_total += move_time
 
         return float(t_total), [N_parallel_moves, N_non_parallel_moves]

@@ -4,16 +4,28 @@ import sys
 import copy
 import random
 import math
+import csv
+import time
+from pathlib import Path
+from datetime import datetime
+from collections import defaultdict
+from typing import Union
+
 import numpy as np
 import xarray as xr
-from typing import Union
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from atommover.utils.errormodels import ZeroNoise
 from atommover.utils.core import generate_random_target_configs, generate_random_init_configs, PhysicalParams, Configurations, CONFIGURATION_PLOT_LABELS
 from atommover.utils.move_utils import move_atoms
 from atommover.utils.AtomArray import AtomArray
 from atommover.algorithms.Algorithm_class import Algorithm, get_effective_target_grid
+
+try:
+    from tqdm.auto import tqdm as tqdm_auto
+except ImportError:  # pragma: no cover - tqdm optional
+    tqdm_auto = None
 
 def evaluate_moves(array: AtomArray ,move_list: list):
     # making reference time
@@ -52,53 +64,315 @@ class BenchmarkingFigure():
         The kind of figure you want to make. Options are histogram ('hist'), a plot comparing different algorithms ('scale'), or a plot comparing different target configurations for the same algorithm ('pattern').
     """
     def __init__(self, variables: list = ['Success rate'], figure_type: str = 'scale'):
+        # Map user-friendly names (case-insensitive) to dataset keys
+        name_map = {
+            'success rate': 'success rate',
+            'filling fraction': 'filling fraction',
+            'time': 'time',
+            'mean success time': 'time',
+            'wall time': 'wall time',
+            'walltime': 'wall time',
+            'wall time (s)': 'wall time',
+            'cpu time': 'cpu time',
+            'cpu time (s)': 'cpu time',
+            # Allow historic label with hash to map to stored key
+            'wrong places #': 'wrong places',
+            'wrong places': 'wrong places',
+            # Allow friendly name to map to stored key
+            'total atoms': 'n atoms',
+            'n atoms': 'n atoms',
+            'mean moves': 'mean moves',
+            'moves': 'mean moves',
+            'parallel move batches': 'parallel move batches',
+            'parallel batches': 'parallel move batches',
+        }
+        normalized: list[str] = []
         for variable in variables:
-            if variable not in ['Success rate', 'Filling fraction', 'Time', 'Wrong places #', 'Total atoms']:
-                raise KeyError(f"Variable '{variable}' is not recognized. The only allowed variables are the following: ['Success rate', 'Filling fraction', 'time', 'Wrong places #', 'Total atoms'].")
-        self.y_axis_variables = variables
+            key = name_map.get(str(variable).strip().lower())
+            if key is None:
+                allowed = [
+                    'Success rate',
+                    'Filling fraction',
+                    'Time',
+                    'Wall time',
+                    'Wrong places #',
+                    'Total atoms',
+                ]
+                raise KeyError(
+                    f"Variable '{variable}' is not recognized. Allowed: {allowed}."
+                )
+            normalized.append(key)
+        # Store dataset keys for later lookups
+        self.y_axis_variables = normalized
         self.figure_type = figure_type
 
-    def generate_scaling_figure(self, x_axis, benchmarking_results, title, x_label, save, savename = 'Algorithm_scaling'):
+    def generate_scaling_figure(self, x_axis_unused, benchmarking_results, title, x_label, save, savename = 'Algorithm_scaling', complexity_summary=None):
+        sns.set_theme(style="whitegrid", font_scale=1.15)
 
-        # Iterate over the y-axis variables
-        fig, ax = plt.subplots(len(self.y_axis_variables), 1, figsize = (5, 5*len(self.y_axis_variables)))
-        for varind, y_var in enumerate(self.y_axis_variables):
-            n_datapoints_added = 0
-            y_axis = []
+        def _format_axis(ax_obj, metric_key):
+            label_map = {
+                'time': 'Mean success time (s)',
+                'wall time': 'Wall time (s)',
+                'success rate': 'Success rate',
+                'filling fraction': 'Filling fraction',
+                'wrong places': 'Wrong places',
+                'n atoms': 'Total atoms',
+                'mean moves': 'Mean moves per shot',
+                'parallel move batches': 'Parallel move batches',
+            }
+            ylabel = label_map.get(metric_key, metric_key.capitalize())
+            ax_obj.set_xlabel("Target sites (atoms)")
+            ax_obj.set_ylabel(ylabel)
+            if title is not None:
+                ax_obj.set_title(title)
+            ax_obj.legend(frameon=False, loc='best')
+            ax_obj.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.4)
+            ax_obj.tick_params(axis='both', labelsize=11)
+            sns.despine(ax=ax_obj)
 
-            # Iterate over the benchmarking results of each algorithm
-            for algo_results in benchmarking_results:
-                # If the y-axis variable is a list (e.g. filling fraction), take its average
-                if type(algo_results[y_var]) is list:
-                    algo_results[y_var] = np.mean(algo_results[y_var])
+        def _prepare_xy(xs, ys):
+            xs = np.asarray(xs, dtype=float)
+            ys = np.asarray(ys, dtype=float)
+            mask = np.isfinite(xs) & np.isfinite(ys)
+            if not np.any(mask):
+                return None
+            xs = xs[mask]
+            ys = ys[mask]
+            order = np.argsort(xs)
+            xs = xs[order]
+            ys = ys[order]
+            return xs, ys
 
-                if math.isnan(algo_results[y_var]):
-                    raise Exception("Data to plot contains nan, indicating that something went wrong in your benchmarking. Please examine data and try again.")
-                y_axis.append(algo_results[y_var])
+        def _power_law_fit(xs, ys):
+            prepared = _prepare_xy(xs, ys)
+            if prepared is None:
+                return None
+            xs, ys = prepared
+            mask = (xs > 0) & (ys > 0)
+            if np.count_nonzero(mask) < 2:
+                return None
+            log_x = np.log(xs[mask])
+            log_y = np.log(ys[mask])
+            slope, intercept = np.polyfit(log_x, log_y, 1)
+            coef = float(np.exp(intercept))
+            exponent = float(slope)
+            return coef, exponent
+
+        def _plot_series(ax_obj, xs, ys, label, color, fit_fn=None, force_power_fit=False, connect_dots=False):
+            prepared = _prepare_xy(xs, ys)
+            if prepared is None:
+                return False
+            xs, ys = prepared
+            sns.scatterplot(x=xs, y=ys, ax=ax_obj, color=color, s=60, marker='o', edgecolor='black', linewidth=0.4, label=label)
+            
+            if connect_dots:
+                # Sort by x to connect in order
+                sort_idx = np.argsort(xs)
+                ax_obj.plot(xs[sort_idx], ys[sort_idx], color=color, linestyle='-', linewidth=1.5, alpha=0.6)
+                return True
+
+            if fit_fn is not None and xs.size >= 2:
+                x_fit = np.linspace(xs.min(), xs.max(), 200)
+                x_fit = x_fit[np.isfinite(x_fit) & (x_fit > 0)]
+                if x_fit.size >= 2:
+                    ax_obj.plot(x_fit, fit_fn(x_fit), color=color, linestyle='-', linewidth=1.8, alpha=0.85)
+            elif force_power_fit and xs.size >= 2:
+                params = _power_law_fit(xs, ys)
+                if params is not None:
+                    coef, exponent = params
+                    x_fit = np.linspace(xs.min(), xs.max(), 200)
+                    x_fit = x_fit[np.isfinite(x_fit) & (x_fit > 0)]
+                    if x_fit.size >= 2:
+                        ax_obj.plot(x_fit, coef * np.power(x_fit, exponent), color=color, linestyle='-', linewidth=1.8, alpha=0.85)
+            if fit_fn is None and (not force_power_fit) and xs.size >= 2:
+                coeffs = np.polyfit(xs, ys, 1)
+                ax_obj.plot(xs, np.polyval(coeffs, xs), color=color, linestyle='-', linewidth=1.8, alpha=0.75)
+            return True
+
+        def _slugify(name: str) -> str:
+            cleaned = ''.join(ch.lower() if ch.isalnum() else '_' for ch in name)
+            cleaned = cleaned.strip('_')
+            return cleaned or 'metric'
+
+        def _normalize_target_label(target_entry, index: int) -> str:
+            if hasattr(target_entry, 'name'):
+                return str(target_entry.name)
+            if isinstance(target_entry, np.ndarray):
+                return f'Custom{index}'
+            return str(target_entry)
+
+        figs_dir = Path('./figs')
+        figs_dir.mkdir(parents=True, exist_ok=True)
+
+        has_complexity_data = bool(complexity_summary)
+
+        if isinstance(benchmarking_results, xr.Dataset):
+            ds = benchmarking_results
+            algo_labels = list(ds.coords['algorithm'].values)
+            palette = sns.color_palette("colorblind", max(len(algo_labels), 1))
+            color_map = {algo: palette[idx % len(palette)] for idx, algo in enumerate(algo_labels)}
+
+            target_values = list(ds.coords['target'].values)
+            target_sel = target_values[0]
+            err_sel = ds.coords['error model'].values[0]
+            phys_sel = ds.coords['physical params'].values[0]
+            round_sel = ds.coords['num rounds'].values[0]
+
+            target_label_map = {
+                idx: _normalize_target_label(val, idx)
+                for idx, val in enumerate(target_values)
+            }
+            target_label = target_label_map.get(0, str(target_sel))
+            error_label = str(err_sel)
+            phys_label = str(phys_sel)
+            rounds_value = int(round(round_sel))
+            do_ejection_attr = benchmarking_results.attrs.get('do_ejection', None)
+
+            complexity_records = complexity_summary or []
+            metric_name_map = {
+                'time': 'wall_time',
+                'wall time': 'wall_time',
+                'mean moves': 'moves',
+                'parallel move batches': 'parallel_batches',
+            }
+
+            def _select_complexity_fit(metric_key: str, algo_name: str):
+                if not complexity_records or metric_key not in metric_name_map:
+                    return None
+                desired_metric = metric_name_map[metric_key]
+                for rec in complexity_records:
+                    if rec.get('metric_name') != desired_metric:
+                        continue
+                    if rec.get('scale_axis') != 'target_sites':
+                        continue
+                    if rec.get('algorithm') != algo_name:
+                        continue
+                    if rec.get('target') != target_label:
+                        continue
+                    if rec.get('error_model') != error_label:
+                        continue
+                    if rec.get('physical_params_label') != phys_label:
+                        continue
+                    if int(rec.get('num_rounds', rounds_value)) != rounds_value:
+                        continue
+                    if do_ejection_attr is not None and rec.get('do_ejection') != bool(do_ejection_attr):
+                        continue
+                    coef = rec.get('coefficient')
+                    exponent = rec.get('exponent')
+                    if coef is None or exponent is None:
+                        continue
+                    if coef <= 0:
+                        continue
+                    return rec
+                return None
+
+            base_sel = {'target': target_sel, 'error model': err_sel, 'physical params': phys_sel, 'num rounds': round_sel}
+            target_counts_da = ds['n targets'].sel(**base_sel)
+
+            for y_var in self.y_axis_variables:
+                fig, ax = plt.subplots(figsize=(6.5, 4.5))
+                plotted_any = False
+                da = ds[y_var].sel(**base_sel)
+                is_success_rate = (y_var == 'success rate')
                 
+                for algo in algo_labels:
+                    y_vals = da.sel(algorithm=algo).values.reshape(-1)
+                    x_vals = target_counts_da.sel(algorithm=algo).values.reshape(-1)
+                    fit_rec = _select_complexity_fit(y_var, str(algo))
+                    fit_fn = None
+                    if fit_rec is not None and not is_success_rate:
+                        coef = float(fit_rec.get('coefficient'))
+                        exponent = float(fit_rec.get('exponent'))
+                        fit_fn = lambda arr, c=coef, e=exponent: c * np.power(arr, e)
+                    
+                    plotted_any |= _plot_series(
+                        ax,
+                        x_vals,
+                        y_vals,
+                        str(algo),
+                        color_map[algo],
+                        fit_fn=fit_fn,
+                        force_power_fit=(has_complexity_data and not is_success_rate),
+                        connect_dots=is_success_rate
+                    )
+                if not plotted_any:
+                    plt.close(fig)
+                    continue
+                _format_axis(ax, y_var)
+                fig.tight_layout()
+                if save:
+                    fig.savefig(figs_dir / f"{savename}_{_slugify(y_var)}.svg", format='svg', dpi=300)
+                plt.close(fig)
+            return
+
+        # Legacy list-of-dicts fallback
+        palette = sns.color_palette("colorblind", 10)
+        color_map = {}
+        color_index = 0
+
+        block_size = len(x_axis_unused) if x_axis_unused is not None else 0
+        for y_var in self.y_axis_variables:
+            fig, ax = plt.subplots(figsize=(6.5, 4.5))
+            plotted_any = False
+            n_datapoints_added = 0
+            y_axis_vals = []
+            target_vals = []
+
+            for algo_results in benchmarking_results:
+                value = algo_results[y_var]
+                target_value = algo_results.get('n targets')
+                if isinstance(value, list):
+                    value = float(np.mean(value))
+                if isinstance(target_value, list):
+                    target_value = float(np.mean(target_value))
+                if target_value is None:
+                    raise KeyError("Legacy benchmarking results must include 'n targets' to plot against target sites.")
+                if math.isnan(value) or math.isnan(target_value):
+                    raise Exception("Data to plot contains nan, indicating that something went wrong in your benchmarking. Please examine data and try again.")
+                y_axis_vals.append(value)
+                target_vals.append(target_value)
                 n_datapoints_added += 1
 
-                # If all the results of the algorithm are collected, plot the results
-                if n_datapoints_added % len(x_axis) == 0:
-                    try:
-                        ax[varind].scatter(x_axis, y_axis, marker = 'o', label = algo_results["algorithm"].__class__.__name__)
-                    except TypeError:
-                        ax.scatter(x_axis, y_axis, marker = 'o', label = algo_results["algorithm"].__class__.__name__)
-                    y_axis = []
+                if block_size > 0 and n_datapoints_added % block_size == 0:
+                    algo_obj = algo_results["algorithm"]
+                    algo_label = getattr(getattr(algo_obj, "__class__", type(algo_obj)), "__name__", str(algo_obj))
+                    if algo_label not in color_map:
+                        color_map[algo_label] = palette[color_index % len(palette)]
+                        color_index += 1
+                    plotted_any |= _plot_series(
+                        ax,
+                        target_vals,
+                        y_axis_vals,
+                        algo_label,
+                        color_map[algo_label],
+                        force_power_fit=has_complexity_data,
+                    )
+                    y_axis_vals = []
+                    target_vals = []
 
-            try:
-                ax[varind].set_xlabel(x_label)
-                ax[varind].set_ylabel(y_var.capitalize())
-                ax[varind].set_title(title)
-                ax[varind].legend(loc='best')
-            except TypeError:
-                ax.set_xlabel(x_label)
-                ax.set_ylabel(y_var.capitalize())
-                ax.set_title(title)
-                ax.legend(loc='best')
+            if block_size == 0 and y_axis_vals and target_vals:
+                algo_obj = benchmarking_results[-1]["algorithm"]
+                algo_label = getattr(getattr(algo_obj, "__class__", type(algo_obj)), "__name__", str(algo_obj))
+                if algo_label not in color_map:
+                    color_map[algo_label] = palette[color_index % len(palette)]
+                    color_index += 1
+                plotted_any |= _plot_series(
+                    ax,
+                    target_vals,
+                    y_axis_vals,
+                    algo_label,
+                    color_map[algo_label],
+                    force_power_fit=has_complexity_data,
+                )
 
-        if save:
-            plt.savefig(f'./figs/'+savename)
+            if not plotted_any:
+                plt.close(fig)
+                continue
+                _format_axis(ax, y_var)
+            fig.tight_layout()
+            if save:
+                fig.savefig(figs_dir / f"{savename}_{_slugify(y_var)}.svg", format='svg', dpi=300)
+            plt.close(fig)
 
     def generate_histogram_figure(self, benchmarking_results, title, x_label, save = False, savename = 'Histogram'):
         hist_data = []
@@ -155,12 +429,14 @@ class BenchmarkingFigure():
             try:
                 ax[varind].set_xlabel(x_label)
                 ax[varind].set_ylabel(y_var.capitalize())
-                ax[varind].set_title(f"{title} - {y_var.capitalize()}")
+                if title is not None:
+                    ax[varind].set_title(f"{title} - {y_var.capitalize()}")
                 ax[varind].legend(loc='best')
             except TypeError:
                 ax.set_xlabel(x_label)
                 ax.set_ylabel(y_var.capitalize())
-                ax.set_title(f"{title} - {y_var.capitalize()}")
+                if title is not None:
+                    ax.set_title(f"{title} - {y_var.capitalize()}")
                 ax.legend(loc='best')
 
         if save:
@@ -210,7 +486,8 @@ class Benchmarking():
                  figure_output: BenchmarkingFigure = BenchmarkingFigure(),
                  n_shots: int = 100,
                  n_species: int = 1,
-                 check_sufficient_atoms: bool = True):
+                 check_sufficient_atoms: bool = True,
+                 show_progress: bool = True):
         # initializing the sweep modules (minus target configs, see below)
         self.algos, self.n_algos = algos, len(algos)
         self.system_size_range, self.n_sizes = sys_sizes, len(sys_sizes)
@@ -222,7 +499,9 @@ class Benchmarking():
         self.n_shots = n_shots
         self.check_sufficient_atoms = check_sufficient_atoms
         self.figure_output = figure_output
+        self.show_progress = show_progress
         self.tweezer_array = AtomArray(n_species = n_species)
+        self._target_cache: dict[tuple, np.ndarray] = {}
 
         # initializing target configs depending on whether they were explicitly specified
         if isinstance(target_configs, list):
@@ -275,6 +554,117 @@ class Benchmarking():
         self.figure_output.y_axis_variables = observables
 
 
+    @staticmethod
+    def _format_target_label(target_entry, index: int) -> str:
+        if hasattr(target_entry, 'name'):
+            return str(target_entry.name)
+        if isinstance(target_entry, np.ndarray):
+            return f'Custom{index}'
+        return str(target_entry)
+
+    @staticmethod
+    def _safe_filename_component(name: str) -> str:
+        cleaned = ''.join(ch.lower() if ch.isalnum() else '_' for ch in name)
+        cleaned = cleaned.strip('_')
+        return cleaned or 'algorithm'
+
+    @staticmethod
+    def _physical_param_repr(parset) -> str:
+        try:
+            return repr(parset)
+        except Exception:
+            return str(parset)
+
+    def _target_cache_key(self, pattern, base_size: int, occupation_prob: float | None) -> tuple:
+        pattern_key = getattr(pattern, "value", pattern)
+        occ = 0.0 if occupation_prob is None else float(occupation_prob)
+        return (pattern_key, int(base_size), round(occ, 6), int(self.tweezer_array.n_species))
+
+    def _get_canonical_target(self, pattern, base_size: int, occupation_prob: float | None) -> np.ndarray:
+        key = self._target_cache_key(pattern, base_size, occupation_prob)
+        cached = self._target_cache.get(key)
+        if cached is not None:
+            return cached
+        base_array = AtomArray([base_size, base_size], n_species=self.tweezer_array.n_species, params=self.tweezer_array.params, error_model=self.tweezer_array.error_model)
+        base_array.generate_target(pattern, occupation_prob=occupation_prob)
+        target = base_array.target.copy()
+        self._target_cache[key] = target
+        return target
+
+    @staticmethod
+    def _ensure_3d(target: np.ndarray) -> np.ndarray:
+        if target.ndim == 3:
+            return target
+        return target[:, :, np.newaxis]
+
+    def _embed_target(self, base_target: np.ndarray, rows: int, cols: int) -> np.ndarray:
+        target = self._ensure_3d(base_target)
+        base_rows, base_cols, species = target.shape
+        if rows < base_rows or cols < base_cols:
+            raise ValueError(
+                f"Algorithm shape {rows}x{cols} cannot host canonical target {base_rows}x{base_cols}."
+            )
+        row_start = (rows - base_rows) // 2
+        col_start = (cols - base_cols) // 2
+        embedded = np.zeros((rows, cols, species), dtype=target.dtype)
+        row_slice = slice(row_start, row_start + base_rows)
+        col_slice = slice(col_start, col_start + base_cols)
+        embedded[row_slice, col_slice, :] = target
+        return embedded
+
+    def _prepare_random_targets(self, base_size: int, occupation_prob: float | None) -> list[np.ndarray]:
+        prob = float(occupation_prob) if occupation_prob is not None else 0.5
+        shape = [base_size, base_size]
+        return generate_random_target_configs(self.n_shots, targ_occup_prob=prob, shape=shape)
+
+    def _get_algorithm_shape(self, algorithm, base_size: int) -> tuple[int, int]:
+        """Return (rows, cols) for the array shape to use with the given algorithm."""
+        rows = base_size
+        cols = base_size
+        if not self.istargetlist:
+            return rows, cols
+
+        def _coerce_dim(value, fallback):
+            try:
+                dim = int(value)
+            except (TypeError, ValueError):
+                dim = fallback
+            return dim if dim > 0 else fallback
+
+        shape_hook = getattr(algorithm, "preferred_initial_shape", None)
+        if callable(shape_hook):
+            try:
+                proposed = shape_hook(base_size)
+            except TypeError:
+                proposed = shape_hook(base_size, getattr(self.tweezer_array, "params", None))
+            if isinstance(proposed, (list, tuple)) and len(proposed) == 2:
+                rows = _coerce_dim(proposed[0], rows)
+                cols = _coerce_dim(proposed[1], cols)
+
+        rows = max(rows, base_size)
+        cols = max(cols, base_size)
+
+        width_factor = getattr(algorithm, "preferred_width_factor", None)
+        if width_factor is not None:
+            try:
+                width_factor = float(width_factor)
+            except (TypeError, ValueError):
+                width_factor = None
+        if width_factor and width_factor > 0:
+            cols = max(cols, int(math.ceil(rows * width_factor)))
+
+        extra_cols = getattr(algorithm, "min_extra_columns", 0)
+        try:
+            extra_cols = int(extra_cols)
+        except (TypeError, ValueError):
+            extra_cols = 0
+        if extra_cols > 0:
+            cols = max(cols, rows + extra_cols)
+
+        cols = max(cols, rows)
+        return rows, cols
+
+
     def get_result_array_dims(self):
         """
         Updates the size and shape of the storage array
@@ -292,7 +682,7 @@ class Benchmarking():
             self.istargetlist = False
             self.n_targets = len(self.target_configs[0])
             if len(self.target_configs) != self.n_sizes:
-                raise IndexError(f"Number of system sizes {self.n_sizes} and shape of `target_configs` {np.shape(target_configs)} does not match. `target_configs` ust have shape (len(sys_sizes), [number of target configs]). ")
+                raise IndexError(f"Number of system sizes {self.n_sizes} and shape of `target_configs` {np.shape(self.target_configs)} does not match. `target_configs` must have shape (len(sys_sizes), [number of target configs]). ")
         else:
             raise TypeError("`target_configs` must be a list of Configuration objects or an np.ndarray.")
         self.n_sizes = len(self.system_size_range)
@@ -317,11 +707,21 @@ class Benchmarking():
                              self.n_rounds]
         success_rate_array = np.zeros(result_array_dims, dtype = 'float')
         time_array = np.zeros(result_array_dims, dtype = 'float')
-        fill_fracs_array = np.zeros(result_array_dims, dtype = 'object')
-        wrong_places_array = np.zeros(result_array_dims, dtype = 'object')
-        n_atoms_array = np.zeros(result_array_dims, dtype = 'object')
-        n_targets_array = np.zeros(result_array_dims, dtype = 'object')
+        # Store scalar summaries to ensure NetCDF compatibility
+        fill_fracs_array = np.zeros(result_array_dims, dtype = 'float')
+        wrong_places_array = np.zeros(result_array_dims, dtype = 'float')
+        n_atoms_array = np.zeros(result_array_dims, dtype = 'float')
+        n_targets_array = np.zeros(result_array_dims, dtype = 'float')
         sufficient_atom_rate = np.zeros(result_array_dims, dtype = 'float')
+        wall_time_array = np.zeros(result_array_dims, dtype = 'float')
+        cpu_time_array = np.zeros(result_array_dims, dtype = 'float')
+        move_counts_array = np.zeros(result_array_dims, dtype = 'float')
+        parallel_batch_counts_array = np.zeros(result_array_dims, dtype = 'float')
+        array_rows_array = np.zeros(result_array_dims, dtype = 'int64')
+        array_cols_array = np.zeros(result_array_dims, dtype = 'int64')
+
+        self._benchmark_records = []
+        self._current_run_timestamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
 
         # for xarray object
         dims = ("algorithm", "target", "sys size", "error model", "physical params", "num rounds")
@@ -329,46 +729,174 @@ class Benchmarking():
             coord_targets = self.target_configs
         else:
             coord_targets = [f'Custom{i}' for i in range(self.n_targets)]
-        coords = {"algorithm": self.algos, 
+        # Use string labels for coords to ensure NetCDF serialization compatibility
+        algo_labels = [getattr(a, '__class__', type(a)).__name__ if not isinstance(a, str) else a for a in self.algos]
+        err_labels = [getattr(e, '__class__', type(e)).__name__ if not isinstance(e, str) else e for e in self.error_models_list]
+        # Represent physical params succinctly; fallback to class name if repr is too long
+        def _param_label(p):
+            try:
+                s = repr(p)
+                return s if len(s) <= 80 else getattr(p, '__class__', type(p)).__name__
+            except Exception:
+                return getattr(p, '__class__', type(p)).__name__
+        phys_labels = [_param_label(p) for p in self.phys_params_list]
+        phys_reprs = [self._physical_param_repr(p) for p in self.phys_params_list]
+
+        coords = {"algorithm": algo_labels,
                   "target": coord_targets,
-                  "sys size": self.system_size_range,
-                  "error model": self.error_models_list,
-                  "physical params": self.phys_params_list,
-                  "num rounds": self.rounds_list}
+                  "sys size": list(self.system_size_range),
+                  "error model": err_labels,
+                  "physical params": phys_labels,
+                  "num rounds": list(self.rounds_list)}
+
+        progress_bars = None
+        progress_states = None
+        if self.show_progress and tqdm_auto is not None:
+            progress_bars = {}
+            progress_states = {}
+            for algo_label in algo_labels:
+                progress_bars[algo_label] = tqdm_auto(
+                    total=self.n_sizes,
+                    desc=f"{algo_label}",
+                    unit="size",
+                    leave=False,
+                )
+                progress_states[algo_label] = set()
+        elif self.show_progress and tqdm_auto is None:
+            print("[INFO] tqdm is not installed; progress bars disabled.")
         
-        # iterating through sweep parameters and running benchmarking rounds
+        # iterating through sweep parameters and running benchmarking rounds            
         for param_ind, parset in enumerate(self.phys_params_list):
             self.tweezer_array.params = parset
-            self.init_config_storage = generate_random_init_configs(self.n_shots, 
-                                                                        load_prob = self.tweezer_array.params.loading_prob, 
-                                                                        max_sys_size = np.max(self.system_size_range),
-                                                                        n_species = self.tweezer_array.n_species)
+            parset_label = phys_labels[param_ind]
+            parset_repr = phys_reprs[param_ind]
+            loading_prob = getattr(parset, 'loading_prob', None)
+            target_prob = getattr(parset, 'target_occup_prob', None)
+            max_rows = int(np.max(self.system_size_range))
+            if self.istargetlist:
+                storage_cols = max(
+                    self._get_algorithm_shape(algo, size)[1]
+                    for algo in self.algos
+                    for size in self.system_size_range
+                )
+            else:
+                storage_cols = max_rows
+            storage_cols = max(storage_cols, max_rows)
+            storage_shape = [max_rows, storage_cols]
+
+            self.init_config_storage = generate_random_init_configs(
+                self.n_shots,
+                load_prob=self.tweezer_array.params.loading_prob,
+                shape=storage_shape,
+                n_species=self.tweezer_array.n_species,
+            )
             for targ_ind in range(self.n_targets):
-                target = None
-                if self.istargetlist:
-                    target = self.target_configs[targ_ind]
-                    if target == Configurations.RANDOM:
-                        self.target_config_storage = generate_random_target_configs(self.n_shots,
-                                                                                    targ_occup_prob= self.tweezer_array.params.target_occup_prob,
-                                                                                    shape=self.tweezer_array.shape)
+                pattern = self.target_configs[targ_ind] if self.istargetlist else None
+                pattern_enum = pattern if isinstance(pattern, Configurations) else None
+                target_label = self._format_target_label(coord_targets[targ_ind], targ_ind)
                 for model_ind, error_model in enumerate(self.error_models_list):
                     self.tweezer_array.error_model = error_model
+                    error_label = err_labels[model_ind]
+                    error_repr = repr(error_model)
 
                     for size_ind, size in enumerate(self.system_size_range):
-                        self.tweezer_array.shape = [size,size]
-                        if not self.istargetlist:
-                            self.tweezer_array.target = self.target_configs[size_ind, targ_ind]
+                        canonical_target = None
+                        random_targets = None
+                        if self.istargetlist and pattern_enum is not None:
+                            if pattern_enum == Configurations.RANDOM:
+                                random_prob = getattr(self.tweezer_array.params, 'target_occup_prob', None)
+                                if random_prob is None:
+                                    random_prob = loading_prob
+                                random_targets = self._prepare_random_targets(size, random_prob)
+                            else:
+                                canonical_prob = loading_prob
+                                if canonical_prob is None:
+                                    canonical_prob = getattr(self.tweezer_array.params, 'target_occup_prob', None)
+                                canonical_target = self._get_canonical_target(pattern_enum, size, canonical_prob)
+
                         for alg_ind, algo in enumerate(self.algos):
+                            rows, cols = self._get_algorithm_shape(algo, size)
+                            precomputed_target = None
+                            if not self.istargetlist:
+                                rows = size
+                                cols = size
+                                self.tweezer_array.target = self.target_configs[size_ind, targ_ind]
+                            else:
+                                if pattern_enum != Configurations.RANDOM and canonical_target is not None:
+                                    precomputed_target = self._embed_target(canonical_target, rows, cols)
+
+                            self.tweezer_array.shape = [rows, cols]
+                            algo_label = algo_labels[alg_ind]
                             for round_ind, num_rounds in enumerate(self.rounds_list):
-                                success_rate, mean_success_time, fill_fracs, wrong_places, atoms_in_arrays, atoms_in_target, sufficient_rate = self._run_benchmark_round(algo, do_ejection=do_ejection, pattern = target, num_rounds=num_rounds)
+                                success_rate, mean_success_time, fill_fracs, wrong_places, atoms_in_arrays, atoms_in_target, sufficient_rate, wall_time, cpu_time, parallel_counts, move_counts = self._run_benchmark_round(
+                                    algo,
+                                    do_ejection=do_ejection,
+                                    pattern=pattern,
+                                    num_rounds=num_rounds,
+                                    precomputed_target=precomputed_target,
+                                    random_targets=random_targets,
+                                    base_target_size=size,
+                                )
+                                fill_mean = float(np.mean(fill_fracs)) if len(fill_fracs) > 0 else np.nan
+                                wrong_mean = float(np.mean(wrong_places)) if len(wrong_places) > 0 else np.nan
+                                atoms_mean = float(np.mean(atoms_in_arrays)) if len(atoms_in_arrays) > 0 else np.nan
+                                target_mean = float(np.mean(atoms_in_target)) if len(atoms_in_target) > 0 else np.nan
+                                parallel_mean = float(np.mean(parallel_counts)) if len(parallel_counts) > 0 else np.nan
+                                moves_mean = float(np.mean(move_counts)) if len(move_counts) > 0 else np.nan
                                 # populating result arrays
                                 success_rate_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = success_rate
                                 time_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = mean_success_time
-                                fill_fracs_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = fill_fracs
-                                wrong_places_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = wrong_places
-                                n_atoms_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = atoms_in_arrays
-                                n_targets_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = atoms_in_target
+                                # Reduce per-shot lists to means for storage
+                                fill_fracs_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = fill_mean
+                                wrong_places_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = wrong_mean
+                                n_atoms_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = atoms_mean
+                                n_targets_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = target_mean
                                 sufficient_atom_rate[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = sufficient_rate
+                                wall_time_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = wall_time
+                                cpu_time_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = cpu_time
+                                parallel_batch_counts_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = parallel_mean
+                                move_counts_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = moves_mean
+                                array_rows_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = rows
+                                array_cols_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = cols
+
+                                record = {
+                                    'run_timestamp': self._current_run_timestamp,
+                                    'algorithm': algo_label,
+                                    'target': target_label,
+                                    'sys_size': size,
+                                    'array_rows': rows,
+                                    'array_cols': cols,
+                                    'num_rounds': num_rounds,
+                                    'round_index': round_ind,
+                                    'error_model': error_label,
+                                    'error_model_repr': error_repr,
+                                    'physical_params_label': parset_label,
+                                    'physical_params_repr': parset_repr,
+                                    'loading_prob': loading_prob,
+                                    'target_occup_prob': target_prob,
+                                    'success_rate': success_rate,
+                                    'mean_success_time': mean_success_time,
+                                    'wall_time_seconds': wall_time,
+                                    'cpu_time_seconds': cpu_time,
+                                    'mean_filling_fraction': fill_mean,
+                                    'mean_wrong_places': wrong_mean,
+                                    'mean_atoms_in_array': atoms_mean,
+                                    'mean_atoms_in_target': target_mean,
+                                    'sufficient_atom_rate': sufficient_rate,
+                                    'mean_moves_per_shot': moves_mean,
+                                    'mean_parallel_batches_per_shot': parallel_mean,
+                                    'n_shots': self.n_shots,
+                                    'n_species': self.tweezer_array.n_species,
+                                    'check_sufficient_atoms': self.check_sufficient_atoms,
+                                    'do_ejection': do_ejection,
+                                }
+                                self._benchmark_records.append(record)
+                                if progress_bars:
+                                    bar = progress_bars[algo_label]
+                                    bar.set_postfix({"L": size})
+                                    if size not in progress_states[algo_label]:
+                                        progress_states[algo_label].add(size)
+                                        bar.update(1)
         
         success_rates_da = xr.DataArray(success_rate_array, dims=dims, coords = coords)
         success_times_da = xr.DataArray(time_array, dims=dims, coords = coords)
@@ -377,17 +905,303 @@ class Benchmarking():
         n_atoms_da = xr.DataArray(n_atoms_array, dims=dims, coords = coords)
         n_targets_da = xr.DataArray(n_targets_array, dims=dims, coords = coords)
         sufficient_atom_rate_da = xr.DataArray(sufficient_atom_rate, dims=dims, coords = coords)
+        wall_time_da = xr.DataArray(wall_time_array, dims=dims, coords = coords)
+        cpu_time_da = xr.DataArray(cpu_time_array, dims=dims, coords = coords)
+        move_counts_da = xr.DataArray(move_counts_array, dims=dims, coords = coords)
+        parallel_batches_da = xr.DataArray(parallel_batch_counts_array, dims=dims, coords = coords)
+        array_rows_da = xr.DataArray(array_rows_array, dims=dims, coords = coords)
+        array_cols_da = xr.DataArray(array_cols_array, dims=dims, coords = coords)
         
         self.benchmarking_results = xr.Dataset({'success rate': success_rates_da, 
-                                                'time': success_times_da, 
-                                                'filling fraction': fill_fracs_da,
-                                                'wrong places': wrong_places_da,
-                                                'n atoms': n_atoms_da,
-                                                'n targets': n_targets_da,
-                                                'sufficient rate': sufficient_atom_rate_da})
+                            'time': success_times_da, 
+                            'filling fraction': fill_fracs_da,
+                            'wrong places': wrong_places_da,
+                            'n atoms': n_atoms_da,
+                            'n targets': n_targets_da,
+                            'sufficient rate': sufficient_atom_rate_da,
+                            'wall time': wall_time_da,
+                            'cpu time': cpu_time_da,
+                            'mean moves': move_counts_da,
+                            'parallel move batches': parallel_batches_da,
+                            'array rows': array_rows_da,
+                            'array cols': array_cols_da})
+        self.benchmarking_results.attrs.update({
+            'do_ejection': bool(do_ejection),
+            'n_shots': int(self.n_shots),
+            'n_species': int(self.tweezer_array.n_species),
+        })
+
+        self._summarize_complexity()
+        self._export_runtime_csv()
+        self._export_complexity_csv()
+
+        if progress_bars:
+            for bar in progress_bars.values():
+                bar.close()
 
             
-    def _run_benchmark_round(self, algorithm, do_ejection: bool = False, pattern = None, num_rounds = 1) -> tuple[float, float, list, list, list, list]:
+    def _export_runtime_csv(self):
+        records = getattr(self, '_benchmark_records', None)
+        if not records:
+            return
+
+        run_id = getattr(self, '_current_run_timestamp', datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'))
+        base_dir = Path('data/benchmark_pipeline/runtime_exports')
+        base_dir.mkdir(parents=True, exist_ok=True)
+
+        field_order = [
+            'run_timestamp',
+            'algorithm',
+            'target',
+            'sys_size',
+            'array_rows',
+            'array_cols',
+            'num_rounds',
+            'round_index',
+            'error_model',
+            'error_model_repr',
+            'physical_params_label',
+            'physical_params_repr',
+            'loading_prob',
+            'target_occup_prob',
+            'success_rate',
+            'mean_success_time',
+            'wall_time_seconds',
+            'mean_filling_fraction',
+            'mean_wrong_places',
+            'mean_atoms_in_array',
+            'mean_atoms_in_target',
+            'sufficient_atom_rate',
+            'mean_moves_per_shot',
+            'mean_parallel_batches_per_shot',
+            'n_shots',
+            'n_species',
+            'check_sufficient_atoms',
+            'do_ejection',
+            'cpu_time_seconds',
+        ]
+
+        grouped_records = {}
+        for rec in records:
+            grouped_records.setdefault(rec['algorithm'], []).append(rec)
+
+        for algo, rows in grouped_records.items():
+            safe_name = self._safe_filename_component(algo)
+            file_path = base_dir / f"{safe_name}_benchmark_runtime_{run_id}.csv"
+            with open(file_path, 'w', newline='', encoding='utf-8') as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=field_order)
+                writer.writeheader()
+                for row in rows:
+                    writer.writerow(row)
+
+        # retain exported data for callers if needed
+        self._benchmark_records = records
+
+    def _summarize_complexity(self):
+        records = getattr(self, '_benchmark_records', None)
+        summary = []
+        if not records:
+            self._complexity_summary = summary
+            return
+
+        def _positive_float(value):
+            try:
+                val = float(value)
+            except (TypeError, ValueError):
+                return None
+            if not math.isfinite(val) or val <= 0:
+                return None
+            return val
+
+        def _format_axis_value(value: float) -> str:
+            if abs(value - round(value)) < 1e-9:
+                return str(int(round(value)))
+            return f"{value:.6g}"
+
+        axis_specs = {
+            'system_size': {
+                'label': 'side length',
+                'getter': lambda rec: rec['sys_size'],
+            },
+            'target_sites': {
+                'label': 'target sites',
+                'getter': lambda rec: rec['mean_atoms_in_target'],
+            },
+        }
+
+        metric_specs = [
+            {
+                'name': 'wall_time',
+                'field': 'wall_time_seconds',
+                'label': 'wall time (s)',
+                'units': 'seconds',
+                'axes': ['system_size', 'target_sites'],
+            },
+            {
+                'name': 'moves',
+                'field': 'mean_moves_per_shot',
+                'label': 'moves per shot',
+                'units': 'moves',
+                'axes': ['target_sites'],
+            },
+            {
+                'name': 'parallel_batches',
+                'field': 'mean_parallel_batches_per_shot',
+                'label': 'parallel batches per shot',
+                'units': 'batches',
+                'axes': ['target_sites'],
+            },
+        ]
+
+        by_algorithm = defaultdict(list)
+        for rec in records:
+            by_algorithm[rec['algorithm']].append(rec)
+
+        for algo, algo_records in by_algorithm.items():
+            combo_groups = defaultdict(list)
+            for rec in algo_records:
+                combo_key = (
+                    rec['target'],
+                    rec['error_model'],
+                    rec['error_model_repr'],
+                    rec['physical_params_label'],
+                    rec['physical_params_repr'],
+                    rec['num_rounds'],
+                    rec['do_ejection'],
+                )
+                combo_groups[combo_key].append(rec)
+
+            for combo_key, combo_records in combo_groups.items():
+                for metric in metric_specs:
+                    metric_field = metric['field']
+                    for axis_name in metric['axes']:
+                        axis_spec = axis_specs[axis_name]
+                        axis_map: dict[float, list[float]] = defaultdict(list)
+                        axis_getter = axis_spec['getter']
+                        for rec in combo_records:
+                            axis_val = _positive_float(axis_getter(rec))
+                            metric_val = _positive_float(rec.get(metric_field))
+                            if axis_val is None or metric_val is None:
+                                continue
+                            axis_map[axis_val].append(metric_val)
+                        if not axis_map:
+                            continue
+                        axis_values_sorted = sorted(axis_map.keys())
+                        axis_vals = np.array(axis_values_sorted, dtype=float)
+                        mean_metrics = np.array([np.mean(axis_map[val]) for val in axis_values_sorted], dtype=float)
+                        mask = (axis_vals > 0) & (mean_metrics > 0)
+                        if np.count_nonzero(mask) < 2:
+                            continue
+                        axis_subset = axis_vals[mask]
+                        metric_subset = mean_metrics[mask]
+                        x = np.log(axis_subset)
+                        y = np.log(metric_subset)
+                        slope, intercept = np.polyfit(x, y, 1)
+                        y_hat = slope * x + intercept
+                        ss_res = float(np.sum((y - y_hat) ** 2))
+                        ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+                        r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 1.0
+                        coef = float(np.exp(intercept))
+                        combo_sample = combo_records[0]
+                        axis_tokens = [_format_axis_value(val) for val in axis_subset]
+                        metric_tokens = [f"{val:.6g}" for val in metric_subset]
+                        summary_record = {
+                            'run_timestamp': combo_sample['run_timestamp'],
+                            'algorithm': algo,
+                            'target': combo_key[0],
+                            'error_model': combo_key[1],
+                            'error_model_repr': combo_key[2],
+                            'physical_params_label': combo_key[3],
+                            'physical_params_repr': combo_key[4],
+                            'num_rounds': combo_key[5],
+                            'do_ejection': combo_key[6],
+                            'loading_prob': combo_sample['loading_prob'],
+                            'target_occup_prob': combo_sample['target_occup_prob'],
+                            'n_shots': combo_sample['n_shots'],
+                            'n_species': combo_sample['n_species'],
+                            'check_sufficient_atoms': combo_sample['check_sufficient_atoms'],
+                            'scale_axis': axis_name,
+                            'axis_label': axis_spec['label'],
+                            'metric_name': metric['name'],
+                            'metric_label': metric['label'],
+                            'metric_units': metric['units'],
+                            'exponent': float(slope),
+                            'coefficient': coef,
+                            'r_squared': float(r_squared),
+                            'n_points': int(np.count_nonzero(mask)),
+                            'size_min': float(np.min(axis_subset)),
+                            'size_max': float(np.max(axis_subset)),
+                            'sizes': '|'.join(axis_tokens),
+                            'metric_values': '|'.join(metric_tokens),
+                            'mean_wall_times': '|'.join(metric_tokens) if metric['name'] == 'wall_time' else '',
+                        }
+                        summary.append(summary_record)
+                        print(
+                            f"[Complexity] {algo} target={combo_key[0]} rounds={combo_key[5]} "
+                            f"error={combo_key[1]} metric={metric['name']} axis={axis_name}: "
+                            f"{metric['label']} ≈ {coef:.3g} * L^{slope:.2f} "
+                            f"(L represents {axis_spec['label']}, R^2={r_squared:.3f}, values={axis_tokens})"
+                        )
+
+        if not summary:
+            print("[Complexity] Not enough distinct inputs to estimate runtime scaling.")
+        self._complexity_summary = summary
+
+    def _export_complexity_csv(self):
+        summary = getattr(self, '_complexity_summary', None)
+        if not summary:
+            return
+
+        run_id = getattr(self, '_current_run_timestamp', datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'))
+        base_dir = Path('data/benchmark_pipeline/runtime_exports')
+        base_dir.mkdir(parents=True, exist_ok=True)
+
+        field_order = [
+            'run_timestamp',
+            'algorithm',
+            'target',
+            'error_model',
+            'error_model_repr',
+            'physical_params_label',
+            'physical_params_repr',
+            'num_rounds',
+            'do_ejection',
+            'loading_prob',
+            'target_occup_prob',
+            'n_shots',
+            'n_species',
+            'check_sufficient_atoms',
+            'scale_axis',
+            'axis_label',
+            'metric_name',
+            'metric_label',
+            'metric_units',
+            'exponent',
+            'coefficient',
+            'r_squared',
+            'n_points',
+            'size_min',
+            'size_max',
+            'sizes',
+            'metric_values',
+            'mean_wall_times',
+        ]
+
+        grouped = defaultdict(list)
+        for rec in summary:
+            grouped[rec['algorithm']].append(rec)
+
+        for algo, rows in grouped.items():
+            safe_name = self._safe_filename_component(algo)
+            file_path = base_dir / f"{safe_name}_complexity_{run_id}.csv"
+            with open(file_path, 'w', newline='', encoding='utf-8') as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=field_order)
+                writer.writeheader()
+                for row in rows:
+                    writer.writerow(row)
+
+            
+    def _run_benchmark_round(self, algorithm, do_ejection: bool = False, pattern = None, num_rounds = 1, precomputed_target: np.ndarray | None = None, random_targets: list[np.ndarray] | None = None, base_target_size: int | None = None) -> tuple[float, float, list, list, list, list, float, float, float, list, list]:
         success_times = []
         success_flags = []
         filling_fractions = []
@@ -395,18 +1209,31 @@ class Benchmarking():
         atoms_in_arrays = []
         atoms_in_targets = []
         sufficient_flags = []
+        parallel_move_counts = []
+        atom_move_counts = []
+        wall_start = time.perf_counter()
+        cpu_start = time.process_time()
 
-        if self.istargetlist:
-            if pattern != Configurations.RANDOM:
-                self.tweezer_array.generate_target(pattern, occupation_prob = self.tweezer_array.params.loading_prob)
+        pattern_enum = pattern if isinstance(pattern, Configurations) else None
+
+        if self.istargetlist and precomputed_target is None and pattern_enum not in (None, Configurations.RANDOM):
+            self.tweezer_array.generate_target(pattern, occupation_prob = self.tweezer_array.params.loading_prob)
                 
         for shot in range(self.n_shots):
             # getting initial and final target configs
-            initial_config = self.init_config_storage[shot][:self.tweezer_array.shape[0], :self.tweezer_array.shape[1]]
+            initial_config = self.init_config_storage[shot][:self.tweezer_array.shape[0], :self.tweezer_array.shape[1]].copy()
             self.tweezer_array.matrix = initial_config.reshape([self.tweezer_array.shape[0], self.tweezer_array.shape[1], self.tweezer_array.n_species])
             if self.istargetlist:
-                if pattern == Configurations.RANDOM:
-                    self.tweezer_array.target = self.target_config_storage[shot][:self.tweezer_array.shape[0], :self.tweezer_array.shape[1]].reshape([self.tweezer_array.shape[0], self.tweezer_array.shape[1], 1])
+                if precomputed_target is not None and pattern_enum not in (None, Configurations.RANDOM):
+                    self.tweezer_array.target = precomputed_target.copy()
+                elif pattern_enum == Configurations.RANDOM:
+                    if random_targets is None:
+                        base_rows = base_target_size if base_target_size is not None else self.tweezer_array.shape[0]
+                        random_targets = self._prepare_random_targets(base_rows, getattr(self.tweezer_array.params, 'target_occup_prob', None))
+                    base_random = random_targets[shot % len(random_targets)]
+                    base_random = self._ensure_3d(base_random)
+                    embedded_random = self._embed_target(base_random, self.tweezer_array.shape[0], self.tweezer_array.shape[1])
+                    self.tweezer_array.target = embedded_random
             if self.check_sufficient_atoms:
                 # loop to ensure that the initial configuration has sufficient atoms.
                 init_count = 0
@@ -420,13 +1247,22 @@ class Benchmarking():
             round_count = 0
             if num_rounds <= 0 or not isinstance(num_rounds, int):
                 raise ValueError(f'Number of rearrangement rounds (entered as {num_rounds}) cannot be 0, negative, nor a non-integer value.')
+            shot_parallel_batches = 0
+            shot_move_count = 0
+            t_total = 0.0
             while round_count < num_rounds:
                 # generating and evaluating moves
                 if self.tweezer_array.n_species == 1:
                     _, move_list, algo_success_flag = algorithm.get_moves(self.tweezer_array, do_ejection = do_ejection)
                 else:
                     _, move_list, algo_success_flag = algorithm.get_moves(self.tweezer_array)
-                t_total, _ = self.tweezer_array.evaluate_moves(move_list)
+                t_total, move_stats = self.tweezer_array.evaluate_moves(move_list)
+                if isinstance(move_stats, (list, tuple)) and len(move_stats) > 0:
+                    shot_parallel_batches += int(move_stats[0])
+                    if len(move_stats) > 1:
+                        shot_move_count += int(move_stats[1])
+                    else:
+                        shot_move_count += int(move_stats[0])
                 success_flag = Algorithm.get_success_flag(self.tweezer_array.matrix,self.tweezer_array.target, do_ejection=do_ejection, n_species=self.tweezer_array.n_species)
                 if success_flag == 1:
                     break
@@ -435,6 +1271,8 @@ class Benchmarking():
             success_flags.append(success_flag)
             if success_flag:
                 success_times.append(t_total)
+            parallel_move_counts.append(shot_parallel_batches)
+            atom_move_counts.append(shot_move_count)
 
             # calculate filling fraction
             filling_fraction_config = np.multiply(self.tweezer_array.matrix, self.tweezer_array.target)
@@ -445,7 +1283,7 @@ class Benchmarking():
                 wrong_places.append(int(np.sum(np.abs(self.tweezer_array.matrix - self.tweezer_array.target))))
             else:
                 start_row, end_row, start_col, end_col = get_effective_target_grid(self.tweezer_array.target)
-                wrong_places.append(int(np.sum(np.abs(self.tweezer_array.matrix[start_row:end_row, start_col:end_col] - self.tweezer_array.target[start_row:end_row, start_col:end_col]))))
+                wrong_places.append(int(np.sum(np.abs(self.tweezer_array.matrix[start_row:end_row + 1, start_col:end_col + 1] - self.tweezer_array.target[start_row:end_row + 1, start_col:end_col + 1]))))
             # Count atoms in array
             atoms_in_arrays.append(int(np.sum(self.tweezer_array.matrix)))
             atoms_in_targets.append(int(np.sum(self.tweezer_array.target)))
@@ -455,7 +1293,21 @@ class Benchmarking():
             else:
                 sufficient_flags.append(True)
 
-        return float(np.mean(success_flags)), float(np.mean(success_times)), filling_fractions, wrong_places, atoms_in_arrays, atoms_in_targets, float(np.mean(sufficient_flags))
+        wall_elapsed = time.perf_counter() - wall_start
+        cpu_elapsed = time.process_time() - cpu_start
+        return (
+            float(np.mean(success_flags)),
+            float(np.mean(success_times)),
+            filling_fractions,
+            wrong_places,
+            atoms_in_arrays,
+            atoms_in_targets,
+            float(np.mean(sufficient_flags)),
+            wall_elapsed,
+            cpu_elapsed,
+            parallel_move_counts,
+            atom_move_counts,
+        )
 
 
     def plot_results(self, save = False, savename = None):
@@ -465,12 +1317,20 @@ class Benchmarking():
         if self.figure_output.figure_type == "scale":
             if savename == None:
                 savename = 'scaling'
-            self.figure_output.generate_scaling_figure(list(self.system_size_range), self.benchmarking_results, "Benchmarking results", "Array length (# atoms)", savename=savename, save=save)
+            self.figure_output.generate_scaling_figure(
+                list(self.system_size_range),
+                self.benchmarking_results,
+                None,
+                "Target sites (atoms)",
+                savename=savename,
+                save=save,
+                complexity_summary=getattr(self, '_complexity_summary', None),
+            )
 
         elif self.figure_output.figure_type == "hist":
             if savename == None:
                 savename = 'histogram'
-            self.figure_output.generate_histogram_figure(self.benchmarking_results, "Benchmarking results", "Array length (# atoms)")
+            self.figure_output.generate_histogram_figure(self.benchmarking_results, None, "Array length (# atoms)")
 
         elif self.figure_output.figure_type == "pattern":
             if savename == None:

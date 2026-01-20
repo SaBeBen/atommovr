@@ -4,10 +4,16 @@ import copy
 import math
 import random
 import numpy as np
-from numba import jit
+try:
+    from numba import jit
+except ImportError:
+    def jit(func=None, **kwargs):
+        def wrapper(f):
+            return f
+        if func is not None:
+            return wrapper(func)
+        return wrapper
 from enum import IntEnum
-
-from atommover.utils.Move import Move
 
 ###########
 # Classes #
@@ -91,7 +97,7 @@ def random_loading(size, probability):
 def generate_random_init_target_configs(n_shots,load_prob, max_sys_size, target_config = None):
     init_config_storage = []
     target_config_storage = []
-    for shot in range(n_shots):
+    for _ in range(n_shots):
         initial_config = random_loading([max_sys_size, max_sys_size], load_prob)
         init_config_storage.append(initial_config)
         if target_config == [Configurations.RANDOM]:
@@ -99,22 +105,20 @@ def generate_random_init_target_configs(n_shots,load_prob, max_sys_size, target_
             target_config_storage.append(target)
     return init_config_storage, target_config_storage
 
-# @jit
-def generate_random_init_configs(n_shots,load_prob, max_sys_size,n_species=1):
-
+def generate_random_init_configs(n_shots, load_prob, shape, n_species=1):
     init_config_storage = []
-    for shot in range(n_shots):
-        # initial_config = random_loading([max_sys_size, max_sys_size], load_prob)
+    rows, cols = int(shape[0]), int(shape[1])
+    base_shape = (rows, cols)
+    for _ in range(n_shots):
         if n_species == 1:
-            initial_config = random_loading([max_sys_size, max_sys_size], load_prob)
+            initial_config = random_loading(base_shape, load_prob)
         elif n_species == 2:
-            initial_config = np.zeros([max_sys_size, max_sys_size,2])
+            initial_config = np.zeros((rows, cols, 2))
             dual_species_prob = 2 - 2*math.sqrt(1-load_prob)
-            initial_config[:,:,0] = random_loading([max_sys_size, max_sys_size], dual_species_prob/2)
-            initial_config[:,:,1] = random_loading([max_sys_size, max_sys_size], dual_species_prob/2)
-        
+            initial_config[:,:,0] = random_loading(base_shape, dual_species_prob/2)
+            initial_config[:,:,1] = random_loading(base_shape, dual_species_prob/2)
 
-            # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
+            # Randomly leave one atom if two species load into the same tweezer
             for i in range(len(initial_config)):
                 for j in range(len(initial_config[0])):
                     if initial_config[i][j][0] == 1 and initial_config[i][j][1] == 1:

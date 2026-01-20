@@ -19,6 +19,8 @@ by [Nikhil Kiran Harle*](https://github.com/khnikhil/khnikhil), [Bo-Yu Chen*](ht
 
 :toolbox: Core utils for moving atoms and simulating stochastic loading: `atommover.utils.core.py` and `atommover.utils.move_utils.py`
 
+:camera: Realistic imaging pipeline: `atommover.utils.imaging/` - Generate camera-like images from atom grids, extract centroids with blob detection, estimate grid angles, and fit detected atoms back to grids.
+
 
 # Use
 
@@ -31,6 +33,30 @@ Want to add an algorithm to the library, or make your own? Check out our templat
 
 Want to add some features and/or make this code nicer? Check out [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+
+## Imaging Pipeline Quick Start
+
+The new `atommover.utils.imaging` subpackage provides realistic image synthesis and extraction:
+
+```python
+from atommover.utils.AtomArray import AtomArray
+from atommover.utils.imaging import extract_grid_from_image
+
+# Generate realistic camera image from atom array
+arr = AtomArray(shape=[6, 8], n_species=1)
+arr.load_tweezers()  
+img = arr.render_realistic_image(sigma=1.5, image_shape=(128, 128))
+
+# Extract grid from image with angle correction
+binary_grid, meta = extract_grid_from_image(
+    img, grid_shape=(6, 8), 
+    method='blob',      # OpenCVs BlobDetection
+    angle_method='pca'  # multiple angle estimation options
+)
+print(f"Detected {binary_grid.sum()} atoms at {meta['angle_deg']:.1f}° rotation")
+```
+
+See [`imaging_demo.py`](imaging_demo.py) for complete examples.
 
 ##  Installation
 
