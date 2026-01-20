@@ -6,7 +6,7 @@ from scipy.sparse import csr_matrix
 
 from atommover.utils.core import *
 from atommover.utils.move_utils import *
-from atommover.utils.animation import *
+from atommover.utils.imaging.animation import *
 from atommover.algorithms.source.ejection import *
 from atommover.algorithms.source.PPSU_weight_matching import bttl_threshold
 

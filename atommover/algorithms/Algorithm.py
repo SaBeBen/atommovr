@@ -69,4 +69,15 @@ class Algorithm:
         # your code here #
 
         return config, move_list, success_flag
+    
+    def preferred_initial_shape(self, target_size: int, loading_prob: float = 0.6) -> tuple[int, int]:
+        """
+        If your algorithm works best with a specific initial array shape,
+        please specify it here as a tuple (rows, cols).
+
+        Default is square with a factor to account for the loading probability and a small buffer to ensure enough atoms.
+        """
+        side = int(np.ceil(np.sqrt(target_size))) * (int(np.ceil(1 / np.sqrt(loading_prob))) + 0.2)
+        return (side, side)
+         
         

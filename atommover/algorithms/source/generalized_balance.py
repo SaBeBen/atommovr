@@ -3,8 +3,7 @@ from collections import deque
 
 from atommover.utils.core import *
 from atommover.utils.move_utils import *
-from atommover.utils.animation import *
-from atommover.algorithms.source.ejection import *
+from atommover.utils.imaging.animation import *
 
 def generalized_balance(init_config, target_config, do_ejection: bool = False, final_size: list = []):
     generalized_balance_success_flag = False
@@ -27,19 +26,10 @@ def generalized_balance(init_config, target_config, do_ejection: bool = False, f
     balance_moves_term = len(move_list)
     final_config = copy.deepcopy(balance_config)
 
-    if do_ejection:
-        eject_moves, final_config = ejection(balance_config, target_config, final_size)
-        move_list.extend(eject_moves)
-        ejection_moves_term = len(eject_moves)
-        # Check if the configuration is the same as the target configuration
-        if np.array_equal(final_config, target_config):
-            generalized_balance_success_flag = True
-    else:
-        ejection_moves_term = 0
-        # Check if the configuration (inside range of target) the same as the target configuration
-        effective_config = np.multiply(final_config, target_config)
-        if np.array_equal(effective_config, target_config):
-            generalized_balance_success_flag = True
+    ejection_moves_term = 0
+    effective_config = np.multiply(final_config, target_config)
+    if np.array_equal(effective_config, target_config):
+        generalized_balance_success_flag = True
     
     return final_config, move_list, generalized_balance_success_flag #, [balance_moves_term, ejection_moves_term]
 

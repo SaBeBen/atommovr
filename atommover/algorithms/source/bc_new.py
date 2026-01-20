@@ -1,12 +1,8 @@
-import atommover
 import atommover.utils as movr
-import atommover.algorithms as algos
-from atommover.algorithms.source.ejection import ejection
-
 import copy
 import numpy as np
 
-def bcv2(array, do_ejection = False):
+def bcv2(array):
     if len(np.shape(array.matrix)) > 2 and np.shape(array.matrix)[2] == 2:
         raise ValueError(f'Atom array has shape {np.shape(array.matrix)}, which is not correct for single species. Did you meant to use a dual species algorithm?')
     success_flag = False
@@ -39,18 +35,9 @@ def bcv2(array, do_ejection = False):
             _, _ = arr1.evaluate_moves(com_moves)
             master_move_list.extend(com_moves)
 
-    if do_ejection:
-        eject_moves, final_config = ejection(arr1.matrix, arr1.target, [0, len(arr1.matrix) - 1, 0, len(arr1.matrix[0]) - 1])
-        _, _ = arr1.evaluate_moves(eject_moves)
-        master_move_list.extend(eject_moves)
-        # 3.1 Check if the configuration is the same as the target configuration
-        if np.array_equal(arr1.matrix, arr1.target.reshape(np.shape(arr1.matrix))):
-            success_flag = True
-    else:
-        # 3.2 Check if the configuration (inside range of target) the same as the target configuration
-        effective_config = np.multiply(arr1.matrix, arr1.target.reshape(np.shape(arr1.matrix)))
-        if np.array_equal(effective_config, arr1.target.reshape(np.shape(arr1.matrix))):
-            success_flag = True
+    effective_config = np.multiply(arr1.matrix, arr1.target.reshape(np.shape(arr1.matrix)))
+    if np.array_equal(effective_config, arr1.target.reshape(np.shape(arr1.matrix))):
+        success_flag = True
     return arr1.matrix, master_move_list, success_flag
 
 def special_case_algo_1d(init_config: np.ndarray, target_config: np.ndarray) -> 'list':

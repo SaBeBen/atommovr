@@ -1,7 +1,7 @@
 ##Algorithm for the Balance and Compact Algorithm
 from atommover.utils.core import *
 from atommover.utils.move_utils import *
-from atommover.utils.animation import *
+from atommover.utils.imaging.animation import *
 from atommover.algorithms.source.ejection import ejection
 from atommover.algorithms.source.generalized_balance import *
 import numpy as np
@@ -26,20 +26,13 @@ def balance_and_compact(init_config: np.ndarray, target_config: np.ndarray, do_e
     col_nums = col_max - col_min + 1
     middle_col = col_min + (col_nums // 2) - 1
 
-    # Counts moves components in the balance and compact algorithm
-    balance_moves_term = 0
-    compact_moves_term = 0
-    ejection_moves_term = 0
-
     pre_balance_config, move_list = pre_balance(matrix, target_config, row_min, row_max, col_min, col_max, move_list)
     balance_left_config, move_list = balance_bc(pre_balance_config, target_config, row_min, row_max, col_min, middle_col, move_list, 0)
     balance_config, move_list = balance_bc(balance_left_config, target_config, row_min, row_max, middle_col + 1, col_max, move_list, 0)
-    balance_moves_term = len(move_list)
 
     # 2. Compact part alogrithm 
     compact_config, move_list = compact_left(balance_config, target_config, middle_col, move_list)
     compact_config, move_list = compact_right(compact_config, target_config, middle_col, move_list)
-    compact_moves_term = len(move_list) - balance_moves_term
     
     final_config = copy.deepcopy(compact_config)
 
@@ -47,12 +40,10 @@ def balance_and_compact(init_config: np.ndarray, target_config: np.ndarray, do_e
     if do_ejection:
         eject_moves, final_config = ejection(compact_config, target_config, [0, len(matrix) - 1, 0, len(matrix[0]) - 1])
         move_list.extend(eject_moves)
-        ejection_moves_term = len(eject_moves)
         # 3.1 Check if the configuration is the same as the target configuration
         if np.array_equal(final_config,target_config):
             success_flag = True
     else:
-        ejection_moves_term = 0
         # 3.2 Check if the configuration (inside range of target) the same as the target configuration
         effective_config = np.multiply(final_config, target_config)
         if np.array_equal(effective_config, target_config):

@@ -1,8 +1,7 @@
 ## Modified Balance and Compact algorithm
 from atommover.utils.core import *
 from atommover.utils.move_utils import *
-from atommover.utils.animation import *
-from atommover.algorithms.source.ejection import ejection
+from atommover.utils.imaging.animation import *
 import numpy as np
 
 # Balance and Compact

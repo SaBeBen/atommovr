@@ -6,12 +6,44 @@ import numpy as np
 from atommover.utils.core import *
 from atommover.utils.move_utils import *
 
-def ejection(init_config: np.ndarray, target_config: np.ndarray, final_size = None) -> tuple[list, np.ndarray]:
+def ejection(
+    init_config: np.ndarray,
+    target_config: np.ndarray,
+    final_size = None,
+    method: str = "sublattice",
+) -> tuple[list, np.ndarray]:
+    """Remove leftover atoms once the target is filled.
+
+    Parameters
+    ----------
+    init_config, target_config : np.ndarray
+        Two-dimensional single-species occupancy grids.
+    final_size : tuple | None
+        Optional bounds used by the legacy sublattice routine.
+    method : {"sublattice", "column"}
+        ``"sublattice"`` runs the historic row/column slicing procedure that
+        incrementally shuttles atoms out of each quadrant. ``"column"`` executes a
+        simplified, maximally parallel routine that strips entire columns from the
+        left and right edges, ejecting them one at a time. The column strategy is
+        fastest when the desired target occupies a compact block in the center of
+        the array and any atoms beyond that block can be discarded. Because it has
+        no notion of buffer zones or future donor usage, it should not be used
+        before the target is fully populated; otherwise, required donor atoms near
+        the perimeter may be lost permanently.
+    """
     matrix = copy.deepcopy(init_config)
     move_list = []
 
     if final_size == None:
         final_size = np.shape(init_config)
+
+    if method not in {"sublattice", "column"}:
+        raise ValueError(f"Unknown ejection method '{method}'.")
+
+    if method == "column":
+        matrix, column_moves = _parallel_square_ejection(matrix, target_config)
+        move_list.extend(column_moves)
+        return move_list, matrix
 
     #Identify unwanted atoms
     left_eject, bot_eject, top_eject, right_eject = generate_eject_coordinates(matrix, target_config)
@@ -37,6 +69,66 @@ def ejection(init_config: np.ndarray, target_config: np.ndarray, final_size = No
         matrix, move_list = ver_ejection(matrix, target_config, move_list, row_min, row_max, col_min, col_max, direction = -1)
 
     return move_list, matrix
+
+
+def _parallel_square_ejection(matrix: np.ndarray, target_config: np.ndarray) -> tuple[np.ndarray, list[list[Move]]]:
+    """Strip columns then rows outside the target bounds with maximal parallelism.
+
+    Each column strictly outside the target's bounding box is removed in one
+    parallel batch, followed by analogous sweeps for rows above and below the
+    target. The runtime is linear in the number of exterior rows/columns. This
+    assumes ``target_config`` is a binary mask matching ``matrix``.
+
+    Potential dangers: if the target occupies disjoint regions or if downstream
+    logic still needs atoms outside the bounding box (e.g., future donor usage),
+    those atoms vanish immediately. The routine also ignores stray atoms *inside*
+    the bounding box; run the traditional ejection if interior cleanup is needed.
+    """
+    temp_matrix = copy.deepcopy(matrix)
+    move_batches: list[list[Move]] = []
+
+    if temp_matrix.ndim != 2:
+        raise ValueError("Column-strip ejection only supports 2-D single-species arrays.")
+
+    target_coords = np.argwhere(target_config == 1)
+    if target_coords.size == 0:
+        raise ValueError("Target consists of all zeros; column ejection would remove every atom.")
+
+    rows, cols = temp_matrix.shape
+    min_row = int(np.min(target_coords[:, 0]))
+    max_row = int(np.max(target_coords[:, 0]))
+    min_col = int(np.min(target_coords[:, 1]))
+    max_col = int(np.max(target_coords[:, 1]))
+
+    # Process columns strictly to the left of the target.
+    for col in range(0, min_col):
+        batch = [Move(row, col, row, col - 1) for row in range(rows) if temp_matrix[row, col] == 1]
+        if batch:
+            move_batches.append(batch)
+            temp_matrix, _ = move_atoms(temp_matrix, batch)
+
+    # Process columns strictly to the right of the target.
+    for col in range(cols - 1, max_col, -1):
+        batch = [Move(row, col, row, col + 1) for row in range(rows) if temp_matrix[row, col] == 1]
+        if batch:
+            move_batches.append(batch)
+            temp_matrix, _ = move_atoms(temp_matrix, batch)
+
+    # Process rows strictly above the target.
+    for row in range(0, min_row):
+        batch = [Move(row, col, row - 1, col) for col in range(cols) if temp_matrix[row, col] == 1]
+        if batch:
+            move_batches.append(batch)
+            temp_matrix, _ = move_atoms(temp_matrix, batch)
+
+    # Process rows strictly below the target.
+    for row in range(rows - 1, max_row, -1):
+        batch = [Move(row, col, row + 1, col) for col in range(cols) if temp_matrix[row, col] == 1]
+        if batch:
+            move_batches.append(batch)
+            temp_matrix, _ = move_atoms(temp_matrix, batch)
+
+    return temp_matrix, move_batches
 
 # Ejection from Left and Right Side; Left = -1, Right = 1
 def hor_ejection(matrix, target_config, move_list, row_min, row_max, col_min, col_max, direction):

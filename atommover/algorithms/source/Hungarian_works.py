@@ -4,15 +4,13 @@ from collections import deque
 from scipy.optimize import linear_sum_assignment
 from scipy.sparse import csr_matrix
 
-from atommover.utils.AtomArray import AtomArray
 from atommover.algorithms.Algorithm_class import Algorithm
 from atommover.utils.core import random_loading, generate_middle_fifty, Configurations
 from atommover.utils.move_utils import Move, move_atoms, get_move_list_from_AOD_cmds
-from atommover.algorithms.source.ejection import ejection
 from atommover.algorithms.source.scaling_lower_bound import make_cost_matrix_square
 from atommover.algorithms.source.PPSU_weight_matching import bttl_threshold
 
-def parallel_LBAP_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray, do_ejection: bool = False, round_lim: int = 15):
+def parallel_LBAP_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray, round_lim: int = 15):
     # Initialize the variables
     LBAP_success_flag = False
     complete_flag = False
@@ -40,19 +38,12 @@ def parallel_LBAP_algorithm_works(atom_arrays: np.ndarray, target_config: np.nda
         move_set.extend(Hung_parallel_move_set)
 
         # effective_config = np.multiply(matrix, target_config)
-        if Algorithm.get_success_flag(matrix, target_config, do_ejection=do_ejection, n_species = 1):
+        if Algorithm.get_success_flag(matrix, target_config, do_ejection=False, n_species = 1):
             complete_flag = True
             LBAP_success_flag = True
         round_count += 1
 
-    # 4. Eject to certain geoemetry
-    if do_ejection:
-        eject_moves, eject_config = ejection(matrix, target_config, [0, len(matrix) - 1, 0, len(matrix[0]) - 1])
-        move_set.extend(eject_moves)
-    else:
-        eject_config = matrix
-
-    return eject_config, move_set, LBAP_success_flag
+    return matrix, move_set, LBAP_success_flag
 
 def generate_LBAP_assignments(matrix, target_config):
     
@@ -108,12 +99,9 @@ def generate_LBAP_assignments(matrix, target_config):
 
     return prepared_assignments
 
-def Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray, do_ejection: bool = False, final_size: list = []):
+def Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray):
     move_set = []
     matrix = copy.deepcopy(atom_arrays)
-
-    if len(final_size) == 0:
-        final_size = [0, len(matrix[0])-1, 0, len(matrix)-1]
 
     #Define target positions for the center square in a matrix.
     current_positions, target_positions = define_current_and_target(matrix, target_config)
@@ -140,18 +128,11 @@ def Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray
         Hungarian_move = move_atom_and_show_grid(matrix, start, target)
         move_set.extend(Hungarian_move)
 
-    #Optional ejection argument
-    if do_ejection:
-        eject_moves, eject_config = ejection(matrix, target_config, final_size)
-        move_set.extend(eject_moves)
-    else:
-        eject_config = copy.deepcopy(matrix)
+    success_flag = Algorithm.get_success_flag(matrix.reshape(np.shape(target_config)), target_config, do_ejection=False, n_species = 1)
 
-    success_flag = Algorithm.get_success_flag(eject_config.reshape(np.shape(target_config)), target_config, do_ejection=do_ejection, n_species = 1)
+    return matrix, move_set, success_flag
 
-    return eject_config, move_set, success_flag
-
-def parallel_Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray, do_ejection: bool = False, final_size: list = [], round_lim: int = 15):
+def parallel_Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray, round_lim: int = 15):
     # Initialize the variables
     Hungarian_success_flag = False
     complete_flag = False
@@ -162,7 +143,7 @@ def parallel_Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: n
     while (complete_flag == False) and (round_count < round_lim):
         N_independent_moves_path = []
         # 1. Generate the assignments
-        prepared_assignments = generate_assignments(matrix, target_config, final_size)
+        prepared_assignments = generate_assignments(matrix, target_config)
 
         # 2. Find out N independent paths
         for start, target in prepared_assignments:
@@ -178,25 +159,15 @@ def parallel_Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: n
         move_set.extend(Hung_parallel_move_set)
 
         # effective_config = np.multiply(matrix, target_config)
-        if Algorithm.get_success_flag(matrix, target_config, do_ejection=do_ejection, n_species = 1):
+        if Algorithm.get_success_flag(matrix, target_config, do_ejection=False, n_species = 1):
             complete_flag = True
             Hungarian_success_flag = True
         round_count += 1
 
-    # 4. Eject to certain geoemetry
-    if do_ejection:
-        eject_moves, eject_config = ejection(matrix, target_config, [0, len(matrix) - 1, 0, len(matrix[0]) - 1])
-        move_set.extend(eject_moves)
-    else:
-        eject_config = matrix
+    return matrix, move_set, Hungarian_success_flag
 
-    return eject_config, move_set, Hungarian_success_flag
+def generate_assignments(matrix, target_config):
 
-def generate_assignments(matrix, target_config, final_size):
-
-    if len(final_size) == 0:
-        final_size = [0, len(matrix[0]) -1, 0, len(matrix)-1]
-    
     #Define target positions for the center square in a matrix.
     current_positions, target_positions = define_current_and_target(matrix, target_config)
 
@@ -235,8 +206,24 @@ def generate_path(arrays, start, end):
     return path
 
 def define_current_and_target(matrix, target_config):
-    current_positions = [(x, y) for x in range(len(matrix[0])) for y in range(len(matrix)) if matrix[x][y] == 1 if target_config[x][y] == 0] #NKH this should in theory not change anything...
-    target_positions = [(x, y) for x in range(len(matrix[0])) for y in range(len(matrix)) if target_config[x][y] == 1 if matrix[x][y] == 0] #same here
+    """Return (atoms, targets) as (row, col) coordinate tuples.
+
+    The implementation scans rows first to align with the ndarray layout and
+    includes every occupied site as a movable atom candidate. Likewise, every
+    target cell with a value of 1 is included irrespective of its current
+    occupancy; the assignment solver will naturally keep atoms in place when a
+    target is already satisfied (zero-cost match).
+    """
+    curr_rows = len(matrix)
+    curr_cols = len(matrix[0]) if curr_rows else 0
+    current_positions = []
+    target_positions = []
+    for r in range(curr_rows):
+        for c in range(curr_cols):
+            if matrix[r][c] == 1:
+                current_positions.append((r, c))
+            if target_config[r][c] == 1:
+                target_positions.append((r, c))
     return current_positions, target_positions
 
 #Generate a cost matrix for the Hungarian Algorithm.
@@ -267,8 +254,8 @@ def move_atom_and_show_grid(grid, start, end):
 def generate_AOD_cmds(matrix, move_seq):
     row_num = len(matrix)
     col_num = len(matrix[0])
-    horiz_AOD_cmds = np.zeros([row_num])
-    vert_AOD_cmds = np.zeros([col_num])
+    horiz_AOD_cmds = np.zeros([col_num])
+    vert_AOD_cmds = np.zeros([row_num])
     parallel_success_flag = True
     op_matrix = copy.deepcopy(matrix)
 
@@ -424,47 +411,50 @@ def transform_paths_into_moves(matrix, N_independent_moves_path):
 
     # 2. Implement the moves via N_independent_moves_path
     # 2.1 Reconstruct new move list regarding the parallel moves
-    keep_running_flag = True
-    count = 0
-    # Why count < 5? Most of the path have less than 5 moves.
-    while keep_running_flag and count < 5:
-        keep_running_flag = True
+    safety_cap = matrix.size * 4 if matrix.size else 0
+    rounds_executed = 0
+    while True:
         moves_in_scan = []
         destination_set = set()
+
         # 2.1.1 If there is no crossing path, implement one move for each path
         for path_in_moves in N_independent_moves_path:
-            # Check if there are unimplemented moves in the path
-            if len(path_in_moves) > 0:
-                for move in path_in_moves:
-                    crossing_path_flag = check_crossing_path(matrix, move[0], intersection_set, destination_set, path_in_moves)
-                    if not crossing_path_flag:
-                        moves_in_scan.append(move[0])
-                        path_in_moves.pop(0)
-                        destination_set.add((move[0].to_row, move[0].to_col))
-                    else:
-                        break
-        # 2.1.2 Parallelize the moves in the same round
-        if len(moves_in_scan) > 0:
-            moves_in_scan = regroup_parallel_moves(matrix, moves_in_scan)
-            # 2.1.3 Implement the moves
-            parallel_move_set.extend(moves_in_scan)
-            for moves in moves_in_scan:
-                matrix, _ = move_atoms(matrix, moves)
-                for move in moves:
-                    if (move.from_row, move.from_col) in intersection_set:
-                        if intersection_set[(move.from_row, move.from_col)] > 0:
-                            intersection_set[(move.from_row, move.from_col)] -= 1
-                        else:
-                            del intersection_set[(move.from_row, move.from_col)]
+            while path_in_moves:
+                move = path_in_moves[0]
+                crossing_path_flag = check_crossing_path(matrix, move[0], intersection_set, destination_set, path_in_moves)
+                if crossing_path_flag:
+                    break
+                moves_in_scan.append(move[0])
+                path_in_moves.pop(0)
+                destination_set.add((move[0].to_row, move[0].to_col))
 
-                    if (move.to_row, move.to_col) in intersection_set:
-                        if intersection_set[(move.to_row, move.to_col)] > 0:
-                            intersection_set[(move.to_row, move.to_col)] -= 1
-                        else:
-                            del intersection_set[(move.to_row, move.to_col)]
-        else:
-            keep_running_flag = False
-        count += 1
+        if not moves_in_scan:
+            break
+
+        moves_in_scan = regroup_parallel_moves(matrix, moves_in_scan)
+        if not moves_in_scan:
+            break
+
+        # 2.1.3 Implement the moves
+        parallel_move_set.extend(moves_in_scan)
+        for moves in moves_in_scan:
+            matrix, _ = move_atoms(matrix, moves)
+            for move in moves:
+                if (move.from_row, move.from_col) in intersection_set:
+                    if intersection_set[(move.from_row, move.from_col)] > 0:
+                        intersection_set[(move.from_row, move.from_col)] -= 1
+                    else:
+                        del intersection_set[(move.from_row, move.from_col)]
+
+                if (move.to_row, move.to_col) in intersection_set:
+                    if intersection_set[(move.to_row, move.to_col)] > 0:
+                        intersection_set[(move.to_row, move.to_col)] -= 1
+                    else:
+                        del intersection_set[(move.to_row, move.to_col)]
+
+        rounds_executed += 1
+        if safety_cap and rounds_executed > safety_cap:
+            raise RuntimeError("Exceeded safety cap while transforming paths into moves")
             
     return matrix, parallel_move_set
 
@@ -473,6 +463,8 @@ def bfs_move_atom(grid, start, end, prev_path):
     queue = deque([(start[0], start[1], [(start[0], start[1])])]) #Use the queue to record current position and path
     visited = set() #Record the visited positions
     visited.add((start[0], start[1]))
+    n_rows = len(grid)
+    n_cols = len(grid[0]) if n_rows else 0
 
     #Start finding the path
     while queue:
@@ -494,13 +486,22 @@ def bfs_move_atom(grid, start, end, prev_path):
         new_row, new_col = current_row + dr, current_col + dc
 
         #Check if there is an obstacle there (If no, start from this new point to find next step)
-        if (new_row, new_col) not in visited and grid[new_row][new_col] == 0:
+        if (
+            0 <= new_row < n_rows
+            and 0 <= new_col < n_cols
+            and (new_row, new_col) not in visited
+            and grid[new_row][new_col] == 0
+        ):
             visited.add((new_row, new_col))
             queue.append((new_row, new_col, path + [(new_row, new_col)])) 
 
     #If there is an obstacle on the path, we decompose the path: start->obstacle->target
     #Define the obstacle position
-    obstacle = (path[len_path][0] + dr, path[len_path][1] + dc)
+    obstacle_row = path[len_path][0] + dr
+    obstacle_col = path[len_path][1] + dc
+    if not (0 <= obstacle_row < n_rows and 0 <= obstacle_col < n_cols):
+        obstacle_row, obstacle_col = path[len_path][0], path[len_path][1]
+    obstacle = (obstacle_row, obstacle_col)
 
     # Update the move in path until obstacle
     if len(prev_path) > 0:
