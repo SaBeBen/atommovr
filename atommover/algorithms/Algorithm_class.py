@@ -106,18 +106,7 @@ class Algorithm:
         
         return success_flag
     
-    def preferred_initial_shape(self, target_size: int, loading_prob: float = 0.6) -> tuple[int, int]:
-        """
-        Suggest a default initial array shape given a target size and loading probability.
 
-        This mirrors the helper present in `Algorithm.py` so algorithms that call
-        `super().preferred_initial_shape(...)` behave consistently regardless of
-        which Algorithm base class is imported.
-        """
-        # Return None by default so tests and callers retain their configured
-        # `array_shape` unless a specific algorithm provides a tailored suggestion.
-        return None
-        
 def get_effective_target_grid(target, n_species = 1):
     try:
         n_rows, n_cols = target.shape

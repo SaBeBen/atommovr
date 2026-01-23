@@ -99,7 +99,7 @@ def _evaluate_params(
             blob_params=blob_params,
         )
         try:
-            binary = detector.extract_and_visualize(sample.image_path, visualize=False)
+            binary = detector.extract_estimate_rotate_and_assign(sample.image_path, visualize=False)
         except Exception as exc:  # pragma: no cover - guardrail for bad params
             logger.debug("Extraction failed for %s: %s", sample.image_path, exc)
             recalls.append(0.0)

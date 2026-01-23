@@ -74,7 +74,7 @@ class AtomArray:
         # Always delegate to superclass to avoid recursion
         super().__setattr__(key, value)
         
-
+        
     # def load_tweezers(self):
     #     """
     #     Simulates uniform stochastic loading for single- or dual-species atom arrays.
@@ -96,105 +96,35 @@ class AtomArray:
         
     #     self.last_loaded_config = copy.deepcopy(self.matrix)
 
-    def load_tweezers(self, extract_angle: bool = False, angle_method: str | None = None, image_kwargs: dict | None = None, image = None):
+    def load_tweezers(self):
         """
         Simulates uniform stochastic loading for single- or dual-species atom arrays.
         Loading probability (default 60%) can be set with `AtomArray.params.loading_prob`.
-        Optionally estimates the array rotation angle from a generated image and stores it in `self.angle`
-        for downstream usage.
 
         Parameters
         ----------
-        extract_angle : bool
-            Whether to estimate the array rotation angle from a generated image.
-            If True, the estimated angle (degrees) is stored in `self.angle`.
-
-        angle_method : str or None
-            Method to use for angle estimation. Passed to `extract_grid_from_image`.
-            If None, no angle estimation is performed.
-
-        image_kwargs : dict or None
-            Additional keyword arguments passed to `render_realistic_image` when
-            generating the image for angle extraction.
+        None
 
         Returns
         -------
         None
         """
+        if self.n_species == 1:
+            self.matrix[:,:,:] = random_loading(self.shape, self.params.loading_prob).reshape(self.shape[0], self.shape[1],1)
+        if self.n_species == 2:
+            dual_species_prob = 2 - 2*math.sqrt(1-self.params.loading_prob)
+            self.matrix[:,:,0] = random_loading(self.shape, dual_species_prob/2)
+            self.matrix[:,:,1] = random_loading(self.shape, dual_species_prob/2)
 
-        # If an image (numpy array or path) is provided, attempt to extract the grid
-        # and angle from it, and set the internal `matrix` accordingly.
-        used_image_for_load = False
-        if image is not None:
-            try:
-                from atommover.utils.imaging import extract_grid_from_image
-                grid_shape = (self.shape[0], self.shape[1])
-                binary, meta = extract_grid_from_image(image, grid_shape=grid_shape, method="blob", angle_method=angle_method)
+            # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
+            for i in range(len(self.matrix)):
+                for j in range(len(self.matrix[0])):
+                    if self.matrix[i][j][0] == 1 and self.matrix[i][j][1] == 1:
+                        random_index = random.randint(0, 1)
+                        self.matrix[i][j][random_index] = 0
 
-                if self.n_species == 1:
-                    self.matrix = binary.reshape(self.shape[0], self.shape[1], 1).astype(int)
-                else:
-                    self.matrix = np.zeros((self.shape[0], self.shape[1], self.n_species), dtype=int)
-                    self.matrix[:, :, 0] = binary.astype(int)
+        self.last_loaded_config = copy.deepcopy(self.matrix)
 
-                self.last_loaded_config = copy.deepcopy(self.matrix)
-                self.last_loaded_image = image
-                try:
-                    self.angle = float(meta.get("angle_deg", 0.0))
-                except Exception:
-                    self.angle = None
-                used_image_for_load = True
-            except Exception as e:
-                try:
-                    import logging
-                    logging.getLogger("atommover").warning(f"Image-based loading failed, falling back to stochastic load: {e}")
-                except Exception:
-                    pass
-
-        # If we didn't load from an image, perform the previous stochastic loading
-        if not used_image_for_load:
-            if self.n_species == 1:
-                self.matrix[:,:,:] = random_loading(self.shape, self.params.loading_prob).reshape(self.shape[0], self.shape[1],1)
-            if self.n_species == 2:
-                dual_species_prob = 2 - 2*math.sqrt(1-self.params.loading_prob)
-                self.matrix[:,:,0] = random_loading(self.shape, dual_species_prob/2)
-                self.matrix[:,:,1] = random_loading(self.shape, dual_species_prob/2)
-
-                # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
-                for i in range(len(self.matrix)):
-                    for j in range(len(self.matrix[0])):
-                        if self.matrix[i][j][0] == 1 and self.matrix[i][j][1] == 1:
-                            random_index = random.randint(0, 1)
-                            self.matrix[i][j][random_index] = 0
-
-            self.last_loaded_config = copy.deepcopy(self.matrix)
-
-            # If extract_angle was requested, generate a synthetic image and estimate angle
-            if extract_angle:
-                # default image kwargs
-                if image_kwargs is None:
-                    image_kwargs = {}
-                try:
-                    try:
-                        img = self.render_realistic_image(**image_kwargs)
-                    except TypeError:
-                        img = self.render_realistic_image()
-
-                    self.last_loaded_image = img
-                    from atommover.utils.imaging import extract_grid_from_image
-                    grid_shape = (self.shape[0], self.shape[1])
-                    _, meta = extract_grid_from_image(img, grid_shape=grid_shape, method="blob", angle_method=angle_method)
-                    try:
-                        self.angle = float(meta.get("angle_deg", 0.0))
-                    except Exception:
-                        self.angle = None
-                except Exception as e:
-                    try:
-                        import logging
-                        logging.getLogger("atommover").warning(f"Angle extraction failed: {e}")
-                    except Exception:
-                        pass
-                    self.angle = None
 
     def generate_target(self, pattern: Configurations = Configurations.CHECKERBOARD, middle_size: list = [], occupation_prob: float = 0.5):
         if self.n_species == 1:

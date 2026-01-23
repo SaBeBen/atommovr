@@ -42,7 +42,7 @@ import yaml
 from atommover.algorithms.single_species import PCFA
 from atommover.utils.AtomArray import AtomArray
 from atommover.utils.awg_control import AODSettings, RFConverter
-from atommover.utils.core import PhysicalParams
+from atommover.utils.core import PhysicalParams, array_shape_for_geometry
 from atommover.utils.imaging.extraction import (
     BlobDetection,
     fit_grid_and_assign,
@@ -103,22 +103,22 @@ def _select_target_side(
     binary: np.ndarray,
     algorithm: object,
     safety_margin: float = 0.8,
+    loading_prob: float = 0.6,
 ) -> int:
     available = int(binary.sum())
     if available == 0:
         return 0
     max_side = min(binary.shape[0], binary.shape[1])
-    pref_shape_fn = getattr(algorithm, "preferred_initial_shape", None)
+    geometry_spec = getattr(algorithm, "preferred_geometry_spec", None)
     for candidate in range(max_side, 0, -1):
         if candidate * candidate > available * safety_margin:
             continue
-        if callable(pref_shape_fn):
-            try:
-                pref_rows, pref_cols = pref_shape_fn(candidate)
-            except Exception:
-                pref_rows, pref_cols = binary.shape
-            if pref_rows > binary.shape[0] or pref_cols > binary.shape[1]:
-                continue
+        try:
+            pref_rows, pref_cols = array_shape_for_geometry(geometry_spec, candidate, loading_prob)
+        except Exception:
+            pref_rows, pref_cols = binary.shape
+        if pref_rows > binary.shape[0] or pref_cols > binary.shape[1]:
+            continue
         return candidate
     return 0
 
@@ -132,7 +132,7 @@ def _build_atom_array(
     arr = AtomArray([rows, cols], n_species=1, params=phys_params)
     arr.matrix[:, :, 0] = binary.astype(int)
 
-    target_side = _select_target_side(binary, algorithm)
+    target_side = _select_target_side(binary, algorithm, loading_prob=getattr(phys_params, "loading_prob", 0.6))
     target = np.zeros_like(binary)
     if target_side > 0:
         target[:target_side, :target_side] = 1

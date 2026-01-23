@@ -145,8 +145,8 @@ def _plan_row_compression(
 			dst = col_min + i
 			
 			# Ensure we don't move off the grid
-			if dst >= state.shape[1]:
-				break
+			# if dst >= state.shape[1]:
+			# 	break
 				
 			if src == dst:
 				continue

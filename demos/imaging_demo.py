@@ -18,13 +18,8 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 from atommover.utils.core import ArrayGeometry
-import cv2
-
 try:
     from atommover.utils.AtomArray import AtomArray
-    from atommover.utils.imaging import (
-        extract_grid_from_image,
-    )
     from atommover.utils.imaging.extraction import BlobDetection
 except Exception as e:
     # Catch any import-time issue (including SyntaxError in imaging modules)
@@ -82,52 +77,25 @@ def demo_extraction_pipeline():
     plt.savefig('figs/imaging/demo_extraction_input.png', dpi=150, bbox_inches='tight')
     plt.close()
 
-    # Test different extraction methods and angle estimators
+    # Show different extraction methods and angle estimators
     methods = [('blob', 'pca'), ('blob', 'fit_rect'), ('blob', None)]
 
-    # NEW: demonstrate the AtomArray image-based loader that extracts angle and sets occupancy
-    arr_img_load = AtomArray(shape=shape, n_species=1)
-    arr_img_load.load_tweezers(image=img, angle_method='pca')
-    print(f"Loaded via AtomArray.load_tweezers(image=...): estimated angle = {arr_img_load.angle}")
-    # save the image that was used/stored by the AtomArray
-    os.makedirs('figs/imaging', exist_ok=True)
-    plt.imsave('figs/imaging/demo_extraction_loaded.png', arr_img_load.last_loaded_image, cmap='Blues')
+    blob_detector = BlobDetection(
+        shape=(shape[0], shape[1]),
+        scale=(1, 1),
+        logger=None,
+    )
     
     for i, (method, angle_method) in enumerate(methods):
-        _, meta = extract_grid_from_image(
+        _, angle_deg, _ = blob_detector.extract_estimate_rotate_and_assign(
             img,
             grid_shape=shape,
             method=method,
             angle_method=angle_method,
         )
 
-        angle_extracted = meta.get('angle_deg', None)
-        print(f"Method {i+1}: method={method}, angle_method={angle_method}, extracted angle={angle_extracted}")
+        print(f"Method {i+1}: method={method}, angle_method={angle_method}, extracted angle={angle_deg}")
 
-def setup_blob_params(params: dict) -> cv2.SimpleBlobDetector_Params:
-    if params is None:
-
-        blob_params = cv2.SimpleBlobDetector_Params()
-        blob_params.filterByColor = True
-        blob_params.blobColor = 255
-        blob_params.minThreshold = 20
-        blob_params.maxThreshold = 255
-        blob_params.thresholdStep = 5
-        blob_params.minDistBetweenBlobs = 10
-        blob_params.minArea = 10
-        blob_params.maxArea = 1000
-        blob_params.filterByArea = False
-        blob_params.filterByCircularity = False
-        blob_params.minCircularity = 0.9
-        blob_params.filterByConvexity = False
-        blob_params.minConvexity = 0.8
-        blob_params.filterByInertia = False
-    else:
-        blob_params = cv2.SimpleBlobDetector_Params()
-        for key, val in params.items():
-            setattr(blob_params, key, val)
-
-    return blob_params
 
 # create a source and a target AtomArray to show start and goal states and visualize them
 def create_demo_arrays():
@@ -150,7 +118,6 @@ def create_demo_arrays():
     img_adjusted = arr_source.render_realistic_image(sigma=1.5, brightness=1, image_shape=(1280, 1280), noise_level=0.01)
 
     # run blob detection on the source image and overlay detected centroids
-    blob_params = setup_blob_params(None)
     spots = int(sum(arr_source.matrix[:,:,0].flatten()))
     print(f"Expecting to detect {spots} blobs in the source image")
 
@@ -159,9 +126,8 @@ def create_demo_arrays():
         spots=spots,
         scale=(1, 1),
         logger=None,
-        blob_params=blob_params,
     )
-    binary_grid = blob_detector.extract_and_visualize(img_source, visualize=True)
+    binary_grid = blob_detector.extract_estimate_rotate_and_assign(img_source, visualize=True)
     n_detected = 0 if binary_grid is None else np.sum(binary_grid)
     print(f"Detected {n_detected} blobs on the source image")
 

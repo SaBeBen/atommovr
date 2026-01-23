@@ -568,12 +568,75 @@ class Extractor:
             binary_grid[r, c] = 1
         return binary_grid
     
-    def extract_and_visualize(self, image, visualize=False):
-        centroids, image_shape = self.extract(image)
-        if len(centroids) > 0 and hasattr(centroids[0], "pt"):
-            centroids = [(c.pt[1], c.pt[0]) for c in centroids]
-        self.logger.info(f"Found {len(centroids)} Centroids in the image.")
-        binary_grid = fit_grid_and_assign(centroids=centroids, grid_shape=self.shape, image_shape=image_shape)
+    def extract_estimate_rotate_and_assign(
+        self,
+        image: np.ndarray | str,
+        grid_shape: Tuple[int, int],
+        angle_method: Optional[str] = None,
+        visualize: bool = False,
+    ) -> Tuple[np.ndarray, float, int]:
+        """
+        Convenience pipeline: detect centroids, optionally estimate/rectify rotation,
+        and assign to a binary grid.
+
+        Parameters
+        ----------
+        image : np.ndarray | str
+            Input image as a numpy array or file path.
+        grid_shape : Tuple[int, int]
+            The expected shape of the grid (rows, columns).
+        angle_method : Optional[str], optional
+            The method to use for angle estimation. Default is None.
+        visualize : bool, optional
+            Whether to visualize the detected centroids on the image. Default is False.
+
+        Returns
+        -------
+        Tuple[np.ndarray, float, int]
+            A tuple containing the binary grid, the angle (in degrees), 
+            and the number of centroids.
+        """
+        if isinstance(image, str):
+            centroids, img_shape = self.extract(image)
+            img_arr = np.array(Image.open(image))
+        else:
+            centroids, img_shape = self.extract(image)
+            img_arr = image
+
+        centroids = np.asarray(centroids)
+        angle = 0.0
+        if angle_method:
+            am = angle_method.lower()
+            if am == "pca":
+                angle = estimate_grid_rotation_pca(centroids)
+            elif am == "vectorize":
+                angle = estimate_grid_rotation_vectorize(centroids, grid_shape)
+            elif am == "diff_pca":
+                angle = estimate_grid_rotation_diff_pca(centroids)
+            elif am == "diffs":
+                angle = estimate_grid_rotation_diffs(centroids)
+            elif am == "pair_diff":
+                angle = estimate_grid_rotation_pair_diff(centroids)
+            elif am == "fit_rect":
+                angle = estimate_grid_rotation_fit_rect(centroids)
+            elif am == "fft_img":
+                angle = estimate_grid_rotation_fourier_img(img_arr)
+            elif am == "fft_mask":
+                angle = estimate_grid_rotation_fourier(centroids, img_shape)
+            else:
+                raise ValueError("Unknown angle_method: %s" % angle_method)
+        # optionally rectify image/centroids
+        if angle_method in {"fft_img"}:
+            rot = rotate_image(img_arr, -angle)
+            # Re-extract on rotated image for better assignment
+            centroids2, _ = self.extract(rot)
+            centroids_use = np.asarray(centroids2)
+        else:
+            centroids_use = centroids
+        binary = fit_grid_and_assign(centroids_use, grid_shape, img_shape)
+        angle_deg = float(angle)
+        n_centroids = int(len(centroids_use))
+
         if visualize:
             if isinstance(image, str):
                 image_path = image
@@ -582,8 +645,9 @@ class Extractor:
                 img = image
             print(f"Centroids shape: {np.array(centroids).shape}, centroids count: {len(centroids)}")
             self.overlay_centroids(img, centroids=centroids, save_path="figs/centroids_on_image.png")
-        return binary_grid
-        
+        return binary, angle_deg, n_centroids
+
+
     @staticmethod
     def overlay_centroids(
         image: np.ndarray,
@@ -624,10 +688,8 @@ class Extractor:
             plt.close(fig)
 
 
-
-
 class BlobDetection(Extractor):
-    def __init__(self, shape, spots=3, threshold=0.1, scale=(1.0, 1.0), affine_matrix=None, logger=None, blob_params=None):
+    def __init__(self, shape, spots=None, threshold=0.1, scale=(1.0, 1.0), affine_matrix=None, logger=None, blob_params=None):
         super().__init__(shape, spots, threshold, scale, affine_matrix, logger=logger)
         if blob_params is None:
             self.blob_params = cv2.SimpleBlobDetector_Params()
@@ -635,7 +697,7 @@ class BlobDetection(Extractor):
             self.blob_params.blobColor = 255
             self.blob_params.minThreshold = 80
             self.blob_params.maxThreshold = 255
-            self.blob_params.thresholdStep = 60
+            self.blob_params.thresholdStep = 20
             self.blob_params.minDistBetweenBlobs = 10
             self.blob_params.minArea = 5
             self.blob_params.maxArea = 1000
@@ -645,6 +707,7 @@ class BlobDetection(Extractor):
             self.blob_params.filterByInertia = False
         else:
             self.blob_params = blob_params
+
         self.detector = cv2.SimpleBlobDetector_create(self.blob_params)
 
     @staticmethod
@@ -674,7 +737,7 @@ class BlobDetection(Extractor):
 
         # Try OpenCV's circle grid detection first (ordered grid)
         # try:
-        #     ret, centroids = cv2.findCirclesGrid(img_8bit, patternSize=(W, H), blobDetector=self.detector)
+        ret, centroids = cv2.findCirclesGrid(img_8bit, patternSize=(W, H), blobDetector=self.detector)
         # except Exception:
         #     ret = False
 
@@ -743,75 +806,3 @@ def _get_default_logger():
     return logger
 
 
-def extract_grid_from_image(
-    image: np.ndarray | str,
-    grid_shape: Tuple[int, int],
-    method: str = "blob",
-    angle_method: Optional[str] = None,
-) -> Tuple[np.ndarray, dict]:
-    """
-    Convenience pipeline: detect centroids, optionally estimate/rectify rotation,
-    and assign to a binary grid. Returns (binary_grid, meta).
-
-    Parameters
-    ----------
-    image : np.ndarray | str
-        Input image as a numpy array or file path.
-    grid_shape : Tuple[int, int]
-        The expected shape of the grid (rows, columns).
-    method : str, optional
-        The method to use for grid extraction. Default is "blob".
-    angle_method : Optional[str], optional
-        The method to use for angle estimation. Default is None.
-
-    Returns
-    -------
-    Tuple[np.ndarray, dict]
-        A tuple containing the binary grid and metadata dictionary in which the angle (in degrees) 
-        and the number of centroids are stored.
-    """
-    logger = _get_default_logger()
-    if method == "blob":
-        extractor = BlobDetection(shape=grid_shape, logger=logger)
-    else:
-        raise ValueError("Unknown method: %s" % method)
-    if isinstance(image, str):
-        centroids, img_shape = extractor.extract(image)
-        img_arr = np.array(Image.open(image))
-    else:
-        centroids, img_shape = extractor.extract(image)
-        img_arr = image
-        # gray = image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    centroids = np.asarray(centroids)
-    angle = 0.0
-    if angle_method:
-        am = angle_method.lower()
-        if am == "pca":
-            angle = estimate_grid_rotation_pca(centroids)
-        elif am == "vectorize":
-            angle = estimate_grid_rotation_vectorize(centroids, grid_shape)
-        elif am == "diff_pca":
-            angle = estimate_grid_rotation_diff_pca(centroids)
-        elif am == "diffs":
-            angle = estimate_grid_rotation_diffs(centroids)
-        elif am == "pair_diff":
-            angle = estimate_grid_rotation_pair_diff(centroids)
-        elif am == "fit_rect":
-            angle = estimate_grid_rotation_fit_rect(centroids)
-        elif am == "fft_img":
-            angle = estimate_grid_rotation_fourier_img(img_arr)
-        elif am == "fft_mask":
-            angle = estimate_grid_rotation_fourier(centroids, img_shape)
-        else:
-            raise ValueError("Unknown angle_method: %s" % angle_method)
-    # optionally rectify image/centroids
-    if angle_method in {"fft_img"}:
-        rot = rotate_image(img_arr, -angle)
-        # Re-extract on rotated image for better assignment
-        centroids2, _ = extractor.extract(rot)
-        centroids_use = np.asarray(centroids2)
-    else:
-        centroids_use = centroids
-    binary = fit_grid_and_assign(centroids_use, grid_shape, img_shape)
-    meta = {"angle_deg": float(angle), "n_centroids": int(len(centroids_use))}
-    return binary, meta

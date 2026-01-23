@@ -13,7 +13,10 @@ except ImportError:
         if func is not None:
             return wrapper(func)
         return wrapper
+import math
 from enum import IntEnum
+from dataclasses import dataclass
+from typing import Optional
 
 ###########
 # Classes #
@@ -77,6 +80,7 @@ class ArrayGeometry(IntEnum):
     TRIANGULAR = 2 # NSY
     BRAVAIS = 3 # NSY
     DECORATED_BRAVAIS = 4 # NSY
+    RECTANGLE_TALL = 5
 
 
 #############
@@ -229,3 +233,74 @@ def generate_middle_fifty(length, filling_threshold = 0.5):
     while (max_L**2)/(length**2) >= filling_threshold:
         max_L -= 1
     return [max_L , max_L]
+
+
+@dataclass
+class ArrayGeometrySpec:
+    """Specification for desired loading geometry.
+
+    - kind: an ArrayGeometry member.
+    - params: optional dict of parameters (algorithm-specific).
+    """
+    kind: ArrayGeometry
+    params: Optional[dict] = None
+
+
+def array_shape_for_geometry(geometry_spec, target_size: int, loading_prob: float = 0.6) -> tuple[int, int]:
+    """Return (rows, cols) for a loading array given `geometry_spec`.
+
+    Accepted `geometry_spec` types:
+    - None: square fallback (see rules).
+    - `ArrayGeometrySpec` instance: follows `kind`.
+    - tuple/list of two ints: interpreted as (rows, cols).
+    """
+    try:
+        t = int(target_size)
+        if t <= 0:
+            raise ValueError
+    except Exception:
+        raise ValueError("target_size must be a positive integer.")
+
+    # Deprecated: algorithms should expose an ArrayGeometrySpec via
+    # `preferred_geometry_spec`. Passing an algorithm instance directly is no
+    # longer supported here.
+
+    # If a plain two-int tuple/list provided -> coerce
+    if isinstance(geometry_spec, (list, tuple)) and len(geometry_spec) == 2:
+        try:
+            rows = int(geometry_spec[0])
+            cols = int(geometry_spec[1])
+        except Exception:
+            raise ValueError("Geometry tuple/list must contain two integers.")
+        rows = max(rows, t)
+        cols = max(cols, t)
+        return rows, cols
+
+    # If None or SQUARE: square fallback scaled by loading_prob
+    if geometry_spec is None or (isinstance(geometry_spec, ArrayGeometrySpec) and geometry_spec.kind == ArrayGeometry.SQUARE):
+        side = int(math.ceil(math.sqrt(t)))
+        scale = int(math.ceil(1.0 / math.sqrt(float(loading_prob)))) if loading_prob and loading_prob > 0 else 1
+        side = side * scale + 2
+        side = max(side, t)
+        return side, side
+
+    # ArrayGeometrySpec handling
+    if isinstance(geometry_spec, ArrayGeometrySpec):
+        if geometry_spec.kind == ArrayGeometry.RECTANGLE_TALL:
+            params = geometry_spec.params or {}
+            preferred_width_factor = float(params.get("preferred_width_factor", 2.0))
+            min_extra_columns = int(params.get("min_extra_columns", 2))
+            rows = int(t)
+            cols = int(math.ceil(t * preferred_width_factor))
+            cols = max(cols, t + min_extra_columns)
+            rows = max(rows, t)
+            cols = max(cols, t)
+            return rows, cols
+        # Fallback: unknown kinds -> square fallback
+        side = int(math.ceil(math.sqrt(t)))
+        scale = int(math.ceil(1.0 / math.sqrt(float(loading_prob)))) if loading_prob and loading_prob > 0 else 1
+        side = side * scale + 2
+        side = max(side, t)
+        return side, side
+
+    raise ValueError("Unsupported `geometry_spec` type; expected ArrayGeometrySpec, (rows,cols), or None.")

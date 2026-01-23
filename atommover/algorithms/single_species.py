@@ -22,6 +22,7 @@ except Exception:
     parallel_LBAP_algorithm_works = None
     Hungarian_algorithm_works = None
 from atommover.algorithms.source.pcfa import pcfa_algorithm
+from atommover.utils.core import ArrayGeometry, ArrayGeometrySpec
 from atommover.algorithms.source.tetris import tetris_algorithm
 
 
@@ -78,8 +79,6 @@ class ParallelHungarian(Algorithm):
         config, moves, _ = parallel_Hungarian_algorithm_works(state, target, round_lim=round_lim)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
 
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        return super().preferred_initial_shape(target_size)
 
 class ParallelLBAP(Algorithm):
     """ Solves the linear bottleneck assignment problem and parallelizes the moves.
@@ -99,8 +98,6 @@ class ParallelLBAP(Algorithm):
         config, moves, _ = parallel_LBAP_algorithm_works(state, target, round_lim=round_lim)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
     
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        return super().preferred_initial_shape(target_size)
 
 
 # Generalized Balance
@@ -122,8 +119,6 @@ class GeneralizedBalance(Algorithm):
         config, moves, _ = generalized_balance(state, target, do_ejection=False)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
 
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        return super().preferred_initial_shape(target_size)
 
 
 ###########################################
@@ -149,8 +144,6 @@ class Hungarian(Algorithm):
         config, moves, _ = Hungarian_algorithm_works(state, target)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
 
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        return super().preferred_initial_shape(target_size)
 
 
 # Balance and Compact
@@ -169,8 +162,6 @@ class BCv2(Algorithm):
         config, moves, _ = bcv2(atom_array)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
     
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        return super().preferred_initial_shape(target_size)
 
 
 # Balance and Compact
@@ -194,8 +185,6 @@ class BalanceAndCompact(Algorithm):
         config, moves, _ = balance_and_compact(state, target, do_ejection=False)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
 
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        return super().preferred_initial_shape(target_size)
 
 
 # Parallel Compression Filling Algorithm (PCFA)
@@ -221,11 +210,10 @@ class PCFA(Algorithm):
         config, moves, _ = pcfa_algorithm(state, target, dop=dop)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
 
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        """Suggest a rectangular loading region with extra donor columns."""
-        cols = max(target_size + self.min_extra_columns,
-                   int(math.ceil(target_size * self.preferred_width_factor)))
-        return target_size, cols
+    preferred_geometry_spec = ArrayGeometrySpec(
+        ArrayGeometry.RECTANGLE_TALL,
+        {"preferred_width_factor": 2.0, "min_extra_columns": 2},
+    )
 
 
 class Tetris(Algorithm):
@@ -250,5 +238,3 @@ class Tetris(Algorithm):
         config, moves, _ = tetris_algorithm(state, target)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
         
-    def preferred_initial_shape(self, target_size: int) -> tuple[int, int]:
-        return super().preferred_initial_shape(target_size)

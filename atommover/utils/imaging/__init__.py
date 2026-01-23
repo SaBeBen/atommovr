@@ -39,7 +39,6 @@ from .extraction import (
     estimate_grid_rotation_fit_rect,
     estimate_grid_rotation_fourier_img,
     estimate_grid_rotation_fourier,
-    extract_grid_from_image,
 )
 
 __all__ = [
@@ -64,7 +63,6 @@ __all__ = [
     "estimate_grid_rotation_fit_rect",
     "estimate_grid_rotation_fourier_img",
     "estimate_grid_rotation_fourier",
-    "extract_grid_from_image",
     # viz
     "overlay_centroids",
 ]
