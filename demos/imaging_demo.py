@@ -90,7 +90,6 @@ def demo_extraction_pipeline():
         _, angle_deg, _ = blob_detector.extract_estimate_rotate_and_assign(
             img,
             grid_shape=shape,
-            method=method,
             angle_method=angle_method,
         )
 
@@ -127,7 +126,7 @@ def create_demo_arrays():
         scale=(1, 1),
         logger=None,
     )
-    binary_grid = blob_detector.extract_estimate_rotate_and_assign(img_source, visualize=True)
+    binary_grid, _, _ = blob_detector.extract_estimate_rotate_and_assign(img_source, grid_shape=shape, visualize=True)
     n_detected = 0 if binary_grid is None else np.sum(binary_grid)
     print(f"Detected {n_detected} blobs on the source image")
 

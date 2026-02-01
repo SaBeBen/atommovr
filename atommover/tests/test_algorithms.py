@@ -20,6 +20,12 @@ from atommover.algorithms.source.Hungarian_works import (
 	parallel_Hungarian_algorithm_works,
 )
 from atommover.utils.imaging.visualization import visualize_move_batches, visualize_batch_moves_on_image
+from atommover.utils.errormodels import (
+	ZeroNoise,
+	UniformVacuumTweezerError,
+	YbRydbergAODErrorModel,
+)
+import random
 
 
 def _centered_target_mask(array_shape: tuple[int, int], target_size: int) -> tuple[np.ndarray, tuple[int, int]]:
@@ -85,41 +91,41 @@ def _line_shift_state(num_cols: int, fill: int) -> tuple[np.ndarray, np.ndarray]
 
 
 ALGORITHM_CASES = [
-	# {
-	# 	"name": "Hungarian",
-	# 	"cls": Hungarian,
-	# 	"target_size": 4,
-	# 	"initializer": _default_source_state,
-	# 	"kwargs": {"do_ejection": False},
-	# },
-	# {
-	# 	"name": "ParallelHungarian",
-	# 	"cls": ParallelHungarian,
-	# 	"target_size": 4,
-	# 	"initializer": _default_source_state,
-	# 	"kwargs": {"do_ejection": False},
-	# },
-	# {
-	# 	"name": "ParallelLBAP",
-	# 	"cls": ParallelLBAP,
-	# 	"target_size": 4,
-	# 	"initializer": _default_source_state,
-	# 	"kwargs": {"do_ejection": False},
-	# },
-	# {
-	# 	"name": "BalanceAndCompact",
-	# 	"cls": BalanceAndCompact,
-	# 	"target_size": 4,
-	# 	"initializer": _default_source_state,
-	# 	"kwargs": {"do_ejection": False},
-	# },
-	# {
-	# 	"name": "GeneralizedBalance",
-	# 	"cls": GeneralizedBalance,
-	# 	"target_size": 4,
-	# 	"initializer": _default_source_state,
-	# 	"kwargs": {"do_ejection": False},
-	# },
+	{
+		"name": "Hungarian",
+		"cls": Hungarian,
+		"target_size": 4,
+		"initializer": _default_source_state,
+		"kwargs": {"do_ejection": False},
+	},
+	{
+		"name": "ParallelHungarian",
+		"cls": ParallelHungarian,
+		"target_size": 4,
+		"initializer": _default_source_state,
+		"kwargs": {"do_ejection": False},
+	},
+	{
+		"name": "ParallelLBAP",
+		"cls": ParallelLBAP,
+		"target_size": 4,
+		"initializer": _default_source_state,
+		"kwargs": {"do_ejection": False},
+	},
+	{
+		"name": "BalanceAndCompact",
+		"cls": BalanceAndCompact,
+		"target_size": 4,
+		"initializer": _default_source_state,
+		"kwargs": {"do_ejection": False},
+	},
+	{
+		"name": "GeneralizedBalance",
+		"cls": GeneralizedBalance,
+		"target_size": 4,
+		"initializer": _default_source_state,
+		"kwargs": {"do_ejection": False},
+	},
 	{
 		"name": "BCv2",
 		"cls": BCv2,
@@ -249,3 +255,60 @@ def test_hungarian_smoke():
 	arr.evaluate_moves(moves)
 	assert np.array_equal(arr.matrix[r0:r0 + L, c0:c0 + L, 0], np.ones((L, L), dtype=int))
 
+
+ERROR_MODELS = [ZeroNoise, UniformVacuumTweezerError, YbRydbergAODErrorModel]
+
+
+@pytest.mark.parametrize("error_model_cls", ERROR_MODELS, ids=lambda c: c.__name__)
+@pytest.mark.parametrize("case", ALGORITHM_CASES, ids=lambda case: case["name"])
+def test_algorithms_with_error_models(case, error_model_cls):
+	"""Run each algorithm with each error model to ensure behavior and stability.
+
+	- For `ZeroNoise` we expect success and filling of the target region.
+	- For other models we only assert that evaluation runs without exceptions and
+	  that the array shape/dtype are preserved.
+	"""
+	# make randomness deterministic for test reproducibility
+	random.seed(0)
+
+	target_size = case["target_size"]
+	algo = case["cls"]()
+
+	array_shape = tuple(array_shape_for_geometry(getattr(algo, "preferred_geometry_spec", None), target_size))
+
+	arr = AtomArray(list(array_shape), n_species=1)
+	arr.load_tweezers()
+	arr.generate_target(Configurations.MIDDLE_FILL, middle_size=(target_size, target_size), occupation_prob=0.6)
+
+	# attach the error model instance
+	err = error_model_cls()
+	arr.error_model = err
+
+	_, move_batches, success = algo.get_moves(arr, **case.get("kwargs", {}))
+
+	# evaluation should not raise
+	try:
+		arr.evaluate_moves(move_batches)
+	except Exception as e:
+		pytest.fail(f"Evaluation raised with {error_model_cls.__name__} on {case['name']}: {e}")
+
+	# basic sanity checks
+	assert isinstance(arr.matrix, np.ndarray)
+	assert arr.matrix.shape[0] == array_shape[0] and arr.matrix.shape[1] == array_shape[1]
+
+	target = arr.get_target()[:, :, 0]
+
+	# For zero-noise we expect the algorithm to succeed and fill the target
+	if error_model_cls is ZeroNoise:
+		assert success, f"{case['name']} reported failure with ZeroNoise"
+		submatrix = arr.matrix[
+			(target == 1)
+		]
+		assert np.all(submatrix == 1), f"{case['name']} did not fill the target region with ZeroNoise"
+	else:
+		# For other error models we do not enforce success, but reasonable filling
+		submatrix = arr.matrix[
+			(target == 1)
+		]
+		fill_fraction = np.sum(submatrix) / np.size(submatrix)
+		assert 0.2 <= fill_fraction <= 1.0, f"{case['name']} had unreasonable fill fraction {fill_fraction:.2f} with {error_model_cls.__name__}"

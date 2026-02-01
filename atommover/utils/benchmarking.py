@@ -17,8 +17,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from atommover.utils.errormodels import ZeroNoise
-from atommover.utils.core import generate_random_target_configs, generate_random_init_configs, PhysicalParams, Configurations, CONFIGURATION_PLOT_LABELS, array_shape_for_geometry
-from atommover.utils.move_utils import move_atoms
+from atommover.utils.core import generate_random_target_configs, generate_random_init_configs, PhysicalParams, Configurations, CONFIGURATION_PLOT_LABELS
 from atommover.utils.AtomArray import AtomArray
 from atommover.algorithms.Algorithm_class import Algorithm, get_effective_target_grid
 
@@ -617,37 +616,51 @@ class Benchmarking():
         shape = [base_size, base_size]
         return generate_random_target_configs(self.n_shots, targ_occup_prob=prob, shape=shape)
 
-    def _get_algorithm_shape(self, algorithm, base_size: int, loading_prob: float | None = None) -> tuple[int, int]:
-        """Return (rows, cols) for the array shape to use with the given algorithm.
-
-        If `loading_prob` is provided it will be used; otherwise the method falls
-        back to reading `self.tweezer_array.params.loading_prob`.
-        """
+    def _get_algorithm_shape(self, algorithm, base_size: int) -> tuple[int, int]:
+        """Return (rows, cols) for the array shape to use with the given algorithm."""
         rows = base_size
         cols = base_size
         if not self.istargetlist:
             return rows, cols
 
-        # Prefer an explicit loading probability if supplied, otherwise read
-        # from the current tweezer array params (fall back to 0.6).
-        if loading_prob is None:
-            params_obj = getattr(getattr(self, "tweezer_array", None), "params", None)
-            if params_obj is not None:
-                loading_prob = getattr(params_obj, "loading_prob", 0.6)
-            else:
-                loading_prob = 0.6
+        def _coerce_dim(value, fallback):
+            try:
+                dim = int(value)
+            except (TypeError, ValueError):
+                dim = fallback
+            return dim if dim > 0 else fallback
 
-        geometry_spec = getattr(algorithm, "preferred_geometry_spec", None)
-        try:
-            proposed_rows, proposed_cols = array_shape_for_geometry(geometry_spec, base_size, loading_prob)
-            rows = int(proposed_rows)
-            cols = int(proposed_cols)
-        except Exception:
-            rows = base_size
-            cols = base_size
+        shape_hook = getattr(algorithm, "preferred_initial_shape", None)
+        if callable(shape_hook):
+            try:
+                proposed = shape_hook(base_size)
+            except TypeError:
+                proposed = shape_hook(base_size, getattr(self.tweezer_array, "params", None))
+            if isinstance(proposed, (list, tuple)) and len(proposed) == 2:
+                rows = _coerce_dim(proposed[0], rows)
+                cols = _coerce_dim(proposed[1], cols)
 
         rows = max(rows, base_size)
         cols = max(cols, base_size)
+
+        width_factor = getattr(algorithm, "preferred_width_factor", None)
+        if width_factor is not None:
+            try:
+                width_factor = float(width_factor)
+            except (TypeError, ValueError):
+                width_factor = None
+        if width_factor and width_factor > 0:
+            cols = max(cols, int(math.ceil(rows * width_factor)))
+
+        extra_cols = getattr(algorithm, "min_extra_columns", 0)
+        try:
+            extra_cols = int(extra_cols)
+        except (TypeError, ValueError):
+            extra_cols = 0
+        if extra_cols > 0:
+            cols = max(cols, rows + extra_cols)
+
+        cols = max(cols, rows)
         return rows, cols
 
 
@@ -761,7 +774,7 @@ class Benchmarking():
             max_rows = int(np.max(self.system_size_range))
             if self.istargetlist:
                 storage_cols = max(
-                    self._get_algorithm_shape(algo, size, loading_prob)[1]
+                    self._get_algorithm_shape(algo, size)[1]
                     for algo in self.algos
                     for size in self.system_size_range
                 )
@@ -801,7 +814,7 @@ class Benchmarking():
                                 canonical_target = self._get_canonical_target(pattern_enum, size, canonical_prob)
 
                         for alg_ind, algo in enumerate(self.algos):
-                            rows, cols = self._get_algorithm_shape(algo, size, loading_prob)
+                            rows, cols = self._get_algorithm_shape(algo, size)
                             precomputed_target = None
                             if not self.istargetlist:
                                 rows = size
@@ -920,12 +933,6 @@ class Benchmarking():
         self._summarize_complexity()
         self._export_runtime_csv()
         self._export_complexity_csv()
-        # Export per-algorithm summary (one row per algorithm with averaged metrics)
-        try:
-            self._export_algorithm_summary_csv()
-        except Exception:
-            # Don't break benchmarking on summary export failure
-            pass
 
         if progress_bars:
             for bar in progress_bars.values():
@@ -1192,83 +1199,6 @@ class Benchmarking():
                 for row in rows:
                     writer.writerow(row)
 
-    def _export_algorithm_summary_csv(self):
-        """Write a single CSV summarizing average metrics per algorithm.
-
-        Uses self._benchmark_records (populated by `run`) and writes
-        `data/benchmark_pipeline/summary_exports/algorithm_summary_{run_id}.csv`.
-        """
-        records = getattr(self, '_benchmark_records', None)
-        if not records:
-            return
-
-        run_id = getattr(self, '_current_run_timestamp', datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'))
-        base_dir = Path('data/benchmark_pipeline/summary_exports')
-        base_dir.mkdir(parents=True, exist_ok=True)
-
-        # Group by algorithm and compute simple means for numeric fields
-        by_algo = defaultdict(list)
-        for rec in records:
-            by_algo[rec['algorithm']].append(rec)
-
-        field_order = [
-            'run_timestamp',
-            'algorithm',
-            'n_records',
-            'mean_success_rate',
-            'mean_success_time',
-            'mean_wall_time_seconds',
-            'mean_filling_fraction',
-            'mean_wrong_places',
-            'mean_atoms_in_array',
-            'mean_atoms_in_target',
-            'mean_moves_per_shot',
-            'mean_parallel_batches_per_shot',
-            'mean_sufficient_rate',
-            'loading_prob',
-            'target_occup_prob',
-            'n_shots',
-            'n_species',
-        ]
-
-        def _safe_mean(lst, key):
-            vals = [float(r[key]) for r in lst if key in r and r[key] is not None]
-            if not vals:
-                return ''
-            return float(np.mean(vals))
-
-        rows_out = []
-        for algo, recs in by_algo.items():
-            row = {
-                'run_timestamp': run_id,
-                'algorithm': algo,
-                'n_records': len(recs),
-                'mean_success_rate': _safe_mean(recs, 'success_rate'),
-                'mean_success_time': _safe_mean(recs, 'mean_success_time'),
-                'mean_wall_time_seconds': _safe_mean(recs, 'wall_time_seconds'),
-                'mean_filling_fraction': _safe_mean(recs, 'mean_filling_fraction'),
-                'mean_wrong_places': _safe_mean(recs, 'mean_wrong_places'),
-                'mean_atoms_in_array': _safe_mean(recs, 'mean_atoms_in_array'),
-                'mean_atoms_in_target': _safe_mean(recs, 'mean_atoms_in_target'),
-                'mean_moves_per_shot': _safe_mean(recs, 'mean_moves_per_shot'),
-                'mean_parallel_batches_per_shot': _safe_mean(recs, 'mean_parallel_batches_per_shot'),
-                'mean_sufficient_rate': _safe_mean(recs, 'sufficient_atom_rate'),
-                'loading_prob': recs[0].get('loading_prob', ''),
-                'target_occup_prob': recs[0].get('target_occup_prob', ''),
-                'n_shots': recs[0].get('n_shots', ''),
-                'n_species': recs[0].get('n_species', ''),
-            }
-            rows_out.append(row)
-
-        file_path = base_dir / f"algorithm_summary_{run_id}.csv"
-        with open(file_path, 'w', newline='', encoding='utf-8') as csv_file:
-            writer = csv.DictWriter(csv_file, fieldnames=field_order)
-            writer.writeheader()
-            for row in rows_out:
-                writer.writerow(row)
-
-        # retain for callers/tests
-        self._algorithm_summary = rows_out
             
     def _run_benchmark_round(self, algorithm, do_ejection: bool = False, pattern = None, num_rounds = 1, precomputed_target: np.ndarray | None = None, random_targets: list[np.ndarray] | None = None, base_target_size: int | None = None) -> tuple[float, float, list, list, list, list, float, float, float, list, list]:
         success_times = []

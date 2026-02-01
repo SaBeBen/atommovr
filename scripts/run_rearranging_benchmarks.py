@@ -10,13 +10,13 @@ if repo_root not in sys.path:
 from atommover.utils.benchmarking import Benchmarking, BenchmarkingFigure
 from atommover.utils.core import Configurations, PhysicalParams
 from atommover.algorithms.single_species import PCFA, Hungarian, BalanceAndCompact, BCv2, ParallelLBAP, ParallelHungarian, GeneralizedBalance, Tetris
-from atommover.utils.errormodels import ZeroNoise
+from atommover.utils.errormodels import ZeroNoise, UniformVacuumTweezerError, YbRydbergAODErrorModel
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run algorithm benchmarks (PCFA vs Hungarian)")
     parser.add_argument("--min_size", type=int, default=6, help="Minimum L for square target")
-    parser.add_argument("--max_size", type=int, default=21, help="Maximum L for square target")
+    parser.add_argument("--max_size", type=int, default=51, help="Maximum L for square target")
     parser.add_argument("--shots", type=int, default=20, help="Number of shots per configuration")
     parser.add_argument("--rounds", type=int, default=1, help="Rearrangement rounds")
     parser.add_argument("--save", action="store_true", help="Save xarray results to data/")
@@ -38,7 +38,7 @@ def main():
     bench = Benchmarking(
         algos=algos,
         target_configs=targets,
-        error_models_list=[ZeroNoise()],
+        error_models_list=[ZeroNoise(), UniformVacuumTweezerError(), YbRydbergAODErrorModel()],
         phys_params_list=params,
         sys_sizes=sizes,
         rounds_list=[args.rounds],

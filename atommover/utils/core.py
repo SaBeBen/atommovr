@@ -87,25 +87,23 @@ class ArrayGeometry(IntEnum):
 # Functions #
 #############
 
-@jit
-def random_loading(size, probability):
-    x = np.random.rand(size[0], size[1])
-    matrix = np.zeros_like(x)
-    for i in range(size[0]):
-        for j in range(size[1]):
-            if x[i,j] > 1-probability:
-                matrix[i,j] = 1
+def random_loading(nrows, ncols, probability):
+    # Use Python's `random` module for determinism when tests call random.seed()
+    matrix = np.zeros((nrows, ncols), dtype=np.int64)
+    for i in range(nrows):
+        for j in range(ncols):
+            if random.random() < probability:
+                matrix[i, j] = 1
     return matrix
 
-@jit
 def generate_random_init_target_configs(n_shots,load_prob, max_sys_size, target_config = None):
     init_config_storage = []
     target_config_storage = []
     for _ in range(n_shots):
-        initial_config = random_loading([max_sys_size, max_sys_size], load_prob)
+        initial_config = random_loading(max_sys_size, max_sys_size, load_prob)
         init_config_storage.append(initial_config)
         if target_config == [Configurations.RANDOM]:
-            target = random_loading([max_sys_size, max_sys_size], load_prob-0.1)
+            target = random_loading(max_sys_size, max_sys_size, load_prob - 0.1)
             target_config_storage.append(target)
     return init_config_storage, target_config_storage
 
@@ -115,12 +113,12 @@ def generate_random_init_configs(n_shots, load_prob, shape, n_species=1):
     base_shape = (rows, cols)
     for _ in range(n_shots):
         if n_species == 1:
-            initial_config = random_loading(base_shape, load_prob)
+            initial_config = random_loading(rows, cols, load_prob)
         elif n_species == 2:
             initial_config = np.zeros((rows, cols, 2))
             dual_species_prob = 2 - 2*math.sqrt(1-load_prob)
-            initial_config[:,:,0] = random_loading(base_shape, dual_species_prob/2)
-            initial_config[:,:,1] = random_loading(base_shape, dual_species_prob/2)
+            initial_config[:,:,0] = random_loading(rows, cols, dual_species_prob/2)
+            initial_config[:,:,1] = random_loading(rows, cols, dual_species_prob/2)
 
             # Randomly leave one atom if two species load into the same tweezer
             for i in range(len(initial_config)):
@@ -135,15 +133,15 @@ def generate_random_init_configs(n_shots, load_prob, shape, n_species=1):
 
     return init_config_storage
 
-@jit
 def generate_random_target_configs(n_shots: int, targ_occup_prob: float, shape: list):
     """
     Generates random target configurations, with site 
     occupation probability equal to targ_occup_prob.
     """
     target_config_storage = []
+    rows, cols = int(shape[0]), int(shape[1])
     for shot in range(n_shots):
-        target = random_loading(shape,targ_occup_prob)
+        target = random_loading(rows, cols, targ_occup_prob)
         target_config_storage.append(target)
     return target_config_storage
 
@@ -190,14 +188,22 @@ def atom_loss(matrix: np.ndarray, move_time: float, lifetime: float = 30) -> tup
         with the atom and knocking it out of its trap.
     """
     loss_flag = 0
-    loss_mask_vals = random_loading(list(np.shape(matrix)), np.exp(-move_time/lifetime))
-    loss_mask = loss_mask_vals.reshape(np.shape(matrix))
-    matrix_copy = copy.deepcopy(matrix)
-    matrix_copy = np.multiply(matrix_copy, loss_mask).reshape(np.shape(matrix))
-
-    if np.array_equal(matrix, matrix_copy):
-        pass
+    # matrix can be 2D (single-species) or 3D (dual-species)
+    shape = np.shape(matrix)
+    if len(shape) == 2:
+        rows, cols = int(shape[0]), int(shape[1])
+        loss_mask = random_loading(rows, cols, np.exp(-move_time/lifetime))
+        matrix_copy = np.multiply(matrix, loss_mask)
+    elif len(shape) == 3:
+        rows, cols, species = int(shape[0]), int(shape[1]), int(shape[2])
+        loss_mask = np.zeros((rows, cols, species), dtype=matrix.dtype)
+        for k in range(species):
+            loss_mask[:,:,k] = random_loading(rows, cols, np.exp(-move_time/lifetime))
+        matrix_copy = np.multiply(matrix, loss_mask)
     else:
+        raise ValueError("Unsupported matrix shape for atom_loss")
+
+    if not np.array_equal(matrix, matrix_copy):
         loss_flag = 1
     return matrix_copy, loss_flag
 
@@ -207,14 +213,19 @@ def atom_loss_dual(matrix: np.ndarray, move_time: float, lifetime: float = 30) -
         simulates the process of atom loss over a length of time `move_time`.
     """
     loss_flag = 0
-    loss_mask = random_loading(list(np.shape(matrix)), np.exp(-move_time/lifetime))
-    matrix_copy = copy.deepcopy(matrix)
+    shape = np.shape(matrix)
+    if len(shape) != 3:
+        raise ValueError('atom_loss_dual expects a 3D matrix with shape (rows,cols,2)')
+    rows, cols, species = int(shape[0]), int(shape[1]), int(shape[2])
+    loss_mask = np.zeros((rows, cols, species), dtype=matrix.dtype)
+    for k in range(species):
+        loss_mask[:,:,k] = random_loading(rows, cols, np.exp(-move_time/lifetime))
     matrix_copy = np.multiply(matrix, loss_mask)
-    for i in range(len(matrix[0])):
-        for j in range(len(matrix)):
+    for i in range(rows):
+        for j in range(cols):
             if matrix_copy[i][j][0] != matrix[i][j][0] or matrix_copy[i][j][1] != matrix[i][j][1]:
                 loss_flag = 1
-    return matrix, loss_flag
+    return matrix_copy, loss_flag
 
 def count_atoms_in_row(row):
     return np.sum(row)
@@ -261,10 +272,6 @@ def array_shape_for_geometry(geometry_spec, target_size: int, loading_prob: floa
     except Exception:
         raise ValueError("target_size must be a positive integer.")
 
-    # Deprecated: algorithms should expose an ArrayGeometrySpec via
-    # `preferred_geometry_spec`. Passing an algorithm instance directly is no
-    # longer supported here.
-
     # If a plain two-int tuple/list provided -> coerce
     if isinstance(geometry_spec, (list, tuple)) and len(geometry_spec) == 2:
         try:
@@ -281,7 +288,10 @@ def array_shape_for_geometry(geometry_spec, target_size: int, loading_prob: floa
         side = int(math.ceil(math.sqrt(t)))
         scale = int(math.ceil(1.0 / math.sqrt(float(loading_prob)))) if loading_prob and loading_prob > 0 else 1
         side = side * scale + 2
-        side = max(side, t)
+        # Ensure some donor margin around the target so rearrangement algorithms
+        # can source atoms from outside the target region. Make array at least
+        # target_size + 4 on a side.
+        side = max(side, t + 4)
         return side, side
 
     # ArrayGeometrySpec handling

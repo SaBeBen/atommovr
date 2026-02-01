@@ -54,10 +54,15 @@ class AtomArray:
         self.params = params
         self.error_model = error_model
 
-        self.matrix = np.zeros([self.shape[0], self.shape[1], self.n_species])
-        self.target = np.zeros([self.shape[0], self.shape[1], self.n_species])
-        self.target_Rb = np.zeros([self.shape[0], self.shape[1]])
-        self.target_Cs = np.zeros([self.shape[0], self.shape[1]])
+        # Use integer dtype for occupancy matrices (0/1)
+        if self.n_species == 1:
+            self.matrix = np.zeros([self.shape[0], self.shape[1], 1], dtype=int)
+            self.target = np.zeros([self.shape[0], self.shape[1], 1], dtype=int)
+        else:
+            self.matrix = np.zeros([self.shape[0], self.shape[1], self.n_species], dtype=int)
+            self.target = np.zeros([self.shape[0], self.shape[1], self.n_species], dtype=int)
+        self.target_Rb = np.zeros([self.shape[0], self.shape[1]], dtype=int)
+        self.target_Cs = np.zeros([self.shape[0], self.shape[1]], dtype=int)
         self.angle = None
 
     def get_random_state(self) -> int:
@@ -66,10 +71,15 @@ class AtomArray:
 
     def __setattr__(self, key, value):
         if key == "shape":
-            self.matrix = np.zeros([value[0], value[1], self.n_species])
-            self.target = np.zeros([value[0], value[1], self.n_species])
-            self.target_Rb = np.zeros([value[0], value[1]])
-            self.target_Cs = np.zeros([value[0], value[1]])
+            # preserve integer dtype for occupancy/target arrays
+            if self.n_species == 1:
+                self.matrix = np.zeros([value[0], value[1], 1], dtype=int)
+                self.target = np.zeros([value[0], value[1], 1], dtype=int)
+            else:
+                self.matrix = np.zeros([value[0], value[1], self.n_species], dtype=int)
+                self.target = np.zeros([value[0], value[1], self.n_species], dtype=int)
+            self.target_Rb = np.zeros([value[0], value[1]], dtype=int)
+            self.target_Cs = np.zeros([value[0], value[1]], dtype=int)
             # (Optional) run any custom logic here
         # Always delegate to superclass to avoid recursion
         super().__setattr__(key, value)
@@ -110,11 +120,14 @@ class AtomArray:
         None
         """
         if self.n_species == 1:
-            self.matrix[:,:,:] = random_loading(self.shape, self.params.loading_prob).reshape(self.shape[0], self.shape[1],1)
-        if self.n_species == 2:
+            # random_loading returns integer arrays (0/1)
+            rows, cols = int(self.shape[0]), int(self.shape[1])
+            self.matrix[:, :, 0] = random_loading(rows, cols, self.params.loading_prob).astype(int)
+        elif self.n_species == 2:
             dual_species_prob = 2 - 2*math.sqrt(1-self.params.loading_prob)
-            self.matrix[:,:,0] = random_loading(self.shape, dual_species_prob/2)
-            self.matrix[:,:,1] = random_loading(self.shape, dual_species_prob/2)
+            rows, cols = int(self.shape[0]), int(self.shape[1])
+            self.matrix[:,:,0] = random_loading(rows, cols, dual_species_prob/2).astype(int)
+            self.matrix[:,:,1] = random_loading(rows, cols, dual_species_prob/2).astype(int)
 
             # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
             for i in range(len(self.matrix)):
@@ -128,42 +141,45 @@ class AtomArray:
 
     def generate_target(self, pattern: Configurations = Configurations.CHECKERBOARD, middle_size: list = [], occupation_prob: float = 0.5):
         if self.n_species == 1:
-            self._generate_single_species_target(pattern, middle_size = middle_size, occupation_prob=occupation_prob)
+            self._generate_single_species_target(pattern, middle_size=middle_size, occupation_prob=occupation_prob)
         elif self.n_species == 2:
-            self._generate_dual_species_target(pattern, middle_size = middle_size, occupation_prob=occupation_prob)
-        else:
-            raise ValueError(f"Unrecognized entry '{self.n_species}' for parameter `n_species`. The simulator only supports single and dual species arrays.")
-        
+            self._generate_dual_species_target(pattern, middle_size=middle_size, occupation_prob=occupation_prob)
 
     def _generate_single_species_target(self, pattern: Configurations = Configurations.MIDDLE_FILL, middle_size: list = [], occupation_prob: float = 0.5):
         """
         A function for generating common target configurations,
         such as checkerboard, zebra stripes, and middle fill.
         """
-        array = np.zeros([self.shape[0], self.shape[1]])
+        # Use integer arrays for targets to ensure binary masks (0/1)
+        array = np.zeros([self.shape[0], self.shape[1]], dtype=int)
 
         if len(middle_size) == 0:
             middle_size = generate_middle_fifty(self.shape[0], occupation_prob)
-            
-        if pattern == Configurations.ZEBRA_HORIZONTAL: # every other row
+
+        if pattern == Configurations.ZEBRA_HORIZONTAL:  # every other row
             for i in range(0, self.shape[0], 2):
-                array[i,:] = 1
-        elif pattern == Configurations.ZEBRA_VERTICAL: # every other col
+                array[i, :] = 1
+        elif pattern == Configurations.ZEBRA_VERTICAL:  # every other col
             for i in range(0, self.shape[1], 2):
-                array[:,i] = 1
-        elif pattern == Configurations.CHECKERBOARD: # checkerboard
+                array[:, i] = 1
+        elif pattern == Configurations.CHECKERBOARD:  # checkerboard
             array = np.indices(self.shape).sum(axis=0) % 2
-        elif pattern == Configurations.MIDDLE_FILL: # middle fill
-            mrow = np.zeros([1,self.shape[1]])
-            mrow[0,int(self.shape[1]/2-middle_size[1]/2):int(self.shape[1]/2-middle_size[1]/2)+middle_size[1]] = 1
-            for i in range(int(self.shape[0]/2-middle_size[0]/2), int(self.shape[0]/2-middle_size[0]/2)+middle_size[0]):
-                array[i,:] = mrow
+        elif pattern == Configurations.MIDDLE_FILL:  # middle fill
+            mrow = np.zeros([1, self.shape[1]], dtype=int)
+            mrow[0, int(self.shape[1] / 2 - middle_size[1] / 2) : int(self.shape[1] / 2 - middle_size[1] / 2) + middle_size[1]] = 1
+            for i in range(int(self.shape[0] / 2 - middle_size[0] / 2), int(self.shape[0] / 2 - middle_size[0] / 2) + middle_size[0]):
+                array[i, :] = mrow
         elif pattern == Configurations.Left_Sweep:
             for i in range(middle_size[0]):
-                array[:,i] = 1
+                array[:, i] = 1
         elif pattern == Configurations.RANDOM:
-            array = random_loading(self.shape,probability=self.params.target_occup_prob)
-        self.target = array.reshape([self.shape[0], self.shape[1], 1])
+            rows, cols = int(self.shape[0]), int(self.shape[1])
+            array = random_loading(rows, cols, probability=self.params.target_occup_prob)
+        # Ensure target is integer binary mask (3D for single-species)
+        if self.n_species == 1:
+            self.target = array.reshape([self.shape[0], self.shape[1], 1]).astype(int)
+        else:
+            self.target = array.astype(int)
 
     def _generate_dual_species_target(self, pattern: Configurations = Configurations.ZEBRA_HORIZONTAL, middle_size: list = [], occupation_prob: float = 0.5):
         """ 
@@ -171,8 +187,8 @@ class AtomArray:
         such as checkerboard, zebra stripes, and middle fill,
         for dual-species.
         """
-        self.target_Rb = np.zeros([self.shape[0], self.shape[1]])
-        self.target_Cs = np.zeros([self.shape[0], self.shape[1]])
+        self.target_Rb = np.zeros([self.shape[0], self.shape[1]], dtype=int)
+        self.target_Cs = np.zeros([self.shape[0], self.shape[1]], dtype=int)
         
         if len(middle_size) == 0:
             middle_size = generate_middle_fifty(self.shape[0], occupation_prob)
@@ -259,6 +275,15 @@ class AtomArray:
 
         # applying error model to calculate atom loss during the time the move was applied
         self.matrix, loss_flag = self.error_model.get_atom_loss(self.matrix, evolution_time=move_time, n_species=self.n_species)
+
+        # Ensure occupancy remains binary integers (0 or 1) after error-model operations
+        if self.n_species == 1:
+            # shape should be (rows, cols, 1); threshold at 0.5 to binarize
+            self.matrix = (self.matrix > 0.5).astype(int).reshape(self.shape[0], self.shape[1], 1)
+        else:
+            # For dual-species, binarize each species plane
+            self.matrix[:,:,0] = (self.matrix[:,:,0] > 0.5).astype(int)
+            self.matrix[:,:,1] = (self.matrix[:,:,1] > 0.5).astype(int)
 
         return [failed_moves, flags], move_time
     
@@ -667,3 +692,7 @@ class AtomArray:
                 t_total += move_time
 
         return float(t_total), [N_parallel_moves, N_non_parallel_moves]
+    
+    def get_target(self) -> np.ndarray:
+        """ Returns the target configuration of the atom array. """
+        return self.target

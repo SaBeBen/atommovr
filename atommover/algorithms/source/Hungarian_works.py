@@ -603,5 +603,6 @@ def generate_target_config(size: list, pattern: Configurations = 0, middle_size:
         for i in range(middle_size[0]):
             array[:,i] = 1
     elif pattern == 5:
-        array = random_loading(size,probability=probability)
+        rows, cols = int(size[0]), int(size[1])
+        array = random_loading(rows, cols, probability)
     return array

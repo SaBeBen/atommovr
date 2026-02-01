@@ -1,7 +1,7 @@
 
 import numpy as np
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict
 
 from atommover.utils.Move import Move
 from atommover.utils.core import PhysicalParams
