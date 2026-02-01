@@ -164,7 +164,7 @@ def test_single_species_algorithms_cover_target_shapes(case):
 	assert success, f"{case['name']} reported failure"
 
 	visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan")
-	visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan Overlay")
+	# visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan Overlay")
 
 	arr.evaluate_moves(move_batches)
 	submatrix = arr.matrix[r0 : r0 + target_size, c0 : c0 + target_size, 0]
@@ -186,7 +186,7 @@ def test_single_species_algorithms_natively(case):
 	_, move_batches, success = algo.get_moves(arr, **case.get("kwargs", {}))
 
 	visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan")
-	visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan Overlay")
+	# visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan Overlay")
 
 	assert success, f"{case['name']} reported failure"
 
@@ -209,8 +209,8 @@ def test_single_species_multiple_shots_natively(case):
 		arr.generate_target(Configurations.MIDDLE_FILL, middle_size=(target_size, target_size), occupation_prob=0.6)
 		_, move_batches, success = algo.get_moves(arr, **case.get("kwargs", {}))
 
-		visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Shot {shot} Move Plan")
-		visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Shot {shot} Move Plan Overlay")
+		visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']}_{shot}_Move_Plan")
+		# visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']}_{shot}_Move_Plan_Overlay")
 
 		assert success, f"{case['name']} reported failure on shot {shot}"
 
@@ -218,7 +218,7 @@ def test_single_species_multiple_shots_natively(case):
 		filled = _contains_target_block(arr.matrix[:, :, 0], target_size)
 		assert filled, f"{case['name']} did not realize the required {target_size} block anywhere in the array on shot {shot}"
 
-		make_single_species_gif(arr, move_batches, savename=f"test_{case['name']}_shot{shot}_rearrangement.gif")
+		make_single_species_gif(arr, move_batches, savename=f"test_{case['name']}_shot{shot}_rearrangement")
 
 
 def test_parallel_assignment_algorithms_complete_long_paths():
@@ -286,6 +286,10 @@ def test_algorithms_with_error_models(case, error_model_cls):
 
 	_, move_batches, success = algo.get_moves(arr, **case.get("kwargs", {}))
 
+	# visualize the planned moves
+	visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']}_{error_model_cls.__name__}_Move_Plan")
+	# visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']}_{error_model_cls.__name__}_Move_Plan_Overlay")
+
 	# evaluation should not raise
 	try:
 		arr.evaluate_moves(move_batches)
@@ -299,16 +303,16 @@ def test_algorithms_with_error_models(case, error_model_cls):
 	target = arr.get_target()[:, :, 0]
 
 	# For zero-noise we expect the algorithm to succeed and fill the target
-	if error_model_cls is ZeroNoise:
-		assert success, f"{case['name']} reported failure with ZeroNoise"
-		submatrix = arr.matrix[
-			(target == 1)
-		]
-		assert np.all(submatrix == 1), f"{case['name']} did not fill the target region with ZeroNoise"
-	else:
-		# For other error models we do not enforce success, but reasonable filling
-		submatrix = arr.matrix[
-			(target == 1)
-		]
-		fill_fraction = np.sum(submatrix) / np.size(submatrix)
-		assert 0.2 <= fill_fraction <= 1.0, f"{case['name']} had unreasonable fill fraction {fill_fraction:.2f} with {error_model_cls.__name__}"
+	# if error_model_cls is ZeroNoise:
+	assert success, f"{case['name']} reported failure with ZeroNoise"
+	submatrix = arr.matrix[
+		(target == 1)
+	]
+	assert np.all(submatrix == 1), f"{case['name']} did not fill the target region with ZeroNoise"
+	# else:
+	# 	# For other error models we do not enforce success, but reasonable filling
+	# 	submatrix = arr.matrix[
+	# 		(target == 1)
+	# 	]
+	# 	fill_fraction = np.sum(submatrix) / np.size(submatrix)
+	# 	assert 0.2 <= fill_fraction <= 1.0, f"{case['name']} had unreasonable fill fraction {fill_fraction:.2f} with {error_model_cls.__name__}"

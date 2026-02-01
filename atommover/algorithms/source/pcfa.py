@@ -339,7 +339,7 @@ def pcfa_algorithm(
 	available_atoms = int(np.sum(state))
 	required_atoms = int(np.sum(target_mask))
 	if available_atoms < required_atoms:
-		return state, [], False
+		raise ValueError("Not enough atoms in initial configuration to reach target mask.")
 	row_min, row_max, col_min, col_max = _target_bounds_from_mask(target_mask)
 	move_plan: List[List[Move]] = []
 	stage2 = _plan_row_compression(state, row_min, row_max, col_min, col_max - col_min, dop)

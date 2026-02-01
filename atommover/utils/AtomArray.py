@@ -506,75 +506,6 @@ class AtomArray:
                         self.matrix[move.from_row][move.from_col][1] -= 1
         return failed_moves, flags
 
-    def _split_move_batch_safely(self, move_set: list) -> list[list]:
-        """Split a parallel move batch into collision-safe sub-batches.
-
-        A move can be scheduled in the same sub-batch if its destination is
-        empty in the current occupancy snapshot and no other move targets the
-        same destination or source in that sub-batch.
-        """
-        if not move_set:
-            return []
-
-        n_rows, n_cols = self.shape[0], self.shape[1]
-        if self.n_species == 1:
-            occupancy = self.matrix[:, :, 0].copy()
-        else:
-            occupancy = (self.matrix[:, :, 0] + self.matrix[:, :, 1] > 0).astype(int)
-
-        remaining = list(move_set)
-        sub_batches: list[list] = []
-        safety_cap = len(remaining) * 2 + 10
-
-        while remaining:
-            batch: list = []
-            used_sources: set[tuple[int, int]] = set()
-            used_targets: set[tuple[int, int]] = set()
-            next_remaining: list = []
-
-            for move in remaining:
-                from_pos = (move.from_row, move.from_col)
-                to_pos = (move.to_row, move.to_col)
-
-                if from_pos in used_sources:
-                    next_remaining.append(move)
-                    continue
-
-                in_bounds = 0 <= move.to_row < n_rows and 0 <= move.to_col < n_cols
-                if in_bounds:
-                    if occupancy[move.to_row, move.to_col] != 0 or to_pos in used_targets:
-                        next_remaining.append(move)
-                        continue
-
-                batch.append(move)
-                used_sources.add(from_pos)
-                if in_bounds:
-                    used_targets.add(to_pos)
-
-            if not batch:
-                # Fallback to avoid infinite loops; execute one move sequentially.
-                batch = [remaining[0]]
-                next_remaining = remaining[1:]
-
-            # Update occupancy as if the batch executed.
-            for move in batch:
-                if 0 <= move.from_row < n_rows and 0 <= move.from_col < n_cols:
-                    occupancy[move.from_row, move.from_col] = 0
-                if 0 <= move.to_row < n_rows and 0 <= move.to_col < n_cols:
-                    occupancy[move.to_row, move.to_col] = 1
-
-            sub_batches.append(batch)
-            remaining = next_remaining
-            safety_cap -= 1
-            if safety_cap <= 0:
-                break
-
-        if remaining:
-            # Execute any leftovers sequentially as a last resort.
-            sub_batches.extend([[move] for move in remaining])
-
-        return sub_batches
-
     def image(self, move_list: list = [], plotted_species: str = 'all', savename = ''):
         """
         Takes a snapshot of the atom array.
@@ -681,15 +612,14 @@ class AtomArray:
 
         # iterating through moves and updating internal state matrix
         for move_ind, move_set in enumerate(move_list):
-            safe_batches = self._split_move_batch_safely(move_set)
-            for safe_set in safe_batches:
-                # performing the move
-                [failed_moves, flags], move_time = self.move_atoms(safe_set)
-                N_parallel_moves += 1
-                N_non_parallel_moves += len(safe_set)
 
-                # calculating the time to complete the move set in parallel
-                t_total += move_time
+            # performing the move
+            [failed_moves, flags], move_time = self.move_atoms(move_set)
+            N_parallel_moves += 1
+            N_non_parallel_moves += len(move_set)
+
+            # calculating the time to complete the move set in parallel
+            t_total += move_time
 
         return float(t_total), [N_parallel_moves, N_non_parallel_moves]
     

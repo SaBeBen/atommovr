@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from atommover.utils.imaging.generation import generate_gaussian_image_from_binary_grid
 from atommover.utils.imaging.extraction import BlobDetection
 from atommover.utils.Move import Move
+from atommover.utils.move_utils import MoveType
 
 
 def _resolve_grid_dims(n_plots: int, max_cols: Optional[int]) -> tuple[int, int]:
@@ -60,11 +61,24 @@ def visualize_move_batches(
         sim = _AA(atom_array.shape, n_species=atom_array.n_species)
         sim.matrix = atom_array.matrix.copy()
         sim.target = atom_array.target.copy()
+        sim.error_model = atom_array.error_model
+        sim.params = atom_array.params
     else:
         sim = None
 
     snapshots: List[np.ndarray] = [M.copy()]
     movements_per_step: List[List[tuple[tuple[int, int], tuple[int, int]]]] = []
+    failures_per_step: List[dict[str, List[tuple[int, int]]]] = []
+
+    def _init_failure_markers() -> dict[str, List[tuple[int, int]]]:
+        return {
+            "pickup": [],
+            "putdown": [],
+            "noatom": [],
+            "crossed": [],
+            "collision": [],
+            "eject": [],
+        }
 
     for batch in move_batches:
         intended: List[tuple[tuple[int, int], tuple[int, int]]] = []
@@ -73,9 +87,26 @@ def visualize_move_batches(
                 intended.append(((int(mv.from_row), int(mv.from_col)), (int(mv.to_row), int(mv.to_col))))
 
         prev_state = snapshots[-1].copy()
+        failure_markers = _init_failure_markers()
         if sim is not None:
-            sim.evaluate_moves([batch])
+            (failed_moves, flags), _ = sim.move_atoms(batch)
             next_state = sim.matrix[:, :, 0].copy()
+            flag_map = {int(idx): int(flags[i]) for i, idx in enumerate(failed_moves)}
+            for mv_idx, mv in enumerate(batch):
+                flag = flag_map.get(mv_idx, 0)
+                movetype = getattr(mv, "movetype", None)
+                if flag == 1:
+                    failure_markers["pickup"].append((int(mv.from_row), int(mv.from_col)))
+                elif flag == 2:
+                    failure_markers["putdown"].append((int(mv.from_row), int(mv.from_col)))
+                elif flag == 3:
+                    failure_markers["noatom"].append((int(mv.from_row), int(mv.from_col)))
+                elif flag == 4:
+                    failure_markers["crossed"].append((int(mv.from_row), int(mv.from_col)))
+                elif movetype == MoveType.ILLEGAL_MOVE:
+                    failure_markers["collision"].append((int(mv.to_row), int(mv.to_col)))
+                elif movetype == MoveType.EJECT_MOVE:
+                    failure_markers["eject"].append((int(mv.from_row), int(mv.from_col)))
         else:
             # Fallback: naive update without collision handling
             next_state = prev_state.copy()
@@ -92,6 +123,7 @@ def visualize_move_batches(
 
         snapshots.append(next_state)
         movements_per_step.append(realized)
+        failures_per_step.append(failure_markers)
 
     n_plots = len(snapshots)
     if n_plots == 0:
@@ -143,6 +175,32 @@ def visualize_move_batches(
                     zorder=10,
                 )
 
+            failure_markers = failures_per_step[idx - 1]
+            if failure_markers["pickup"]:
+                xs = [c for _, c in failure_markers["pickup"]]
+                ys = [r for r, _ in failure_markers["pickup"]]
+                ax.scatter(xs, ys, marker="x", color="gold", s=40, linewidths=1.8, zorder=12, label="pickup fail")
+            if failure_markers["putdown"]:
+                xs = [c for _, c in failure_markers["putdown"]]
+                ys = [r for r, _ in failure_markers["putdown"]]
+                ax.scatter(xs, ys, marker="x", color="magenta", s=40, linewidths=1.8, zorder=12, label="putdown fail")
+            if failure_markers["noatom"]:
+                xs = [c for _, c in failure_markers["noatom"]]
+                ys = [r for r, _ in failure_markers["noatom"]]
+                ax.scatter(xs, ys, marker="x", color="gray", s=36, linewidths=1.6, zorder=12, label="no atom")
+            if failure_markers["crossed"]:
+                xs = [c for _, c in failure_markers["crossed"]]
+                ys = [r for r, _ in failure_markers["crossed"]]
+                ax.scatter(xs, ys, marker="x", color="red", s=44, linewidths=2.0, zorder=13, label="crossed")
+            if failure_markers["collision"]:
+                xs = [c for _, c in failure_markers["collision"]]
+                ys = [r for r, _ in failure_markers["collision"]]
+                ax.scatter(xs, ys, marker="x", color="black", s=44, linewidths=2.0, zorder=13, label="collision")
+            if failure_markers["eject"]:
+                xs = [c for _, c in failure_markers["eject"]]
+                ys = [r for r, _ in failure_markers["eject"]]
+                ax.scatter(xs, ys, marker="x", color="lime", s=40, linewidths=1.8, zorder=12, label="eject")
+
     for j in range(n_plots, len(axes)):
         axes[j].axis("off")
 
@@ -189,11 +247,24 @@ def visualize_batch_moves_on_image(
         sim = _AA(atom_array.shape, n_species=atom_array.n_species)
         sim.matrix = atom_array.matrix.copy()
         sim.target = atom_array.target.copy()
+        sim.error_model = atom_array.error_model
+        sim.params = atom_array.params
     else:
         sim = None
 
     snapshots: List[np.ndarray] = [base_state.copy()]
     realized_batches: List[List[tuple[tuple[int, int], tuple[int, int]]]] = []
+    failures_per_step: List[dict[str, List[tuple[int, int]]]] = []
+
+    def _init_failure_markers() -> dict[str, List[tuple[int, int]]]:
+        return {
+            "pickup": [],
+            "putdown": [],
+            "noatom": [],
+            "crossed": [],
+            "collision": [],
+            "eject": [],
+        }
 
     for batch in move_batches:
         intended: List[tuple[tuple[int, int], tuple[int, int]]] = []
@@ -207,9 +278,26 @@ def visualize_batch_moves_on_image(
                 )
 
         prev_state = snapshots[-1].copy()
+        failure_markers = _init_failure_markers()
         if sim is not None:
-            sim.evaluate_moves([batch])
+            (failed_moves, flags), _ = sim.move_atoms(batch)
             next_state = sim.matrix[:, :, 0].copy()
+            flag_map = {int(idx): int(flags[i]) for i, idx in enumerate(failed_moves)}
+            for mv_idx, mv in enumerate(batch):
+                flag = flag_map.get(mv_idx, 0)
+                movetype = getattr(mv, "movetype", None)
+                if flag == 1:
+                    failure_markers["pickup"].append((int(mv.from_row), int(mv.from_col)))
+                elif flag == 2:
+                    failure_markers["putdown"].append((int(mv.from_row), int(mv.from_col)))
+                elif flag == 3:
+                    failure_markers["noatom"].append((int(mv.from_row), int(mv.from_col)))
+                elif flag == 4:
+                    failure_markers["crossed"].append((int(mv.from_row), int(mv.from_col)))
+                elif movetype == MoveType.ILLEGAL_MOVE:
+                    failure_markers["collision"].append((int(mv.to_row), int(mv.to_col)))
+                elif movetype == MoveType.EJECT_MOVE:
+                    failure_markers["eject"].append((int(mv.from_row), int(mv.from_col)))
         else:
             next_state = prev_state.copy()
             for (fr, fc), (tr, tc) in intended:
@@ -224,6 +312,7 @@ def visualize_batch_moves_on_image(
 
         snapshots.append(next_state)
         realized_batches.append(realized)
+        failures_per_step.append(failure_markers)
 
     def _grid_pixel_centers(rows: int, cols: int, img_shape: Tuple[int, int]):
         h, w = img_shape
@@ -360,6 +449,27 @@ def visualize_batch_moves_on_image(
                     linewidths=1.5,
                     zorder=16,
                 )
+
+        failure_markers = failures_per_step[idx - 1]
+        def _plot_failures(coords: List[tuple[int, int]], color: str):
+            if not coords:
+                return
+            ys = []
+            xs = []
+            for r, c in coords:
+                if 0 <= r < R and 0 <= c < C:
+                    y, x = centers[r, c]
+                    ys.append(y)
+                    xs.append(x)
+            if xs:
+                ax.scatter(xs, ys, marker="x", color=color, s=80, linewidths=2.2, zorder=20)
+
+        _plot_failures(failure_markers["pickup"], "gold")
+        _plot_failures(failure_markers["putdown"], "magenta")
+        _plot_failures(failure_markers["noatom"], "gray")
+        _plot_failures(failure_markers["crossed"], "red")
+        _plot_failures(failure_markers["collision"], "black")
+        _plot_failures(failure_markers["eject"], "lime")
 
     plt.tight_layout()
     if save_path is None:

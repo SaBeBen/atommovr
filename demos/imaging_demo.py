@@ -27,6 +27,9 @@ except Exception as e:
     print("Skipping imaging demo (module import failed).")
     exit(0)
 
+from atommover.utils.imaging.animation import make_single_species_gif
+from atommover.utils.Move import Move
+
 def demo_image_generation():
     """Demo realistic image synthesis from atom arrays."""
     print("=== Image Generation Demo ===")
@@ -139,6 +142,32 @@ def create_demo_arrays():
     plt.close()
 
 
+
+def demo_gif_generation():
+    """Generate a small demo GIF using a handcrafted move list."""
+    print("=== GIF Generation Demo ===")
+    arr = AtomArray(shape=[4, 4], n_species=1)
+    arr.load_tweezers()
+    # place a few atoms manually
+    arr.matrix[:, :, 0] = 0
+    arr.matrix[0, 0, 0] = 1
+    arr.matrix[0, 3, 0] = 1
+    arr.matrix[3, 0, 0] = 1
+
+    # construct a simple batch: move (0,0)->(1,1) and (0,3)->(2,2)
+    moves = [
+        Move(0, 0, 1, 1),
+        Move(0, 3, 2, 2),
+    ]
+    # single batch (list-of-lists)
+    move_batches = [moves]
+
+    print("Saving frames to ./figs/frames/ and gif to ./figs/resorting/")
+    make_single_species_gif(arr, move_batches, savename="demo_single_species_gif", duration=0.3)
+    print("GIF generation complete: ./figs/resorting/demo_single_species_gif.gif")
+
+
+
 if __name__ == "__main__":
     print("AtomMovr Imaging Integration Demo")
     print("=" * 40)
@@ -147,6 +176,7 @@ if __name__ == "__main__":
         demo_image_generation()
         demo_extraction_pipeline() 
         create_demo_arrays()
+        demo_gif_generation()
 
     except Exception as e:
         print(f"\n✗ Demo failed: {e}")

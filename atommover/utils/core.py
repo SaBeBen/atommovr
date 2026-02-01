@@ -287,11 +287,11 @@ def array_shape_for_geometry(geometry_spec, target_size: int, loading_prob: floa
     if geometry_spec is None or (isinstance(geometry_spec, ArrayGeometrySpec) and geometry_spec.kind == ArrayGeometry.SQUARE):
         side = int(math.ceil(math.sqrt(t)))
         scale = int(math.ceil(1.0 / math.sqrt(float(loading_prob)))) if loading_prob and loading_prob > 0 else 1
-        side = side * scale + 2
+        side = side * scale
         # Ensure some donor margin around the target so rearrangement algorithms
         # can source atoms from outside the target region. Make array at least
-        # target_size + 4 on a side.
-        side = max(side, t + 4)
+        # target_size + 2 on a side.
+        side = max(side, t + 2)
         return side, side
 
     # ArrayGeometrySpec handling

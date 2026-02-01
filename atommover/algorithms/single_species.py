@@ -196,8 +196,8 @@ class PCFA(Algorithm):
 
        Supported configurations: square targets (L x L) positioned at top-left of array."""
 
-    preferred_width_factor = 2.0
-    min_extra_columns = 2
+    preferred_width_factor = 2.1
+    min_extra_columns = 4
 
     def __repr__(self):
         return 'PCFA'
@@ -212,7 +212,7 @@ class PCFA(Algorithm):
 
     preferred_geometry_spec = ArrayGeometrySpec(
         ArrayGeometry.RECTANGLE_TALL,
-        {"preferred_width_factor": 2.0, "min_extra_columns": 2},
+        {"preferred_width_factor": 2.1, "min_extra_columns": 4},
     )
 
 

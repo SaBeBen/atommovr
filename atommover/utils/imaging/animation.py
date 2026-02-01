@@ -1,5 +1,6 @@
 # Code to visualize the atom array and generate gifs of the rearrangement process.
 
+import copy
 import imageio.v2 as imageio
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
@@ -111,14 +112,49 @@ def dual_species_image(matrix, move_list: list = [], plt_spacer: float = 0.25, a
 ########################
 
 def make_single_species_gif(single_species_array, move_list, params: PhysicalParams = PhysicalParams(), savename: str = 'matrix_animation', plt_spacer: float = 0.25, duration: float = 200):
+    # Work on a copy so callers can pass arrays that have already been evaluated.
+    sim_array = copy.deepcopy(single_species_array)
+
+    # Normalize move_list to list-of-lists
+    if len(move_list) > 0 and isinstance(move_list[0], Move):
+        move_list = [move_list]
     # making reference time
     t_total = 0
 
-    dotsize = np.min([800/np.sqrt(len(single_species_array.matrix)**2 + len(single_species_array.matrix[0])**2), 80])
+    dotsize = np.min([800/np.sqrt(len(sim_array.matrix)**2 + len(sim_array.matrix[0])**2), 80])
     
     # plotting the initial configuration
+    # If the provided AtomArray has already had the moves applied (e.g. tests call
+    # `evaluate_moves` before generating a gif), reconstruct the pre-move occupancy
+    # by reverse-applying the planned moves. This ensures the GIF shows the full
+    # move sequence from initial -> final instead of starting from the already-
+    # evaluated final state.
+    if len(move_list) > 0:
+        # flatten move_list (list of batches) to sequential list of Move
+        flat_moves = [m for batch in move_list for m in (batch if isinstance(batch, list) else [batch])]
+        # create initial layer from current sim_array (which may be final)
+        init_layer = sim_array.matrix[:, :, 0].copy()
+        R, C = init_layer.shape
+        # reverse apply moves to reconstruct initial occupancy
+        for mv in reversed(flat_moves):
+            fr_r, fr_c = int(mv.from_row), int(mv.from_col)
+            to_r, to_c = int(mv.to_row), int(mv.to_col)
+            # treat ejection as removal at destination/out-of-bounds
+            if getattr(mv, 'movetype', None) == MoveType.EJECT_MOVE:
+                # pre-move had atom at source
+                if 0 <= fr_r < R and 0 <= fr_c < C:
+                    init_layer[fr_r, fr_c] = 1
+            else:
+                # if destination is in-bounds, assume post-move had atom there;
+                # reverse: remove atom at destination and restore at source
+                if 0 <= to_r < R and 0 <= to_c < C:
+                    init_layer[to_r, to_c] = 0
+                if 0 <= fr_r < R and 0 <= fr_c < C:
+                    init_layer[fr_r, fr_c] = 1
+        sim_array.matrix[:, :, 0] = init_layer
+
     fig, ax = plt.subplots()
-    blue_inds_x, blue_inds_y, white_inds_x, white_inds_y = _get_inds_for_circ_matr_plot(single_species_array.matrix)
+    blue_inds_x, blue_inds_y, white_inds_x, white_inds_y = _get_inds_for_circ_matr_plot(sim_array.matrix[:, :, 0])
     ax.scatter(blue_inds_x, blue_inds_y, s=dotsize, c=SPECIES1COL, edgecolor=EDGECOL)
     ax.scatter(white_inds_x, white_inds_y, s=dotsize, c=NOATOMCOL, edgecolor=EDGECOL)
     if t_total> 1e-3:
@@ -126,22 +162,25 @@ def make_single_species_gif(single_species_array, move_list, params: PhysicalPar
     else:
         ax.set_title(f"t = {int(t_total*1e6)} \u03bc s")
     
-    _check_and_fix_lims(ax, len(single_species_array.matrix[0]), len(single_species_array.matrix))
+    _check_and_fix_lims(ax, len(sim_array.matrix[0]), len(sim_array.matrix))
     
     ax.set_aspect('equal') # Make the circles appear closer
     ax.axis('off') # Turn off the axis for a prettier plot
     plt.gca().invert_yaxis()# invert y axis so that it visually represents the matrix state
-    plt.savefig('./figs/frames/frame0')
+    # ensure frame directory exists and save as PNG
+    import os as _os
+    _os.makedirs('./figs/frames', exist_ok=True)
+    plt.savefig('./figs/frames/frame0.png')
     plt.close()
 
     # iterating through moves and creating new frames
     for move_ind, move_set in enumerate(move_list):
         # performing the move
-        [failed_moves, flags], move_time = single_species_array.move_atoms(move_set)
+        [failed_moves, flags], move_time = sim_array.move_atoms(move_set)
 
         # plotting the frame
         fig, ax = plt.subplots()
-        blue_inds_x, blue_inds_y, white_inds_x, white_inds_y = _get_inds_for_circ_matr_plot(single_species_array.matrix)
+        blue_inds_x, blue_inds_y, white_inds_x, white_inds_y = _get_inds_for_circ_matr_plot(sim_array.matrix[:, :, 0])
         ax.scatter(blue_inds_x, blue_inds_y, s=dotsize, c=SPECIES1COL, edgecolor=EDGECOL)
         ax.scatter(white_inds_x, white_inds_y, s=dotsize, c=NOATOMCOL, edgecolor=EDGECOL)
 
@@ -220,69 +259,89 @@ def make_single_species_gif(single_species_array, move_list, params: PhysicalPar
         else:
             ax.set_title(f"t = {int(t_total*1e6)} \u03bcs")
         
-        _check_and_fix_lims(ax, len(single_species_array.matrix[0]), len(single_species_array.matrix))
+        _check_and_fix_lims(ax, len(sim_array.matrix[0]), len(sim_array.matrix))
         
         ax.set_aspect('equal') # Make the circles appear closer
         ax.axis('off') # Turn off the axis for a prettier plot
         plt.gca().invert_yaxis() # invert y axis so that it visually represents the matrix state
-        plt.savefig(f'./figs/frames/frame{move_ind+1}')
+        plt.savefig(f'./figs/frames/frame{move_ind+1}.png')
         plt.close()
 
         # # simulating atom loss NB: this is now done in `ErrorModel` (see atommover.utils.errormodels)
         # matrix, loss_flag = atom_loss(matrix, t_move, params.lifetime)
 
-    with imageio.get_writer(f'./figs/resorting/{savename}.gif', mode='I', duration = duration) as writer:
-        for i in range(len(move_list)+1):
+    # write gif from generated PNG frames
+    _os.makedirs('./figs/resorting', exist_ok=True)
+    with imageio.get_writer(f'./figs/resorting/{savename}.gif', mode='I', duration=duration) as writer:
+        for i in range(len(move_list) + 1):
             filename = f'./figs/frames/frame{i}.png'
             image = imageio.imread(filename)
             writer.append_data(image)
-    writer.close()
 
     return t_total
 
-def make_dual_species_gif(dual_species_array, move_list: list, savename = 'matrix_animation',plt_spacer = 0.25, duration = 0.2):
-    # making reference time
-    t_total = 0
-    # arrays = copy.deepcopy(dual_species_matrix)
-    
-    dotsize = np.min([800/np.sqrt(len(dual_species_array.matrix)**2 + len(dual_species_array.matrix[0])**2), 80])
-    # plotting the initial configuration
-    fig, ax = plt.subplots()
-    blue_inds_x, blue_inds_y, \
-    yellow_inds_x, yellow_inds_y, \
-    white_inds_x, white_inds_y = _dual_species_get_inds_for_circ_matr_plot(dual_species_array.matrix)
+def make_dual_species_gif(
+    dual_species_array,
+    move_list: list,
+    savename: str = 'matrix_animation',
+    plt_spacer: float = 0.25,
+    duration: float = 0.2,
+):
+    """Create a dual-species rearrangement GIF with correct per-frame state."""
+    sim_array = copy.deepcopy(dual_species_array)
 
+    if len(move_list) > 0 and isinstance(move_list[0], Move):
+        move_list = [move_list]
+
+    t_total = 0
+    dotsize = np.min([800/np.sqrt(len(sim_array.matrix)**2 + len(sim_array.matrix[0])**2), 80])
+
+    fig, ax = plt.subplots()
+    blue_inds_x, blue_inds_y, yellow_inds_x, yellow_inds_y, white_inds_x, white_inds_y = _dual_species_get_inds_for_circ_matr_plot(sim_array.matrix)
     ax.scatter(blue_inds_x, blue_inds_y, s=dotsize, c=SPECIES1COL, edgecolor=EDGECOL)
     ax.scatter(yellow_inds_x, yellow_inds_y, s=dotsize, c=SPECIES2COL, edgecolor=EDGECOL)
     ax.scatter(white_inds_x, white_inds_y, s=dotsize, c=NOATOMCOL, edgecolor=EDGECOL)
 
     ax.set_aspect('equal')
-    if t_total> 1e-3:
+    if t_total > 1e-3:
         ax.set_title(f"t = {round(t_total*1e3,3)} ms")
-        ax.axis('off')
     else:
         ax.set_title(f"t = {int(t_total*1e6)} \u03bc s")
-        ax.axis('off')
-    plt.gca().invert_yaxis() # invert y axis so that it visually represents the matrix state
-    plt.savefig('./figs/frames/frame0')
+    ax.axis('off')
+    plt.gca().invert_yaxis()
+    import os as _os
+    # reconstruct pre-move dual-species occupancy similarly to single-species case
+    if len(move_list) > 0:
+        flat_moves = [m for batch in move_list for m in (batch if isinstance(batch, list) else [batch])]
+        init_layer = sim_array.matrix.copy()
+        R, C = init_layer.shape[:2]
+        for mv in reversed(flat_moves):
+            fr_r, fr_c = int(mv.from_row), int(mv.from_col)
+            to_r, to_c = int(mv.to_row), int(mv.to_col)
+            if getattr(mv, 'movetype', None) == MoveType.EJECT_MOVE:
+                if 0 <= fr_r < R and 0 <= fr_c < C:
+                    # set species occupancy at source to 1 for whichever species
+                    init_layer[fr_r, fr_c, 0] = 1
+            else:
+                if 0 <= to_r < R and 0 <= to_c < C:
+                    init_layer[to_r, to_c, :] = 0
+                if 0 <= fr_r < R and 0 <= fr_c < C:
+                    init_layer[fr_r, fr_c, 0] = 1
+        sim_array.matrix = init_layer
+
+    _os.makedirs('./figs/frames', exist_ok=True)
+    plt.savefig('./figs/frames/frame0.png')
     plt.clf()
 
-    # iterating through moves and creating new frames
     for move_ind, move_set in enumerate(move_list):
-        # performing the move
-        [failed_moves, flags], move_time = dual_species_array.move_atoms(move_set)
-        # plotting the frame
+        [failed_moves, flags], move_time = sim_array.move_atoms(move_set)
         fig, ax = plt.subplots()
-        blue_inds_x, blue_inds_y, \
-        yellow_inds_x, yellow_inds_y, \
-        white_inds_x, white_inds_y = _dual_species_get_inds_for_circ_matr_plot(dual_species_array.matrix)
-    
+
+        blue_inds_x, blue_inds_y, yellow_inds_x, yellow_inds_y, white_inds_x, white_inds_y = _dual_species_get_inds_for_circ_matr_plot(sim_array.matrix)
         ax.scatter(blue_inds_x, blue_inds_y, s=dotsize, c=SPECIES1COL, edgecolor=EDGECOL)
         ax.scatter(yellow_inds_x, yellow_inds_y, s=dotsize, c=SPECIES2COL, edgecolor=EDGECOL)
         ax.scatter(white_inds_x, white_inds_y, s=dotsize, c=NOATOMCOL, edgecolor=EDGECOL)
 
-
-        distances = []
         eject_x = []
         eject_y = []
         pickup_fail_x = []
@@ -291,73 +350,66 @@ def make_dual_species_gif(dual_species_array, move_list: list, savename = 'matri
         putdown_fail_y = []
         collision_fail_x = []
         collision_fail_y = []
+
         for move_set_ind, move in enumerate(move_set):
-            # checking whether the move failed or not
             if move_set_ind in failed_moves:
-                fail_flag = flags[np.where(np.isclose(failed_moves,move_set_ind))[0][0]]
+                fail_flag = flags[np.where(np.isclose(failed_moves, move_set_ind))[0][0]]
             else:
                 fail_flag = 0
 
-            if move.to_row > len(dual_species_array.matrix)-1 or move.to_row < 0 or move.to_col < 0 or move.to_col > len(dual_species_array.matrix[0])-1 and fail_flag == 0:
-                # plot a green dot if ejection succeeded
+            if move.to_row > len(sim_array.matrix)-1 or move.to_row < 0 or move.to_col < 0 or move.to_col > len(sim_array.matrix[0])-1 and fail_flag == 0:
                 if fail_flag == 0:
                     eject_x.append(move.from_col)
-                    eject_y.append(len(dual_species_array.matrix[0])-move.from_row)
-                    
-            # plotting an arrow for each individual move
-            ax.arrow(move.from_col+np.sign(move.dx)*plt_spacer, 
-                        len(dual_species_array.matrix[0])-(move.from_row+np.sign(move.dy)*plt_spacer), 
-                        move.dx-np.sign(move.dx)*2*plt_spacer, 
-                        -move.dy+np.sign(move.dy)*2*plt_spacer, 
-                        color = ARROWCOL, 
-                        width = 0.03, 
-                        length_includes_head = True)
-            if fail_flag == 1:
-                # plot a yellow dot if pickup failed
-                pickup_fail_x.append(move.from_col)
-                pickup_fail_y.append(len(dual_species_array.matrix[0])-move.from_row)
-            elif fail_flag == 2:
-                # plot a magenta dot if putdown failed
-                putdown_fail_x.append(move.from_col)
-                putdown_fail_y.append(len(dual_species_array.matrix[0])-move.from_row)
-            elif fail_flag == 3:
-                # plot red dots if atoms collided
-                collision_fail_x.append(move.from_col)
-                collision_fail_y.append(len(dual_species_array.matrix[0])-move.from_row)
-                collision_fail_x.append(move.to_col)
-                collision_fail_y.append(len(dual_species_array.matrix[0])-move.to_row)
+                    eject_y.append(len(sim_array.matrix[0]) - move.from_row)
 
-            if len(eject_x) > 0:
+            ax.arrow(
+                move.from_col + np.sign(move.dx) * plt_spacer,
+                len(sim_array.matrix[0]) - (move.from_row + np.sign(move.dy) * plt_spacer),
+                move.dx - np.sign(move.dx) * 2 * plt_spacer,
+                -move.dy + np.sign(move.dy) * 2 * plt_spacer,
+                color=ARROWCOL,
+                width=0.03,
+                length_includes_head=True,
+            )
+
+            if fail_flag == 1:
+                pickup_fail_x.append(move.from_col)
+                pickup_fail_y.append(len(sim_array.matrix[0]) - move.from_row)
+            elif fail_flag == 2:
+                putdown_fail_x.append(move.from_col)
+                putdown_fail_y.append(len(sim_array.matrix[0]) - move.from_row)
+            elif fail_flag == 3:
+                collision_fail_x.append(move.from_col)
+                collision_fail_y.append(len(sim_array.matrix[0]) - move.from_row)
+                collision_fail_x.append(move.to_col)
+                collision_fail_y.append(len(sim_array.matrix[0]) - move.to_row)
+
+            if eject_x:
                 ax.scatter(eject_x, eject_y, s=dotsize, c=EJECTCOL, edgecolor=EDGECOL)
-            if len(pickup_fail_x) > 0:
+            if pickup_fail_x:
                 ax.scatter(pickup_fail_x, pickup_fail_y, s=dotsize, c=PICKUPFAILCOL, edgecolor=EDGECOL)
-            if len(putdown_fail_x) > 0:
+            if putdown_fail_x:
                 ax.scatter(putdown_fail_x, putdown_fail_y, s=dotsize, c=PUTDOWNFAILCOL, edgecolor=EDGECOL)
-            if len(collision_fail_x) > 0:
+            if collision_fail_x:
                 ax.scatter(collision_fail_x, collision_fail_y, s=dotsize, c=COLLISIONFAILCOL, edgecolor=EDGECOL)
 
-        # keeping track of the time
         t_total += move_time
         ax.set_aspect('equal')
-        if t_total> 1e-3:
+        if t_total > 1e-3:
             ax.set_title(f"t = {round(t_total*1e3,3)} ms")
-            ax.axis('off')
         else:
             ax.set_title(f"t = {int(t_total*1e6)} \u03bcs")
-            ax.axis('off')
-        plt.gca().invert_yaxis() # invert y axis so that it visually represents the matrix state
-        plt.savefig(f'./figs/frames/frame{move_ind+1}')
+        ax.axis('off')
+        plt.gca().invert_yaxis()
+        plt.savefig(f'./figs/frames/frame{move_ind+1}.png')
         plt.clf()
 
-        # # simulating atom loss
-        # arrays, loss_flag = atom_loss_dual(arrays, t_move, params.lifetime)
-
-    with imageio.get_writer(f'./figs/{savename}.gif', mode='I', duration = duration) as writer:
-        for i in range(len(move_list)+1):
+    _os.makedirs('./figs/resorting', exist_ok=True)
+    with imageio.get_writer(f'./figs/resorting/{savename}.gif', mode='I', duration=duration) as writer:
+        for i in range(len(move_list) + 1):
             filename = f'./figs/frames/frame{i}.png'
             image = imageio.imread(filename)
             writer.append_data(image)
-    writer.close()
 
     return t_total
 
