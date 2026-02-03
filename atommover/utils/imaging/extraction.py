@@ -571,10 +571,11 @@ class Extractor:
     def extract_estimate_rotate_and_assign(
         self,
         image: np.ndarray | str,
-        grid_shape: Tuple[int, int],
+        grid_shape: Optional[Tuple[int, int]] = None,
         angle_method: Optional[str] = None,
         visualize: bool = False,
-    ) -> Tuple[np.ndarray, float, int]:
+        return_details: bool = False,
+    ) -> np.ndarray | Tuple[np.ndarray, float, int]:
         """
         Convenience pipeline: detect centroids, optionally estimate/rectify rotation,
         and assign to a binary grid.
@@ -584,7 +585,7 @@ class Extractor:
         image : np.ndarray | str
             Input image as a numpy array or file path.
         grid_shape : Tuple[int, int]
-            The expected shape of the grid (rows, columns).
+            The expected shape of the grid (rows, columns). Defaults to `self.shape`.
         angle_method : Optional[str], optional
             The method to use for angle estimation. Default is None.
         visualize : bool, optional
@@ -592,10 +593,12 @@ class Extractor:
 
         Returns
         -------
-        Tuple[np.ndarray, float, int]
-            A tuple containing the binary grid, the angle (in degrees), 
-            and the number of centroids.
+        np.ndarray | Tuple[np.ndarray, float, int]
+            Returns the binary grid by default. If `return_details=True`, returns
+            (binary grid, angle in degrees, number of centroids).
         """
+        if grid_shape is None:
+            grid_shape = tuple(self.shape)
         if isinstance(image, str):
             centroids, img_shape = self.extract(image)
             img_arr = np.array(Image.open(image))
@@ -645,7 +648,9 @@ class Extractor:
                 img = image
             print(f"Centroids shape: {np.array(centroids).shape}, centroids count: {len(centroids)}")
             self.overlay_centroids(img, centroids=centroids, save_path="figs/centroids_on_image.png")
-        return binary, angle_deg, n_centroids
+        if return_details:
+            return binary, angle_deg, n_centroids
+        return binary
 
 
     @staticmethod
@@ -757,7 +762,7 @@ class BlobDetection(Extractor):
 
         centroids = self.subpixel_gaussian_centroid(img_gray, keypoints=keypoints)
         return centroids, img_gray.shape
-    
+
     @staticmethod
     def subpixel_gaussian_centroid(img, keypoints, win_size=5):
         if not keypoints:
