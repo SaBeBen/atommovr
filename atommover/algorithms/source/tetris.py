@@ -23,7 +23,7 @@ from __future__ import annotations
 # Ludwig-Maximilians-Universitaet Muenchen (Ryd-Yb tweezer array group)
 # SPDX-License-Identifier: MIT
 #
-# Implementation author: Sascha Benz (https://www.mpq.mpg.de/6859879/ryd-yb-tweezer-array)
+# Implementation author: Sascha Benz
 # This file implements the Tetris algorithm described in:
 # Wang, S., Zhang, W., Zhang, T., Mei, S., Wang, Y., Hu, J., Chen, W. (2023).
 # Accelerating the Assembly of Defect-Free Atomic Arrays with Maximum Parallelisms.

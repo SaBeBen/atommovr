@@ -23,7 +23,7 @@ from __future__ import annotations
 # Ludwig-Maximilians-Universitaet Muenchen (Ryd-Yb tweezer array group)
 # SPDX-License-Identifier: MIT
 #
-# Implementation author: Sascha Benz (https://www.mpq.mpg.de/6859879/ryd-yb-tweezer-array)
+# Implementation author: Sascha Benz
 # This file provides an independent reimplementation of the PCFA algorithm
 # described in: Zhang, Y., Zhang, Z., Zhang, G., Zhang, Z., Chen, Y., Li, Y., Liu, W., Wu, J.,
 # Sovkov, V., & Ma, J. (2025). A Fast Rearrangement Method for Defect-Free Atom Arrays.
