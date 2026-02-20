@@ -4,9 +4,9 @@ import sys
 import numpy as np
 
 # Ensure repo root is on sys.path so demos can be run from the demos/ folder
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from atommover.utils.AtomArray import AtomArray
 from atommover.utils.core import PhysicalParams, array_shape_for_geometry
@@ -77,14 +77,14 @@ def main():
         print(f"   Number of Move Steps: {len(move_list)}")
         print(f"   Number of AWG Batches: {len(awg_sequence)}")
         
-        total_duration = sum(batch.total_duration for batch in awg_sequence)
+        total_duration = sum(batch.total_duration_s for batch in awg_sequence)
         print(f"   Total Sequence Duration: {total_duration*1e6:.2f} us")
         
         # Inspect first batch if exists
         if awg_sequence:
             print("\n   [First Batch Details]")
             first_batch = awg_sequence[0]
-            print(f"   Duration: {first_batch.total_duration*1e6:.2f} us")
+            print(f"   Duration: {first_batch.total_duration_s*1e6:.2f} us")
             print(f"   Ramps: {len(first_batch.ramps)}")
             for i, ramp in enumerate(first_batch.ramps[:5]):
                 print(f"     Ramp {i}: {ramp.channel} {ramp.f_start/1e6:.1f}->{ramp.f_end/1e6:.1f} MHz")

@@ -392,19 +392,27 @@ class AtomArray:
                 #   e) crossed (the moving tweezer intersects with another moving tweezer and the atom will be lost)
 
                 # if there is an atom in the pickup pos
-                if int(state_before_moves[move.from_row][move.from_col]) == 1:
+                val_pickup = state_before_moves[move.from_row][move.from_col]
+                if isinstance(val_pickup, np.ndarray) and val_pickup.ndim > 0:
+                    val_pickup = val_pickup.item()
+                
+                if int(val_pickup) == 1:
 
                     if move.to_col > self.shape[1]-1 or move.to_row > self.shape[0]-1 or move.to_col < 0 or move.to_row < 0:
                         move.movetype = MoveType.EJECT_MOVE
                     else:
                         # if the putdown pos is vacant, the move is legal
-                        if int(state_before_moves[move.to_row][move.to_col]) == 0:
+                        val_putdown = state_before_moves[move.to_row][move.to_col]
+                        if isinstance(val_putdown, np.ndarray) and val_putdown.ndim > 0:
+                            val_putdown = val_putdown.item()
+
+                        if int(val_putdown) == 0:
                             move.movetype = MoveType.LEGAL_MOVE
                         # if the putdown pos is filled, the move is illegal/there will be a collision
-                        elif int(state_before_moves[move.to_row][move.to_col]) == 1:
+                        elif int(val_putdown) == 1:
                             move.movetype = MoveType.ILLEGAL_MOVE
                         else:
-                            raise Exception(f"{int(self.matrix[move.to_row][move.to_col])} is not a valid matrix entry.")
+                            raise Exception(f"{int(val_putdown)} is not a valid matrix entry.")
                 else: # if there is no atom in the pickup pos
                     move.movetype = MoveType.NO_ATOM_TO_MOVE
                     move.failure_flag = 3

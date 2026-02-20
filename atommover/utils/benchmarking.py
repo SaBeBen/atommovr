@@ -210,7 +210,7 @@ class BenchmarkingFigure():
 
             target_values = list(ds.coords['target'].values)
             target_sel = target_values[0]
-            err_sel = ds.coords['error model'].values[0]
+            err_values = list(ds.coords['error model'].values)
             phys_sel = ds.coords['physical params'].values[0]
             round_sel = ds.coords['num rounds'].values[0]
 
@@ -219,7 +219,6 @@ class BenchmarkingFigure():
                 for idx, val in enumerate(target_values)
             }
             target_label = target_label_map.get(0, str(target_sel))
-            error_label = str(err_sel)
             phys_label = str(phys_sel)
             rounds_value = int(round(round_sel))
             do_ejection_attr = benchmarking_results.attrs.get('do_ejection', None)
@@ -232,7 +231,7 @@ class BenchmarkingFigure():
                 'parallel move batches': 'parallel_batches',
             }
 
-            def _select_complexity_fit(metric_key: str, algo_name: str):
+            def _select_complexity_fit(metric_key: str, algo_name: str, error_label: str):
                 if not complexity_records or metric_key not in metric_name_map:
                     return None
                 desired_metric = metric_name_map[metric_key]
@@ -262,43 +261,56 @@ class BenchmarkingFigure():
                     return rec
                 return None
 
-            base_sel = {'target': target_sel, 'error model': err_sel, 'physical params': phys_sel, 'num rounds': round_sel}
-            target_counts_da = ds['n targets'].sel(**base_sel)
+            for err_sel in err_values:
+                error_label = str(err_sel)
+                base_sel = {
+                    'target': target_sel,
+                    'error model': err_sel,
+                    'physical params': phys_sel,
+                    'num rounds': round_sel,
+                }
+                target_counts_da = ds['n targets'].sel(**base_sel)
 
-            for y_var in self.y_axis_variables:
-                fig, ax = plt.subplots(figsize=(6.5, 4.5))
-                plotted_any = False
-                da = ds[y_var].sel(**base_sel)
-                is_success_rate = (y_var == 'success rate')
-                
-                for algo in algo_labels:
-                    y_vals = da.sel(algorithm=algo).values.reshape(-1)
-                    x_vals = target_counts_da.sel(algorithm=algo).values.reshape(-1)
-                    fit_rec = _select_complexity_fit(y_var, str(algo))
-                    fit_fn = None
-                    if fit_rec is not None and not is_success_rate:
-                        coef = float(fit_rec.get('coefficient'))
-                        exponent = float(fit_rec.get('exponent'))
-                        fit_fn = lambda arr, c=coef, e=exponent: c * np.power(arr, e)
-                    
-                    plotted_any |= _plot_series(
-                        ax,
-                        x_vals,
-                        y_vals,
-                        str(algo),
-                        color_map[algo],
-                        fit_fn=fit_fn,
-                        force_power_fit=(has_complexity_data and not is_success_rate),
-                        connect_dots=is_success_rate
-                    )
-                if not plotted_any:
+                for y_var in self.y_axis_variables:
+                    fig, ax = plt.subplots(figsize=(6.5, 4.5))
+                    plotted_any = False
+                    da = ds[y_var].sel(**base_sel)
+                    is_success_rate = (y_var == 'success rate')
+
+                    for algo in algo_labels:
+                        y_vals = da.sel(algorithm=algo).values.reshape(-1)
+                        x_vals = target_counts_da.sel(algorithm=algo).values.reshape(-1)
+                        fit_rec = _select_complexity_fit(y_var, str(algo), error_label)
+                        fit_fn = None
+                        if fit_rec is not None and not is_success_rate:
+                            coef = float(fit_rec.get('coefficient'))
+                            exponent = float(fit_rec.get('exponent'))
+                            fit_fn = lambda arr, c=coef, e=exponent: c * np.power(arr, e)
+
+                        plotted_any |= _plot_series(
+                            ax,
+                            x_vals,
+                            y_vals,
+                            str(algo),
+                            color_map[algo],
+                            fit_fn=fit_fn,
+                            force_power_fit=(has_complexity_data and not is_success_rate),
+                            connect_dots=is_success_rate
+                        )
+                    if not plotted_any:
+                        plt.close(fig)
+                        continue
+                    _format_axis(ax, y_var)
+                    fig.tight_layout()
+            
+                    if save:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        fig.savefig(
+                            figs_dir / f"{savename}_{_slugify(error_label)}_{_slugify(y_var)}_{timestamp}.svg",
+                            format='svg',
+                            dpi=300,
+                        )
                     plt.close(fig)
-                    continue
-                _format_axis(ax, y_var)
-                fig.tight_layout()
-                if save:
-                    fig.savefig(figs_dir / f"{savename}_{_slugify(y_var)}.svg", format='svg', dpi=300)
-                plt.close(fig)
             return
 
         # Legacy list-of-dicts fallback
@@ -483,7 +495,8 @@ class Benchmarking():
                  n_shots: int = 100,
                  n_species: int = 1,
                  check_sufficient_atoms: bool = True,
-                 show_progress: bool = True):
+                 show_progress: bool = True,
+                 per_round_logging: bool = False):
         # initializing the sweep modules (minus target configs, see below)
         self.algos, self.n_algos = algos, len(algos)
         self.system_size_range, self.n_sizes = sys_sizes, len(sys_sizes)
@@ -498,6 +511,9 @@ class Benchmarking():
         self.show_progress = show_progress
         self.tweezer_array = AtomArray(n_species = n_species)
         self._target_cache: dict[tuple, np.ndarray] = {}
+        # Optional per-round logging of empty-site counts and new fills per shot
+        self.per_round_logging = bool(per_round_logging)
+        self._per_round_records: list[dict] = []
 
         # initializing target configs depending on whether they were explicitly specified
         if isinstance(target_configs, list):
@@ -789,7 +805,8 @@ class Benchmarking():
                             self.tweezer_array.shape = [rows, cols]
                             algo_label = algo_labels[alg_ind]
                             for round_ind, num_rounds in enumerate(self.rounds_list):
-                                success_rate, mean_success_time, fill_fracs, wrong_places, atoms_in_arrays, atoms_in_target, sufficient_rate, wall_time, cpu_time, parallel_counts, move_counts = self._run_benchmark_round(
+                                (success_rate, mean_success_time, fill_fracs, wrong_places, atoms_in_arrays, atoms_in_target, sufficient_rate, wall_time, cpu_time, parallel_counts, move_counts,
+                                 per_round_new_fills, per_round_empty_counts) = self._run_benchmark_round(
                                     algo,
                                     do_ejection=do_ejection,
                                     pattern=pattern,
@@ -852,6 +869,19 @@ class Benchmarking():
                                     'do_ejection': do_ejection,
                                 }
                                 self._benchmark_records.append(record)
+                                # Save per-round CSV if requested
+                                if self.per_round_logging and per_round_new_fills:
+                                    base_dir = Path('data/benchmark_pipeline/per_round')
+                                    base_dir.mkdir(parents=True, exist_ok=True)
+                                    fname = f"per_round_{self._current_run_timestamp}_{algo_label}_L{size}_{error_label}_R{num_rounds}_{target_label}.csv"
+                                    file_path = base_dir / fname
+                                    with open(file_path, 'w', newline='', encoding='utf-8') as csv_file:
+                                        fieldnames = ['shot', 'round_index', 'empty_before', 'new_fills']
+                                        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+                                        writer.writeheader()
+                                        for shot_idx, (fills_list, empty_list) in enumerate(zip(per_round_new_fills, per_round_empty_counts)):
+                                            for r_idx, (nf, eb) in enumerate(zip(fills_list, empty_list)):
+                                                writer.writerow({'shot': shot_idx, 'round_index': r_idx, 'empty_before': int(eb), 'new_fills': int(nf)})
                                 if progress_bars:
                                     bar = progress_bars[algo_label]
                                     bar.set_postfix({"L": size})
@@ -895,6 +925,7 @@ class Benchmarking():
         self._summarize_complexity()
         self._export_runtime_csv()
         self._export_complexity_csv()
+        self._export_algorithm_summary_csv()
 
         if progress_bars:
             for bar in progress_bars.values():
@@ -1249,6 +1280,9 @@ class Benchmarking():
         sufficient_flags = []
         parallel_move_counts = []
         atom_move_counts = []
+        # Per-round diagnostics
+        per_round_new_fills_allshots: list[list[int]] = []
+        per_round_empty_counts_allshots: list[list[int]] = []
         wall_start = time.perf_counter()
         cpu_start = time.process_time()
 
@@ -1319,13 +1353,29 @@ class Benchmarking():
             shot_parallel_batches = 0
             shot_move_count = 0
             t_total = 0.0
+            # per-shot per-round lists
+            shot_new_fills: list[int] = []
+            shot_empty_before: list[int] = []
             while round_count < num_rounds:
+                # record number of empty target sites before this round
+                filled_before = int(np.sum(np.multiply(self.tweezer_array.matrix, self.tweezer_array.target)))
+                total_target = int(np.sum(self.tweezer_array.target))
+                empty_before = int(max(0, total_target - filled_before))
+                shot_empty_before.append(empty_before)
                 # generating and evaluating moves
-                if self.tweezer_array.n_species == 1:
-                    _, move_list, algo_success_flag = algorithm.get_moves(self.tweezer_array, do_ejection = do_ejection)
-                else:
-                    _, move_list, algo_success_flag = algorithm.get_moves(self.tweezer_array)
-                t_total, move_stats = self.tweezer_array.evaluate_moves(move_list)
+                try:
+                    if self.tweezer_array.n_species == 1:
+                        _, move_list, algo_success_flag = algorithm.get_moves(self.tweezer_array, do_ejection = do_ejection)
+                    else:
+                        _, move_list, algo_success_flag = algorithm.get_moves(self.tweezer_array)
+                    t_total, move_stats = self.tweezer_array.evaluate_moves(move_list)
+                except ValueError as value_error:
+                    print(f"ValueError in round {round_count} for algorithm {algorithm.__class__.__name__}: {value_error}. Marking shot as failed.")
+                    break
+                # compute new fills achieved by this round
+                filled_after = int(np.sum(np.multiply(self.tweezer_array.matrix, self.tweezer_array.target)))
+                new_fills = max(0, filled_after - filled_before)
+                shot_new_fills.append(int(new_fills))
                 if isinstance(move_stats, (list, tuple)) and len(move_stats) > 0:
                     shot_parallel_batches += int(move_stats[0])
                     if len(move_stats) > 1:
@@ -1334,6 +1384,14 @@ class Benchmarking():
                         shot_move_count += int(move_stats[0])
                 success_flag = Algorithm.get_success_flag(self.tweezer_array.matrix,self.tweezer_array.target, do_ejection=do_ejection, n_species=self.tweezer_array.n_species)
                 if success_flag == 1:
+                    # pad remaining rounds with zeros for consistent length
+                    round_count += 1
+                    # If we ended early, remaining rounds contribute no new fills and empty_before becomes 0
+                    # (we still want per-round vectors of length num_rounds)
+                    while round_count < num_rounds:
+                        shot_empty_before.append(0)
+                        shot_new_fills.append(0)
+                        round_count += 1
                     break
                 round_count += 1
 
@@ -1342,6 +1400,10 @@ class Benchmarking():
                 success_times.append(t_total)
             parallel_move_counts.append(shot_parallel_batches)
             atom_move_counts.append(shot_move_count)
+
+            # store per-shot per-round diagnostics
+            per_round_new_fills_allshots.append(shot_new_fills)
+            per_round_empty_counts_allshots.append(shot_empty_before)
 
             # calculate filling fraction
             filling_fraction_config = np.multiply(self.tweezer_array.matrix, self.tweezer_array.target)
@@ -1376,6 +1438,8 @@ class Benchmarking():
             cpu_elapsed,
             parallel_move_counts,
             atom_move_counts,
+            per_round_new_fills_allshots,
+            per_round_empty_counts_allshots,
         )
 
 

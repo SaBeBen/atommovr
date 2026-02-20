@@ -143,16 +143,24 @@ def _apply_moves(init_matrix: np.ndarray,
             #   d) no atom to move (there is NO atom in the pickup pos)
 
             # if there is an atom in the pickup pos
-            if int(init_matrix[move.from_row][move.from_col]) == 1:
+            val_pickup = init_matrix[move.from_row][move.from_col]
+            if isinstance(val_pickup, np.ndarray) and val_pickup.ndim > 0:
+                val_pickup = val_pickup.item()
+            
+            if int(val_pickup) == 1:
                 try:
                     # check if there is NO atom in the putdown pos
-                    if int(init_matrix[move.to_row][move.to_col]) == 0 and move.to_col >= 0 and move.to_row >= 0:
+                    val_putdown = init_matrix[move.to_row][move.to_col]
+                    if isinstance(val_putdown, np.ndarray) and val_putdown.ndim > 0:
+                        val_putdown = val_putdown.item()
+
+                    if int(val_putdown) == 0 and move.to_col >= 0 and move.to_row >= 0:
                         movetype = MoveType.LEGAL_MOVE
                     # check if there is an atom in the putdown pos
-                    elif int(init_matrix[move.to_row][move.to_col]) == 1 and move.to_col >= 0 and move.to_row >= 0:
+                    elif int(val_putdown) == 1 and move.to_col >= 0 and move.to_row >= 0:
                         movetype = MoveType.ILLEGAL_MOVE
                     elif move.to_col >= 0 and move.to_row >= 0:
-                        raise Exception(f"{int(init_matrix[move.to_row][move.to_col])} is not a valid matrix entry.")
+                        raise Exception(f"{int(val_putdown)} is not a valid matrix entry.")
                     else:
                         raise IndexError
                 except IndexError:

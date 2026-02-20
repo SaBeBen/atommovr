@@ -13,9 +13,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Ensure repo root is on sys.path so demos can be run from the demos/ folder
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from atommover.utils.core import ArrayGeometry
 try:

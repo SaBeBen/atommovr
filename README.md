@@ -21,6 +21,12 @@ by [Nikhil Kiran Harle*](https://github.com/khnikhil/khnikhil), [Bo-Yu Chen*](ht
 
 :camera: Realistic imaging pipeline: `atommover.utils.imaging/` - Generate camera-like images from atom grids, extract centroids with blob detection, estimate grid angles, and fit detected atoms back to grids.
 
+:wrench: AWG hardware controller: `awg_controller/` - Drive Spectrum Instrumentation DDS cards with four interchangeable execution strategies (streaming, ramp, pattern, camera-triggered).
+
+:test_tube: Comprehensive test suites: `atommover.tests/` and `awg_controller/tests/` - Unit and integration tests covering algorithms, imaging, RF conversion, and DDS strategies.
+
+:gear: Imaging parameter optimization: `optimization/` - Automated search for blob-detection parameters such as sigma bounds and detection thresholds.
+
 
 # Use
 

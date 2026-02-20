@@ -313,6 +313,23 @@ def _plan_gap_fill(
 					current_axis = axis
 				if axis != current_axis:
 					flush(axis)
+				if current_batch:
+					conflict = False
+					# Check for hardware conflict: same source cannot map to different targets in one batch
+					if axis == "vertical":
+						for m in current_batch:
+							if m.from_row == move.from_row and m.to_row != move.to_row:
+								conflict = True
+								break
+					elif axis == "horizontal":
+						for m in current_batch:
+							if m.from_col == move.from_col and m.to_col != move.to_col:
+								conflict = True
+								break
+					
+					if conflict:
+						flush(axis)
+
 				current_batch.append(move)
 				_apply_batches_to_state(state, [[move]])
 				if dop is not None and dop > 0 and len(current_batch) >= dop:
