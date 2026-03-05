@@ -1283,14 +1283,15 @@ class Benchmarking():
         # Per-round diagnostics
         per_round_new_fills_allshots: list[list[int]] = []
         per_round_empty_counts_allshots: list[list[int]] = []
-        wall_start = time.perf_counter()
-        cpu_start = time.process_time()
 
         pattern_enum = pattern if isinstance(pattern, Configurations) else None
 
         if self.istargetlist and precomputed_target is None and pattern_enum not in (None, Configurations.RANDOM):
             self.tweezer_array.generate_target(pattern, occupation_prob = self.tweezer_array.params.loading_prob)
                 
+        wall_start = time.perf_counter()
+        cpu_start = time.process_time()
+
         for shot in range(self.n_shots):
             # getting initial and final target configs
             raw_init = np.asarray(self.init_config_storage[shot])
@@ -1424,8 +1425,8 @@ class Benchmarking():
             else:
                 sufficient_flags.append(True)
 
-        wall_elapsed = time.perf_counter() - wall_start
-        cpu_elapsed = time.process_time() - cpu_start
+        wall_elapsed = (time.perf_counter() - wall_start) / self.n_shots
+        cpu_elapsed = (time.process_time() - cpu_start) / self.n_shots
         return (
             float(np.mean(success_flags)),
             float(np.mean(success_times)),
