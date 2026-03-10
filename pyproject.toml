@@ -1,0 +1,71 @@
+[project]
+name = "atommovr"
+version = "0.2.0"
+description = "Atom transport and error modeling for AOD-based tweezer arrays."
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+  "numpy",
+  "xarray",
+  "numba",
+  "matplotlib",
+  "imageio==2.36.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "nox",
+  "black",
+  "ruff",
+  "pytest",
+  "pytest-cov",
+  "ipykernel",
+]
+
+# =========================
+# Build system (standard for setuptools)
+# =========================
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# =========================
+# Black (code formatter)
+# =========================
+[tool.black]
+line-length = 88               # Maximum line length; Black will wrap lines beyond this
+target-version = ["py310"]     # Python version compatibility
+# skip-string-normalization = true  # Uncomment if you want to preserve original quote style
+
+# =========================
+# Ruff (linter / bug checker)
+# =========================
+[tool.ruff]
+select = ["E", "F", "B"]      # Enable error rules, pyflakes checks, and Bugbear checks
+ignore = ["E501"]              # Ignore line length (formatter handles it)
+exclude = ["tests/*", "docs/*"] # Optional: skip certain folders if desired
+
+# Specific configuration for flake8-bugbear rules
+[tool.ruff.flake8-bugbear]
+extend-immutable-calls = [
+  "numpy.zeros",
+  "numpy.ones",
+  "numpy.empty"
+]
+# This prevents false positives for functions that return mutable objects
+
+# =========================
+# pytest (test framework + coverage)
+# =========================
+[tool.pytest.ini_options]
+testpaths = ["tests"]                         # Where to look for tests
+addopts = "--cov=atommovr --cov-report=term-missing"  # Coverage reporting
+# markers, python_files, and other pytest options can also go here
+
+# =========================
+# Optional future additions
+# =========================
+# [tool.isort]  # import sorting
+# [tool.mypy]   # type checking
+# [tool.coverage] # coverage thresholds
