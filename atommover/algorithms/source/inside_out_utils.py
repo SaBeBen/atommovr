@@ -6,7 +6,7 @@ import numpy as np
 import copy
 from scipy.optimize import linear_sum_assignment
 from collections import deque
-from atommover.utils.core import Move
+from atommover.utils.Move import Move
 from atommover.utils.AtomArray import AtomArray
 from atommover.utils.move_utils import *
 from typing import Callable

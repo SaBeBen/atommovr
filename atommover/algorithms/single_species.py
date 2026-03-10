@@ -13,7 +13,7 @@ from atommover.algorithms.Algorithm_class import Algorithm
 from atommover.algorithms.source.balance_compact import balance_and_compact
 from atommover.algorithms.source.bc_new import bcv2
 from atommover.algorithms.source.generalized_balance import generalized_balance
-from atommover.algorithms.source.Hungarian_works import parallel_Hungarian_algorithm_works, parallel_LBAP_algorithm_works, Hungarian_algorithm_works
+from atommover.algorithms.source.Hungarian_works import parallel_Hungarian_algorithm_works, parallel_LBAP_algorithm_works, Hungarian_algorithm_works_fast
 
 ##########################
 # Bernien Lab algorithms #
@@ -24,7 +24,7 @@ class ParallelHungarian(Algorithm):
     """ A variant on the Hungarian matching algorithm that parallelizes the moves
         instead of executing them sequentially (one by one).
         
-        Supported configurations: all. """
+        Supported configurations: all (but the overall array must be square). """
     def __repr__(self):
         return 'Parallel Hungarian'
     
@@ -76,7 +76,7 @@ class Hungarian(Algorithm):
         matrix mapping available atoms to the target spots, and solves the
         linear assignment problem to find an efficient set of moves.
         
-        Supported configurations: all. """
+        Supported configurations: all (but the overall array must be square). """
 
     def __repr__(self):
         return 'Hungarian'
@@ -84,7 +84,7 @@ class Hungarian(Algorithm):
     def get_moves(self, atom_array: AtomArray, do_ejection: bool = False):
         if atom_array.n_species != 1:
             raise ValueError(f"Single-species algorithm cannot process atom array with {atom_array.n_species} species.")
-        return Hungarian_algorithm_works(atom_array.matrix[:,:,0], atom_array.target, do_ejection)
+        return Hungarian_algorithm_works_fast(atom_array.matrix[:,:,0], atom_array.target, do_ejection)
 
 # Balance and Compact
 class BCv2(Algorithm):
