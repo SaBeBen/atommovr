@@ -143,9 +143,40 @@ class AtomArray:
                         random_index = random.randint(0, 1)
                         self.matrix[i][j][random_index] = 0
         
-        self.last_loaded_config = copy.deepcopy(self.matrix)
+        self.last_loaded_config = copy.deepcopy(self.matrix) # can just use .copy()
 
-    def generate_target(self, pattern: Configurations = Configurations.CHECKERBOARD, middle_size: list = [], occupation_prob: float = 0.5):
+    def generate_target(self, pattern: Configurations = Configurations.CHECKERBOARD, middle_size: list | None = None, occupation_prob: float = 0.5):
+        """
+        Generate a target occupation pattern for the current array.
+
+        This method dispatches to the single-species or dual-species target builder
+        depending on ``self.n_species``. It is the public entry point for creating
+        common target configurations used by rearrangement algorithms and simulator
+        diagnostics.
+
+        Parameters
+        ----------
+        pattern : Configurations, optional
+            Target pattern to generate.
+        middle_size : list | None, optional
+            Size specification for centered target patterns. When ``None``, the
+            target builder chooses a default centered region based on the array size
+            and occupation probability.
+        occupation_prob : float, optional
+            Filling fraction used when constructing default centered regions.
+
+        Returns
+        -------
+        None
+            This method updates ``self.target`` in place.
+
+        Raises
+        ------
+        ValueError
+            If ``self.n_species`` is not supported by the simulator.
+        """
+        if middle_size is None:
+            middle_size = []
         if self.n_species == 1:
             self._generate_single_species_target(pattern, middle_size = middle_size, occupation_prob=occupation_prob)
         elif self.n_species == 2:

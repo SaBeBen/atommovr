@@ -328,12 +328,18 @@ def move_atoms(
     # evaluating atom loss process from error model
     matrix_out, _ = error_model.get_atom_loss(matrix_out, move_time, n_species = 1)
 
+    if matrix_out.size > 0 and int(np.min(matrix_out)) < 0:
+        raise ValueError("move_atoms produced negative occupancy; refusing to cast to unsigned dtype.")
+    
+    if needs_recast:
+        return matrix_out.astype(orig_dtype, copy=False), [failed_moves, flags]
+
     return matrix_out, [failed_moves, flags]
     
-def _get_duplicate_vals_from_list(l):
+def _get_duplicate_vals_from_list(l: list) -> list:
     return [k for k,v in Counter(l).items() if v>1]
 
-def _find_and_resolve_crossed_moves(move_list: list, matrix_copy: np.ndarray) -> 'tuple[np.ndarray, list]':
+def _find_and_resolve_crossed_moves(move_list: list, matrix_copy: np.ndarray) -> tuple[NDArray, list]:
     """
     Identifies sets of moves where the AOD tweezers cross over each other (and destroy the atoms).
     NB: this ONLY works for moves where you only move by one column or one row.
