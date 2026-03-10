@@ -3,6 +3,7 @@
 import imageio.v2 as imageio
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
+from matplotlib.axes import Axes
 
 from atommover.utils.Move import Move
 from atommover.utils.core import *
@@ -13,11 +14,22 @@ from atommover.utils.customize import *
 # Single frame visualization/imaging #
 ######################################
 
-def single_species_image(matrix, move_list: list = [], plt_spacer: float = 0.25, padding: list = [], title: str = '', atom_color: str = SPECIES1COL, savename = ''):
+def single_species_image(
+    matrix: np.ndarray, 
+    move_list: list | None = None, 
+    plt_spacer: float = 0.25, 
+    padding: list | None = None, 
+    title: str = '', 
+    atom_color: str = SPECIES1COL, 
+    savename = ''
+) -> None:
+    
     
     fig, ax = plt.subplots()
+    if move_list is None:
+        move_list = []
 
-    if padding != []:
+    if padding is not None:
         ax.add_patch(Rectangle((padding[1][0]-0.5, padding[0][0]-0.5), len(matrix[0]) - np.sum(padding[1]), len(matrix) - np.sum(padding[0]),
                 edgecolor = EDGECOL,
                 facecolor = 'b',
@@ -26,7 +38,7 @@ def single_species_image(matrix, move_list: list = [], plt_spacer: float = 0.25,
 
     dotsize = np.min([800/np.sqrt(len(matrix)**2 + len(matrix[0])**2), 80])
     filled_inds_x, filled_inds_y, empty_inds_x, empty_inds_y = _get_inds_for_circ_matr_plot(matrix)
-    ax.scatter(filled_inds_x, filled_inds_y, s=dotsize, c=atom_color)#, edgecolor=EDGECOL)
+    ax.scatter(filled_inds_x, filled_inds_y, s=dotsize, c=atom_color) #, edgecolor=EDGECOL)
     ax.scatter(empty_inds_x, empty_inds_y, s=dotsize, c=NOATOMCOL, edgecolor=EDGECOL)
     
     # plotting arrows to indicate moves (NB: this does NOT apply the moves, but rather only adds the visualization)
@@ -55,8 +67,16 @@ def single_species_image(matrix, move_list: list = [], plt_spacer: float = 0.25,
 
 
 #Generate atom arrays figure
-def dual_species_image(matrix, move_list: list = [], plt_spacer: float = 0.25, atoms: str = 'all', savename = ''):
-    
+def dual_species_image(
+    matrix, 
+    move_list: list | None = None, 
+    plt_spacer: float = 0.25, 
+    atoms: str = 'all', 
+    savename = ''
+) -> None:
+    if move_list is None:
+        move_list = []
+
     fig, ax = plt.subplots()
 
     blue_inds_x, blue_inds_y, yellow_inds_x, yellow_inds_y, white_inds_x, white_inds_y = _dual_species_get_inds_for_circ_matr_plot(matrix)
@@ -110,7 +130,14 @@ def dual_species_image(matrix, move_list: list = [], plt_spacer: float = 0.25, a
 # Movie/gif generation #
 ########################
 
-def make_single_species_gif(single_species_array, move_list, params: PhysicalParams = PhysicalParams(), savename: str = 'matrix_animation', plt_spacer: float = 0.25, duration: float = 200):
+def make_single_species_gif(
+    single_species_array, 
+    move_list, 
+    params: PhysicalParams = PhysicalParams(), 
+    savename: str = 'matrix_animation', 
+    plt_spacer: float = 0.25, 
+    duration: float = 200
+)-> float:
     # making reference time
     t_total = 0
 
@@ -165,7 +192,6 @@ def make_single_species_gif(single_species_array, move_list, params: PhysicalPar
 
             # calculating the distance of the move
             distances.append(move.distance)
-
 
             if move.movetype == MoveType.EJECT_MOVE:
                 # plot a green dot if ejection succeeded
@@ -240,7 +266,13 @@ def make_single_species_gif(single_species_array, move_list, params: PhysicalPar
 
     return t_total
 
-def make_dual_species_gif(dual_species_array, move_list: list, savename = 'matrix_animation',plt_spacer = 0.25, duration = 0.2):
+def make_dual_species_gif(
+    dual_species_array,
+    move_list: list,
+    savename = 'matrix_animation',
+    plt_spacer = 0.25,
+    duration = 0.2
+) -> float:
     # making reference time
     t_total = 0
     # arrays = copy.deepcopy(dual_species_matrix)
@@ -365,6 +397,23 @@ def make_dual_species_gif(dual_species_array, move_list: list, savename = 'matri
 # Utils #
 #########
 
+def _plot_arrows(ax: Axes,
+                 move_list: list[Move], 
+                 plt_spacer: float = 0.25,
+                 width: float = 0.03
+                 ) -> None:
+    if len(move_list) > 0:
+            for move in move_list:
+                ax.arrow(move.from_col+np.sign(move.dx)*plt_spacer, 
+                        move.from_row+np.sign(move.dy)*plt_spacer,
+                        move.dx-np.sign(move.dx)*2*plt_spacer,
+                        move.dy-np.sign(move.dy)*2*plt_spacer,
+                        color = ARROWCOL, 
+                        width = width, 
+                        length_includes_head = True)
+                
+    
+
 def _get_inds_for_circ_matr_plot(matrix: np.ndarray):
     """
         Given a matrix whose entries $ in {0,1} $,
@@ -423,7 +472,7 @@ def _dual_species_get_inds_for_circ_matr_plot(matrix: np.ndarray):
     return blue_inds_x, blue_inds_y, yellow_inds_x, yellow_inds_y, white_inds_x, white_inds_y
 
 
-def _check_and_fix_lims(ax, xlen, ylen):
+def _check_and_fix_lims(ax: Axes, xlen: int, ylen: int) -> None:
     xleft, xright = ax.get_xlim()
     ybottom, ytop = ax.get_ylim()
     pct_extension = 0.05

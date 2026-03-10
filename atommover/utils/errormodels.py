@@ -13,30 +13,40 @@ class ZeroNoise(ErrorModel):
     Simulates errorless rearrangement (assumes perfect tweezers
     and an infinitely long vacuum-limited lifetime).
     """
-    def __init__(self):
+    def __init__(self,
+                 putdown_time: float = 0, 
+                 pickup_time: float = 0,
+                 accel_time: float = 0,
+                 decel_time: float = 0,
+                 seed: int | None = None):
+        super().__init__(
+            putdown_time=putdown_time,
+            pickup_time=pickup_time,
+            accel_time=accel_time,
+            decel_time=decel_time,
+            pickup_fail_rate=0.0,
+            putdown_fail_rate=0.0,
+            accel_fail_rate=0.0,
+            decel_fail_rate=0.0,
+            lifetime=np.inf,
+            seed=seed,
+        )
         self.name = "ZeroNoise"
-        self.putdown_time = 0 # seconds
-        self.pickup_time = 0 # seconds
 
     def __repr__(self) -> str:
         return self.name
-    
-    def get_move_errors(self, state: np.ndarray, moves: list[Move]) -> list:
-        """ 
-        Given a set of moves and the current state, assigns
-        an attribute `failure_flag` to the move. 
-        - If the move suceeds, `move_failure_flag = 0`.
-        - If the move fails but the atom remains in its original position,
-        `move.failure_flag = 1`.
-        - If the move fails and the atom is also ejected,
-        `move_failure_flag = 2`.
 
-        For this noise model, it sets all failure flags to 0.
-        """
-        for move in moves:
-            move.failure_flag = 0
-        
-        return moves
+    def apply_accel_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+        pass
+
+    def apply_decel_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+        pass
+
+    def apply_pickup_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+        pass
+
+    def apply_putdown_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+        pass
 
     def get_atom_loss(self, state: np.ndarray, evolution_time: float, n_species: int = 1) -> tuple[np.ndarray, bool]:
         """ 
@@ -60,9 +70,28 @@ class ZeroNoise(ErrorModel):
         loss_flag : bool
             1 if any atom loss occurred, 0 if not.
         """
-        loss_flag = 0
-        new_state = copy.deepcopy(state)
+        if n_species not in [1,2]:
+            raise ValueError(f'Parameter "n_species" must be 1 or 2, not {n_species}')
+        loss_flag = False
+        new_state = state.copy()
         return new_state, loss_flag
+    
+    # def get_move_errors(self, state: np.ndarray, moves: list[Move]) -> list:
+    #     """ 
+    #     Given a set of moves and the current state, assigns
+    #     an attribute `failure_flag` to the move. 
+    #     - If the move suceeds, `move_failure_flag = 0`.
+    #     - If the move fails but the atom remains in its original position,
+    #     `move.failure_flag = 1`.
+    #     - If the move fails and the atom is also ejected,
+    #     `move_failure_flag = 2`.
+
+    #     For this noise model, it sets all failure flags to 0.
+    #     """
+    #     for move in moves:
+    #         move.failure_flag = 0
+        
+    #     return moves
 
 class UniformVacuumTweezerError(ErrorModel):
     """
@@ -83,45 +112,34 @@ class UniformVacuumTweezerError(ErrorModel):
     Vacuum limited lifetime of an individual atom (assumed to be uniform for all atoms),
     in seconds. Default value is 30. 
     """
-    def __init__(self, 
-                 pickup_fail_rate: float = 0.01, 
-                 putdown_fail_rate: float = 0.01, 
-                 lifetime: float = 30,
+    def __init__(self,
+                 putdown_time: float = 0, 
                  pickup_time: float = 0,
-                 putdown_time: float = 0):
+                 accel_time: float = 0,
+                 decel_time: float = 0,
+                 pickup_fail_rate: float = 0.01,
+                 putdown_fail_rate: float = 0.01,
+                 accel_fail_rate: float = 0,
+                 decel_fail_rate: float = 0,
+                 lifetime: float = 30,
+                 seed: int | None = None,
+            ):
+        super().__init__(
+            putdown_time=putdown_time,
+            pickup_time=pickup_time,
+            accel_time=accel_time,
+            decel_time=decel_time,
+            pickup_fail_rate=pickup_fail_rate,
+            putdown_fail_rate=putdown_fail_rate,
+            accel_fail_rate=accel_fail_rate,
+            decel_fail_rate=decel_fail_rate,
+            lifetime=lifetime,
+            seed=seed,
+        )
         self.name = "UniformVacuumTweezerError"
-        self.pickup_fail_rate = pickup_fail_rate
-        self.putdown_fail_rate = putdown_fail_rate
-        self.lifetime = lifetime
-        self.pickup_time = pickup_time
-        self.putdown_time = putdown_time
 
     def __repr__(self) -> str:
         return self.name
-    
-    def get_move_errors(self, state: np.ndarray, moves: list[Move]) -> list[Move]:
-        """ 
-        Given a set of moves and the current state, assigns
-        an attribute `failure_flag` to the move. 
-        - If the move suceeds, `move_failure_flag = 0`.
-        - If the move fails but the atom remains in its original position,
-        `move.failure_flag = 1`.
-        - If the move fails and the atom is also ejected,
-        `move_failure_flag = 2`.
-
-        In this error model, we uniformly sample from a probability distribution
-        specified by the class attributes `pickup_fail_rate` and 
-        `putdown_fail_rate`.
-        """
-
-        move_fails = random.choices([0, 1, 2], 
-                                    weights=[1-self.pickup_fail_rate-self.putdown_fail_rate,
-                                    self.pickup_fail_rate,
-                                    self.putdown_fail_rate],
-                                    k = len(moves))
-        for move_index, move in enumerate(moves):
-            move.failure_flag = move_fails[move_index]
-        return moves
 
 
     def get_atom_loss(self, 
@@ -130,7 +148,7 @@ class UniformVacuumTweezerError(ErrorModel):
                       n_species: int = 1) -> tuple[np.ndarray, bool]:
         """ 
         Given the current state of the atom array, applies any general loss process
-        over the period $$\Delta t$$ = evolution_time.
+        over the period $\Delta t$ = evolution_time.
 
         For this error model, we consider uniform loss from background gas particles
         knocking atoms out of their traps. 
@@ -145,35 +163,38 @@ class UniformVacuumTweezerError(ErrorModel):
         - new_state (np.ndarray). The state after the loss process.
         - loss_flag (bool). 1 if any atom loss occurred, 0 if not.
         """
+        if n_species not in [1,2]:
+            raise ValueError(f'Parameter "n_species" must be 1 or 2, not {n_species}')
         evolution_time = evolution_time
         if n_species == 1:
-            new_state, loss_flag = atom_loss(state, evolution_time, self.lifetime)
+            new_state, loss_flag = atom_loss(state, evolution_time, self.lifetime, self.rng)
         elif n_species == 2:
-            new_state, loss_flag = atom_loss_dual(state, evolution_time, self.lifetime)
+            new_state, loss_flag = atom_loss_dual(state, evolution_time, self.lifetime, self.rng)
+        else:
+            raise ValueError(f"Parameter 'n_species' must be either 1 or 2, not {n_species}.")
         return new_state, loss_flag
     
-    # def evaluate_moves(self, state: AtomArray, moves: list[Move]) -> tuple[AtomArray, str, str]:
+
+        # def get_move_errors(self, state: np.ndarray, moves: list[Move], putdown_events: set, pickup_events: set) -> list[Move]:
+    #     """ 
+    #     Given a set of moves and the current state, assigns
+    #     an attribute `failure_flag` to the move. 
+    #     - If the move suceeds, `move_failure_flag = 0`.
+    #     - If the move fails but the atom remains in its original position,
+    #     `move.failure_flag = 1`.
+    #     - If the move fails and the atom is also ejected,
+    #     `move_failure_flag = 2`.
+
+    #     In this error model, we uniformly sample from a probability distribution
+    #     specified by the class attributes `pickup_fail_rate` and 
+    #     `putdown_fail_rate`.
     #     """
-    #     Given an AtomArray object representing the current state of the
-    #     array, and a set of moves to execute in *parallel*, applies the
-    #     moves to the array and returns the resulting state after
-    #     error processes have occured, as well as flags to indicate the
-    #     presence of any errors. 
 
-    #     Inputs:
-    #     - `state`: `AtomArray`. Current state of the atom array.
-    #     - `moves`: list[`Move`, `Move`, ...]. List of parallel moves to execute.
-
-    #     Outputs:
-    #     - `state`: `AtomArray`. Modified state object.
-    #     - `MoveFailureFlag`: bool. 1 if any move has failed, 0 if not.
-    #     - `AtomLossFlag`: bool. 1 if any atom has been lost, 0 if not.
-    #     """
-    #     MoveFailureFlag = 0
-    #     AtomLossFlag = 0
-
-    #     for move in moves:
-    #         pass
-        
-        
-    #     return state, MoveFailureFlag, AtomLossFlag
+    #     move_fails = random.choices([0, 1, 2], 
+    #                                 weights=[1-self.pickup_fail_rate-self.putdown_fail_rate,
+    #                                 self.pickup_fail_rate,
+    #                                 self.putdown_fail_rate],
+    #                                 k = len(moves))
+    #     for move_index, move in enumerate(moves):
+    #         move.failure_flag = move_fails[move_index]
+    #     return moves

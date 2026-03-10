@@ -1,0 +1,26 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Build / test / profiling junk
+.prof
+prof.out
+.pytest_cache/
+.coverage
+htmlcov/
+.nox/
+
+# Editor junk
+.vscode/
+.DS_Store
+
+# Generated figures / animations
+figs/frames/
+figs/*.gif
+figs/*.png
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local data artifacts
+data/*.pkl

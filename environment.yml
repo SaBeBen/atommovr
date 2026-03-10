@@ -9,6 +9,9 @@ dependencies:
   - xarray
   - ipykernel
   - matplotlib
+  - setuptools # needed because lazy-build calls PPSU/setupc.py
+  - pip
   - pip:
+      - -e .[dev]
       - imageio==2.36.1
       - pillow==11.1.0

@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from atommover.utils.AtomArray import AtomArray
 from atommover.algorithms.Algorithm_class import Algorithm
 from atommover.utils.core import random_loading, generate_middle_fifty, Configurations
-from atommover.utils.move_utils import Move, move_atoms, get_move_list_from_AOD_cmds
+from atommover.utils.move_utils import Move, move_atoms, move_atoms_noiseless, get_move_list_from_AOD_cmds, get_AOD_cmds_from_move_list
 from atommover.algorithms.source.ejection import ejection
 from atommover.algorithms.source.scaling_lower_bound import make_cost_matrix_square
 from atommover.algorithms.source.PPSU_weight_matching import bttl_threshold
@@ -108,6 +108,60 @@ def generate_LBAP_assignments(matrix, target_config):
 
     return prepared_assignments
 
+def Hungarian_algorithm_works_fast(
+    atom_arrays: np.ndarray,
+    target_config: np.ndarray,
+    do_ejection: bool = False,
+    final_size: list[int] | None = None,
+):
+    """
+    Execute the Hungarian rearrangement routine with lower Python overhead.
+
+    Parameters
+    ----------
+    atom_arrays : np.ndarray
+        Current occupancy grid.
+    target_config : np.ndarray
+        Desired occupancy grid.
+    do_ejection : bool, optional
+        Whether to append the optional ejection stage.
+    final_size : list[int] | None, optional
+        Optional geometry bounds for ejection.
+
+    Returns
+    -------
+    tuple[np.ndarray, list, bool]
+        Final configuration, move list, and success flag.
+    """
+    from atommover.algorithms.Algorithm_class import Algorithm
+    from atommover.algorithms.source.ejection import ejection
+
+    move_set: list = []
+    matrix: np.ndarray = atom_arrays.copy()
+
+    if final_size is None:
+        final_size = [0, len(matrix[0]) - 1, 0, len(matrix) - 1]
+
+    prepared_assignments = generate_assignments_fast(matrix, target_config, final_size)
+
+    for start, target in prepared_assignments:
+        hungarian_move = move_atom_and_show_grid(matrix, start, target)
+        move_set.extend(hungarian_move)
+
+    if do_ejection:
+        eject_moves, eject_config = ejection(matrix, target_config, final_size)
+        move_set.extend(eject_moves)
+    else:
+        eject_config = matrix.copy()
+
+    success_flag: bool = Algorithm.get_success_flag(
+        eject_config.reshape(np.shape(target_config)),
+        target_config,
+        do_ejection=do_ejection,
+        n_species=1,
+    )
+    return eject_config, move_set, success_flag
+
 def Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray, do_ejection: bool = False, final_size: list = []):
     move_set = []
     matrix = copy.deepcopy(atom_arrays)
@@ -137,7 +191,7 @@ def Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: np.ndarray
 
     for start, target in prepared_assignments:
         Hungarian_move = []
-        Hungarian_move = move_atom_and_show_grid(matrix, start, target)
+        Hungarian_move = move_atom_and_show_grid_og(matrix, start, target)
         move_set.extend(Hungarian_move)
 
     #Optional ejection argument
@@ -156,13 +210,13 @@ def parallel_Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: n
     Hungarian_success_flag = False
     complete_flag = False
     move_set = []
-    matrix = copy.deepcopy(atom_arrays)
+    matrix = atom_arrays.copy()
     round_count = 0
 
     while (complete_flag == False) and (round_count < round_lim):
         N_independent_moves_path = []
         # 1. Generate the assignments
-        prepared_assignments = generate_assignments(matrix, target_config, final_size)
+        prepared_assignments = generate_assignments_fast(matrix, target_config, final_size)
 
         # 2. Find out N independent paths
         for start, target in prepared_assignments:
@@ -174,7 +228,7 @@ def parallel_Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: n
                 N_independent_moves_path.append(single_move_path)
 
         # 3. Transform the N_independent_moves_path into a list of moves
-        matrix, Hung_parallel_move_set = transform_paths_into_moves(matrix, N_independent_moves_path)
+        matrix, Hung_parallel_move_set = transform_paths_into_moves_fast(matrix, N_independent_moves_path)
         move_set.extend(Hung_parallel_move_set)
 
         # effective_config = np.multiply(matrix, target_config)
@@ -191,6 +245,127 @@ def parallel_Hungarian_algorithm_works(atom_arrays: np.ndarray, target_config: n
         eject_config = matrix
 
     return eject_config, move_set, Hungarian_success_flag
+
+## refactored code for speed
+
+def define_current_and_target_fast(
+    matrix: np.ndarray,
+    target_config: np.ndarray,
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """
+    Identify movable atom coordinates and unfilled target coordinates.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Current occupancy grid.
+    target_config : np.ndarray
+        Desired occupancy grid.
+
+    Returns
+    -------
+    tuple[list[tuple[int, int]], list[tuple[int, int]]]
+        Source coordinates and target coordinates as lists of ``(row, col)``
+        tuples.
+    """
+    matrix_2d: np.ndarray = _as_2d_occupancy(matrix, "matrix")
+    target_2d: np.ndarray = _as_2d_occupancy(target_config, "target_config")
+
+    if matrix_2d.shape != target_2d.shape:
+        raise ValueError(
+            f"matrix and target_config must have the same 2D shape; got "
+            f"{matrix_2d.shape} and {target_2d.shape}."
+        )
+
+    current_positions_arr: np.ndarray = np.argwhere(
+        (matrix_2d == 1) & (target_2d == 0)
+    )
+    target_positions_arr: np.ndarray = np.argwhere(
+        (target_2d == 1) & (matrix_2d == 0)
+    )
+
+    current_positions: list[tuple[int, int]] = [
+        (int(pos[0]), int(pos[1])) for pos in current_positions_arr
+    ]
+    target_positions: list[tuple[int, int]] = [
+        (int(pos[0]), int(pos[1])) for pos in target_positions_arr
+    ]
+
+    return current_positions, target_positions
+
+
+def generate_cost_matrix_fast(
+    current_positions: list[tuple[int, int]],
+    target_positions: list[tuple[int, int]],
+) -> np.ndarray:
+    """
+    Build the pairwise Euclidean cost matrix for Hungarian assignment.
+
+    Parameters
+    ----------
+    current_positions : list[tuple[int, int]]
+        Coordinates of movable atoms.
+    target_positions : list[tuple[int, int]]
+        Coordinates of currently empty target sites.
+
+    Returns
+    -------
+    np.ndarray
+        Cost matrix of shape ``(n_atoms, n_targets)``.
+    """
+    num_atoms: int = len(current_positions)
+    num_targets: int = len(target_positions)
+
+    if num_atoms == 0 or num_targets == 0:
+        return np.zeros((num_atoms, num_targets), dtype=np.float64)
+
+    current_arr: np.ndarray = np.asarray(current_positions, dtype=np.int64)
+    target_arr: np.ndarray = np.asarray(target_positions, dtype=np.int64)
+
+    deltas: np.ndarray = current_arr[:, None, :] - target_arr[None, :, :]
+    sq_dist: np.ndarray = np.sum(deltas * deltas, axis=2, dtype=np.int64)
+
+    return np.sqrt(sq_dist, dtype=np.float64)
+
+
+def generate_assignments_fast(
+    matrix: np.ndarray,
+    target_config: np.ndarray,
+    final_size: list[int],
+) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    """
+    Generate Hungarian assignments in the same output format as the original.
+    """
+    if len(final_size) == 0:
+        final_size = [0, len(matrix[0]) - 1, 0, len(matrix) - 1]
+
+    current_positions, target_positions = define_current_and_target_fast(
+        matrix,
+        target_config,
+    )
+    cost_matrix = generate_cost_matrix_fast(current_positions, target_positions)
+
+    if cost_matrix.size == 0:
+        return []
+
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    order = np.argsort(col_ind)
+
+    prepared_assignments = [
+        (current_positions[int(i)], target_positions[int(j)])
+        for i, j in zip(row_ind[order], col_ind[order])
+    ]
+
+    for start, target in prepared_assignments:
+        if len(start) != 2 or len(target) != 2:
+            raise RuntimeError(
+                f"Fast Hungarian produced non-2D coordinate: "
+                f"start={start}, target={target}"
+            )
+
+    return prepared_assignments
+
+## original code
 
 def generate_assignments(matrix, target_config, final_size):
 
@@ -227,7 +402,7 @@ def generate_path(arrays, start, end):
     path = []
     
     while current_pos != end:
-        path, current_pos = bfs_move_atom(grid, current_pos, end, path)
+        path, current_pos = bfs_move_atom_og(grid, current_pos, end, path)
         
     path = flatten_tuple(path)[::-1]
     grid, path = generate_decomposed_move_set(grid, path)
@@ -258,6 +433,19 @@ def move_atom_and_show_grid(grid, start, end):
     
     while current_pos != end:
         path, current_pos = bfs_move_atom(grid, current_pos, end, path)
+        
+    path = flatten_tuple(path)[::-1]
+    grid, path = generate_decomposed_move_set(grid, path)
+
+    return path
+
+def move_atom_and_show_grid_og(grid, start, end):
+    #Initialize current position
+    current_pos = start
+    path = []
+    
+    while current_pos != end:
+        path, current_pos = bfs_move_atom_og(grid, current_pos, end, path)
         
     path = flatten_tuple(path)[::-1]
     grid, path = generate_decomposed_move_set(grid, path)
@@ -350,6 +538,111 @@ def generate_decomposed_move_set(grid, path):
         
     return grid, decomposed_move_set
 
+# def _move_atoms_hungarian(
+#     matrix: np.ndarray,
+#     moves: list[Move],
+# ) -> tuple[np.ndarray, list[list]]:
+#     """
+#     Apply a move batch through the Hungarian-local compatibility layer.
+
+#     Why this exists
+#     ---------------
+#     The Hungarian algorithm code historically operates on 2D occupancy matrices,
+#     while the optimized move utility expects 3D single-species matrices. This
+#     wrapper keeps the algorithm code patchable in tests and lets production code
+#     use the optimized move implementation.
+
+#     Parameters
+#     ----------
+#     matrix : np.ndarray
+#         Occupancy matrix, either 2D ``(rows, cols)`` or 3D ``(rows, cols, 1)``.
+#     moves : list[Move]
+#         Move batch to apply.
+
+#     Returns
+#     -------
+#     tuple[np.ndarray, list[list]]
+#         Updated matrix and legacy move metadata.
+#     """
+#     return _move_atoms_compat_fast(matrix, moves)
+
+
+def regroup_parallel_moves_fast(
+    matrix: np.ndarray,
+    move_seqq: list[Move],
+) -> list[list[Move]]:
+    """
+    Greedily regroup sequential moves into parallel-executable batches.
+
+    Why this exists
+    ---------------
+    The legacy implementation repeatedly copies the working matrix, rebuilds
+    candidate move lists, and re-computes the same initial atom-count invariant
+    inside nested loops. This refactor preserves the same greedy grouping order
+    and validation semantics, while moving a few guaranteed-fail checks ahead of
+    the expensive AOD/simulation path.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Current occupancy grid.
+    move_seqq : list[Move]
+        Sequential move list to regroup.
+
+    Returns
+    -------
+    list[list[Move]]
+        Parallel move batches in the same greedy order as the legacy routine.
+    """
+    matrix_copy: np.ndarray = matrix.copy()
+    parallel_seq: list[list[Move]] = []
+    parallel_ind_set: set[int] = set()
+
+    current_atom_count: int = int(np.sum(matrix_copy))
+
+    for move_ind, move in enumerate(move_seqq):
+        if move_ind in parallel_ind_set:
+            continue
+        if matrix_copy[move.from_row, move.from_col] == 0:
+            continue
+
+        parallel_moves: list[Move] = [move]
+        parallel_ind_set.add(move_ind)
+
+        for p_move_ind, p_move in enumerate(move_seqq):
+            if p_move_ind in parallel_ind_set:
+                continue
+
+            # Safe early reject: the legacy code rejects this candidate anyway,
+            # but only after building AOD commands.
+            if matrix_copy[p_move.from_row, p_move.from_col] == 0:
+                continue
+
+            parallel_moves.append(p_move)
+            _, _, can_parallelize = get_AOD_cmds_from_move_list(matrix_copy, parallel_moves, verify=True)
+
+            if not can_parallelize:
+                parallel_moves.pop()
+                continue
+
+            scratch: np.ndarray = matrix_copy.copy()
+            scratch = move_atoms_noiseless(scratch, parallel_moves)
+
+            if int(np.sum(scratch)) == current_atom_count:
+                parallel_ind_set.add(p_move_ind)
+            else:
+                parallel_moves.pop()
+
+        scratch = matrix_copy.copy()
+        scratch = move_atoms_noiseless(scratch, parallel_moves)
+
+        if int(np.sum(scratch)) == current_atom_count:
+            parallel_seq.append(parallel_moves.copy())
+            matrix_copy = scratch
+
+    return parallel_seq
+
+
 def regroup_parallel_moves(matrix, move_seqq):
     matrix_copy = copy.deepcopy(matrix)
     parallel_seq = []
@@ -400,6 +693,109 @@ def regroup_parallel_moves(matrix, move_seqq):
             matrix_copy = copy.deepcopy(sanit_check_matrix)
 
     return parallel_seq
+
+def transform_paths_into_moves_fast(
+    matrix: np.ndarray,
+    N_independent_moves_path: list[list[list[Move]]],
+) -> tuple[np.ndarray, list[list[Move]]]:
+    """
+    Convert independent path decompositions into executable parallel move rounds.
+
+    This refactor preserves the original scheduling behavior exactly, including
+    the original mutation-during-iteration semantics on ``path_in_moves``.
+    The optimization here is intentionally conservative: it removes unused
+    temporary containers while leaving the control flow unchanged.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Current occupancy grid.
+    N_independent_moves_path : list[list[list[Move]]]
+        Nested path representation used by the legacy Hungarian code.
+
+    Returns
+    -------
+    tuple[np.ndarray, list[list[Move]]]
+        Updated occupancy grid and grouped parallel move rounds.
+    """
+    parallel_move_set: list[list[Move]] = []
+
+    # Build only the intersection information that is actually used.
+    intersection_set: dict[tuple[int, int], int] = {}
+
+    n_paths: int = len(N_independent_moves_path)
+    for i in range(n_paths):
+        for j in range(i, n_paths):
+            if i != j:
+                _, intersections = check_intersection(
+                    N_independent_moves_path[i],
+                    N_independent_moves_path[j],
+                )
+                if len(intersections) > 0:
+                    for intersection in intersections:
+                        if intersection not in intersection_set:
+                            intersection_set[intersection] = 0
+                        else:
+                            intersection_set[intersection] = (
+                                intersection_set[intersection] + 1
+                            )
+
+    keep_running_flag: bool = True
+    count: int = 0
+
+    # Preserve the original hard stop and loop structure.
+    while keep_running_flag and count < 5:
+        keep_running_flag = True
+        moves_in_scan: list[Move] = []
+        destination_set: set[tuple[int, int]] = set()
+
+        # IMPORTANT: preserve original semantics exactly.
+        # We intentionally iterate over the live list while mutating it via
+        # pop(0), because the legacy behavior depends on that.
+        for path_in_moves in N_independent_moves_path:
+            if len(path_in_moves) > 0:
+                for move in path_in_moves:
+                    crossing_path_flag: bool = check_crossing_path(
+                        matrix,
+                        move[0],
+                        intersection_set,
+                        destination_set,
+                        path_in_moves,
+                    )
+                    if not crossing_path_flag:
+                        moves_in_scan.append(move[0])
+                        path_in_moves.pop(0)
+                        destination_set.add((move[0].to_row, move[0].to_col))
+                    else:
+                        break
+
+        if len(moves_in_scan) > 0:
+            grouped_moves: list[list[Move]] = regroup_parallel_moves_fast(matrix, moves_in_scan)
+            parallel_move_set.extend(grouped_moves)
+
+            for moves in grouped_moves:
+                matrix = move_atoms_noiseless(matrix, moves)
+                for move in moves:
+                    from_coord: tuple[int, int] = (move.from_row, move.from_col)
+                    to_coord: tuple[int, int] = (move.to_row, move.to_col)
+
+                    if from_coord in intersection_set:
+                        if intersection_set[from_coord] > 0:
+                            intersection_set[from_coord] -= 1
+                        else:
+                            del intersection_set[from_coord]
+
+                    if to_coord in intersection_set:
+                        if intersection_set[to_coord] > 0:
+                            intersection_set[to_coord] -= 1
+                        else:
+                            del intersection_set[to_coord]
+        else:
+            keep_running_flag = False
+
+        count += 1
+
+    return matrix, parallel_move_set
 
 def transform_paths_into_moves(matrix, N_independent_moves_path):
     parallel_move_set = []
@@ -468,8 +864,47 @@ def transform_paths_into_moves(matrix, N_independent_moves_path):
             
     return matrix, parallel_move_set
 
-##Find possible path between start and end position
+
 def bfs_move_atom(grid, start, end, prev_path):
+    n_rows, n_cols = grid.shape
+    queue = deque([(start[0], start[1], [(start[0], start[1])])])
+    visited = {(start[0], start[1])}
+
+    while queue:
+        current_row, current_col, path = queue.popleft()
+
+        if (current_row, current_col) == end:
+            if len(prev_path) > 0:
+                prev_path = prev_path, path
+            else:
+                prev_path = path
+            return prev_path, end
+
+        len_path = len(path) - 1
+        dr = 1 if end[0] > path[len_path][0] else (-1 if end[0] < path[len_path][0] else 0)
+        dc = 1 if end[1] > path[len_path][1] else (-1 if end[1] < path[len_path][1] else 0)
+        new_row, new_col = current_row + dr, current_col + dc
+
+        in_bounds = (0 <= new_row < n_rows) and (0 <= new_col < n_cols)
+        if in_bounds and (new_row, new_col) not in visited and grid[new_row][new_col] == 0:
+            visited.add((new_row, new_col))
+            queue.append((new_row, new_col, path + [(new_row, new_col)]))
+
+    obstacle = (path[len_path][0] + dr, path[len_path][1] + dc)
+    if obstacle == start:
+        raise RuntimeError(f"bfs_move_atom failed to make progress from {start} toward {end}")
+    if not (0 <= obstacle[0] < n_rows and 0 <= obstacle[1] < n_cols):
+        raise RuntimeError(f"bfs_move_atom stepped out of bounds: obstacle={obstacle}, end={end}")
+
+    if len(prev_path) > 0:
+        prev_path = prev_path, path + [obstacle]
+    else:
+        prev_path = path + [obstacle]
+
+    return prev_path, obstacle
+
+##Find possible path between start and end position
+def bfs_move_atom_og(grid, start, end, prev_path):
     queue = deque([(start[0], start[1], [(start[0], start[1])])]) #Use the queue to record current position and path
     visited = set() #Record the visited positions
     visited.add((start[0], start[1]))
@@ -604,3 +1039,79 @@ def generate_target_config(size: list, pattern: Configurations = 0, middle_size:
     elif pattern == 5:
         array = random_loading(size,probability=probability)
     return array
+
+
+## helpers/wrappers
+
+# def _move_atoms_compat_fast(
+#     matrix: np.ndarray,
+#     moves: list[Move],
+# ):
+#     """
+#     Apply a move batch using the fast move utility while preserving the legacy
+#     2D matrix convention used by the Hungarian algorithm code.
+
+#     Parameters
+#     ----------
+#     matrix : np.ndarray
+#         Occupancy matrix, either 2D ``(rows, cols)`` or 3D ``(rows, cols, 1)``.
+#     moves : list[Move]
+#         Move batch to apply.
+
+#     Returns
+#     -------
+#     tuple[np.ndarray, list]
+#         Updated matrix and move metadata, with dimensionality matching the input.
+#     """
+#     if matrix.ndim == 2:
+#         promoted = matrix[:, :, None]
+#         promoted_out, meta = move_atoms_fast(promoted, moves)
+#         return promoted_out[:, :, 0], meta
+
+#     if matrix.ndim == 3:
+#         return move_atoms_fast(matrix, moves)
+
+#     raise ValueError(
+#         f"matrix must be 2D or 3D single-species occupancy, got ndim={matrix.ndim}."
+#     )
+
+def _as_2d_occupancy(arr: np.ndarray, name: str) -> np.ndarray:
+    """
+    Normalize an occupancy array to a 2D single-species view.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Occupancy array, expected to be either 2D or 3D with a singleton
+        species axis.
+    name : str
+        Array name for error reporting.
+
+    Returns
+    -------
+    np.ndarray
+        2D occupancy view.
+
+    Raises
+    ------
+    ValueError
+        If the array cannot be interpreted as a 2D single-species occupancy
+        grid.
+    """
+    arr = np.asarray(arr)
+
+    if arr.ndim == 2:
+        return arr
+
+    if arr.ndim == 3:
+        if arr.shape[2] == 1:
+            return arr[:, :, 0]
+        raise ValueError(
+            f"{name} has shape {arr.shape}; fast Hungarian helper expects a "
+            "single-species grid, not multiple species."
+        )
+
+    raise ValueError(
+        f"{name} has shape {arr.shape}; expected a 2D grid or 3D grid with "
+        "singleton species axis."
+    )
