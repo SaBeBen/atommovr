@@ -1,10 +1,11 @@
 # Tests for utility functions (in progress)
 
 import numpy as np
+import pytest
 
 from atommover.utils.AtomArray import AtomArray
 from atommover.utils.Move import Move, FailureEvent, FailureFlag
-from atommover.utils.move_utils import get_move_list_from_AOD_cmds, get_AOD_cmds_from_move_list
+from atommover.utils.move_utils import get_move_list_from_AOD_cmds, get_AOD_cmds_from_move_list, MoveType
 
 def test_move():
     move = Move(1,0,2,3)
@@ -47,3 +48,56 @@ class TestAODToMoveListAndViceVersa:
         roundtrip = get_move_list_from_AOD_cmds(horiz_AOD_cmds, vert_AOD_cmds)
         assert len(roundtrip) == 1
         assert roundtrip[0] == move_seq[0]
+
+
+class TestMove:
+    def test_basic_initialization(self):
+        move = Move(1, 0, 2, 3)
+        assert move.from_row == 1
+        assert move.from_col == 0
+        assert move.to_row == 2
+        assert move.to_col == 3
+
+    def test_delta_calculation(self):
+        move = Move(1, 2, 4, 6)
+        assert move.dx == 4
+        assert move.dy == 3
+
+    def test_negative_delta(self):
+        move = Move(5, 5, 2, 3)
+        assert move.dx == -2
+        assert move.dy == -3
+
+    def test_distance_calculation(self):
+        move = Move(0, 0, 3, 4)
+        assert move.distance == 5.0
+
+    def test_midpoint_calculation(self):
+        move = Move(0, 0, 2, 4)
+        assert move.midx == 2.0
+        assert move.midy == 1.0
+
+    def test_equality(self):
+        move1 = Move(1, 2, 3, 4)
+        move2 = Move(1, 2, 3, 4)
+        move3 = Move(1, 2, 3, 5)
+        assert move1 == move2
+        assert move1 != move3
+        assert move1 != (1, 2, 3, 4)
+
+    def test_zero_distance_move(self):
+        move = Move(2, 3, 2, 3)
+        assert move.distance == 0
+        assert move.dx == 0
+        assert move.dy == 0
+
+
+class TestMoveType:
+    def test_enum_values(self):
+        assert MoveType.ILLEGAL_MOVE == 0
+        assert MoveType.LEGAL_MOVE == 1
+        assert MoveType.EJECT_MOVE == 2
+        assert MoveType.NO_ATOM_TO_MOVE == 3
+
+    def test_enum_count(self):
+        assert len(MoveType) == 4

@@ -1,4 +1,5 @@
 
+import copy
 import numpy as np
 import pytest
 
@@ -521,5 +522,26 @@ class TestFindAndResolveCrossedMoves:
 
         assert int(moves[0].fail_flag) == 3
         assert int(moves[1].fail_flag) == 0
+
+
+class TestApplyMoves:
+    def test_legal_move(self) -> None:
+        init = np.array([[1, 0],
+                         [0, 0]], dtype=float)
+        out = copy.deepcopy(init)
+        m = Move(0, 0, 0, 1)
+        m.failure_flag = 0
+        result_out, failed, fl = mu._apply_moves(init, out, [m])
+        assert result_out[0, 0] == 0
+        assert result_out[0, 1] == 1
+        assert failed == []
+
+    def test_no_atom_to_move(self) -> None:
+        init = np.array([[0, 0],
+                         [0, 0]], dtype=float)
+        out = copy.deepcopy(init)
+        m = Move(0, 0, 0, 1)
+        result_out, failed, fl = mu._apply_moves(init, out, [m])
+        assert np.array_equal(result_out, np.zeros((2, 2)))
 
 

@@ -12,6 +12,41 @@ from atommover.utils.failure_policy import FailureEvent, FailureFlag
 from atommover.tests.support.doubles import TimingSpyErrorModel, BoomErrorModel
 from atommover.tests.support.helpers import boom
 
+
+class TestAtomArrayInitBasic:
+    def test_default_initialization(self):
+        array = AtomArray()
+        assert array.shape == [10, 10]
+        assert array.n_species == 1
+        assert array.matrix.shape == (10, 10, 1)
+
+    def test_custom_shape(self):
+        array = AtomArray(shape=[5, 8])
+        assert array.shape == [5, 8]
+        assert array.matrix.shape == (5, 8, 1)
+
+    def test_dual_species(self):
+        array = AtomArray(shape=[5, 5], n_species=2)
+        assert array.n_species == 2
+        assert array.matrix.shape == (5, 5, 2)
+
+    def test_invalid_n_species_raises(self):
+        with pytest.raises(ValueError):
+            AtomArray(n_species=3)
+
+    def test_load_tweezers_single_species_binary(self):
+        array = AtomArray(shape=[4, 4], n_species=1)
+        array.load_tweezers()
+        assert array.matrix.shape == (4, 4, 1)
+        assert np.all((array.matrix == 0) | (array.matrix == 1))
+
+    def test_load_tweezers_dual_species_no_overlap(self):
+        array = AtomArray(shape=[3, 3], n_species=2)
+        array.load_tweezers()
+        for i in range(3):
+            for j in range(3):
+                assert not (array.matrix[i, j, 0] == 1 and array.matrix[i, j, 1] == 1)
+
 class TestMoveAtomsFastPath:
     def test_no_crossed_tones_skips_expensive_cross_bookkeeping(self, monkeypatch) -> None:
         """
