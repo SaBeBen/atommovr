@@ -6,7 +6,7 @@
 # Author: Nikhil Harle
 
 import numpy as np
-
+from atommover.utils.AtomArray import AtomArray
 
 class Algorithm:
     """ 
@@ -28,7 +28,7 @@ class Algorithm:
     def __repr__(self) -> str:
         return 'Insert the name of your algorithm here. This is what will show up on your benchmarking plots.'
 
-    def get_moves(self, atom_array, do_ejection: bool = False) -> tuple[np.ndarray, list, bool]:
+    def get_moves(self, atom_array, do_ejection: bool = False) -> tuple[AtomArray, list, bool]:
         """ 
         This is the main function for the algorithm. 
         
@@ -44,7 +44,7 @@ class Algorithm:
         any other (optional!) kwargs you see fit to include :)
         
         ## Returns
-        **config** : np.ndarray
+        **config** : AtomArray
             the final configuration after all moves have been applied
             (ideally, this should just be the target configuration)
 
@@ -64,7 +64,7 @@ class Algorithm:
             simple sanity check. This should be set to True if the algorithm prepares the 
             final configuration and `False` if it does not. This is helpful during benchmarking.
         """
-        config = np.zeros(atom_array.shape)
+        config = AtomArray(shape=atom_array.shape, n_species=atom_array.n_species)
         move_set = []
         success_flag = False
 
