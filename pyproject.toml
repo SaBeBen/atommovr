@@ -69,3 +69,7 @@ addopts = "--cov=atommovr --cov-report=term-missing"  # Coverage reporting
 # [tool.isort]  # import sorting
 # [tool.mypy]   # type checking
 # [tool.coverage] # coverage thresholds
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["atommovr*"]
