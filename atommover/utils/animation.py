@@ -23,8 +23,37 @@ def single_species_image(
     atom_color: str = SPECIES1COL, 
     savename = ''
 ) -> None:
-    
-    
+    """
+    Plot a single-species atom array as a static image.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Two-dimensional occupancy matrix. Occupied sites are plotted as filled
+        circles and empty sites are plotted as outlines.
+    move_list : list, optional
+        Sequence of moves to overlay as arrows without modifying ``matrix``.
+        If ``None``, no arrows are drawn.
+    plt_spacer : float, optional
+        Offset applied to arrow start and end points so the arrowheads do not
+        overlap the site markers.
+    padding : list, optional
+        Row and column padding specification used to draw a rectangular target
+        region. Expected format is ``[[top, bottom], [left, right]]``.
+    title : str, optional
+        Title to display above the plot. If empty, no title is shown.
+    atom_color : str, optional
+        Matplotlib-compatible color used for occupied sites.
+    savename : str, optional
+        File name for saving the figure inside the ``figs`` directory. If empty,
+        the figure is only displayed.
+
+    Returns
+    -------
+    None
+        This function displays the plot and optionally saves it to disk.
+    """
+
     fig, ax = plt.subplots()
     if move_list is None:
         move_list = []
@@ -74,6 +103,34 @@ def dual_species_image(
     atoms: str = 'all', 
     savename = ''
 ) -> None:
+    """
+    Plot a dual-species atom array as a static image.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Three-dimensional array whose last axis encodes the occupancy of the two
+        atomic species at each site.
+    move_list : list, optional
+        Sequence of moves to overlay as arrows without modifying ``matrix``. If
+        ``None``, no arrows are drawn.
+    plt_spacer : float, optional
+        Offset applied to arrow start and end points so the arrows remain
+        visually separated from the lattice sites.
+    atoms : str, optional
+        Which species to highlight. Use ``'all'`` to show both species,
+        ``SPECIES1NAME`` to highlight only species 1, or ``SPECIES2NAME`` to
+        highlight only species 2.
+    savename : str, optional
+        File name for saving the figure inside the ``figs`` directory. If empty,
+        the figure is only displayed.
+
+    Returns
+    -------
+    None
+        This function displays the plot and optionally saves it to disk.
+    """
+
     if move_list is None:
         move_list = []
 
@@ -138,6 +195,38 @@ def make_single_species_gif(
     plt_spacer: float = 0.25, 
     duration: float = 200
 )-> float:
+    """
+    Render a GIF showing the evolution of a single-species array.
+
+    Parameters
+    ----------
+    single_species_array : object
+        Atom-array object with a ``matrix`` attribute and a ``move_atoms``
+        method. The object is mutated in place as each move set is applied.
+    move_list : list
+        Ordered collection of move sets. Each move set is applied in sequence and
+        produces one animation frame.
+    params : PhysicalParams, optional
+        Physical parameter bundle kept for API compatibility. It is currently not
+        used directly by this function.
+    savename : str, optional
+        Base name of the GIF written to the ``figs`` directory.
+    plt_spacer : float, optional
+        Offset applied to arrow start and end points when overlaying moves.
+    duration : float, optional
+        Frame duration passed to ``imageio.get_writer``.
+
+    Returns
+    -------
+    float
+        Total simulated move time accumulated over all applied move sets.
+
+    Notes
+    -----
+    Intermediate frame images are written to ``figs/frames`` before being
+    combined into the final GIF.
+    """
+
     # making reference time
     t_total = 0
 
@@ -273,6 +362,35 @@ def make_dual_species_gif(
     plt_spacer = 0.25,
     duration = 0.2
 ) -> float:
+    """
+    Render a GIF showing the evolution of a dual-species array.
+
+    Parameters
+    ----------
+    dual_species_array : object
+        Atom-array object with a ``matrix`` attribute and a ``move_atoms``
+        method. The object is mutated in place as each move set is applied.
+    move_list : list
+        Ordered collection of move sets. Each move set is applied in sequence and
+        produces one animation frame.
+    savename : str, optional
+        Base name of the GIF written to the ``figs`` directory.
+    plt_spacer : float, optional
+        Offset applied to arrow start and end points when overlaying moves.
+    duration : float, optional
+        Frame duration passed to ``imageio.get_writer``.
+
+    Returns
+    -------
+    float
+        Total simulated move time accumulated over all applied move sets.
+
+    Notes
+    -----
+    Intermediate frame images are written to ``figs/frames`` before being
+    combined into the final GIF.
+    """
+
     # making reference time
     t_total = 0
     # arrays = copy.deepcopy(dual_species_matrix)
@@ -402,6 +520,27 @@ def _plot_arrows(ax: Axes,
                  plt_spacer: float = 0.25,
                  width: float = 0.03
                  ) -> None:
+    """
+    Draw move arrows on an existing axes object.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes on which the arrows are drawn.
+    move_list : list of Move
+        Moves to render as arrows.
+    plt_spacer : float, optional
+        Offset applied to arrow start and end points so arrowheads do not sit on
+        top of site markers.
+    width : float, optional
+        Arrow shaft width passed to ``Axes.arrow``.
+
+    Returns
+    -------
+    None
+        The axes is modified in place.
+    """
+
     if len(move_list) > 0:
             for move in move_list:
                 ax.arrow(move.from_col+np.sign(move.dx)*plt_spacer, 
@@ -416,13 +555,26 @@ def _plot_arrows(ax: Axes,
 
 def _get_inds_for_circ_matr_plot(matrix: np.ndarray):
     """
-        Given a matrix whose entries $ in {0,1} $,
-        returns lists of coordinates which give the locations
-        of the 1s and 0s, respectively, in the matrix.
-    
-        Used to minimize calls to `plt.scatter()` during
-        `single_species_image()` and `make_single_species_gif()` 
+    Collect plotting coordinates for a single-species occupancy matrix.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Two-dimensional occupancy matrix. Entries equal to 1 are treated as
+        filled sites and all other entries are treated as empty sites.
+
+    Returns
+    -------
+    tuple of list
+        Four lists containing the x and y coordinates of filled sites followed
+        by the x and y coordinates of empty sites.
+
+    Notes
+    -----
+    This helper groups coordinates so callers can minimize the number of
+    ``plt.scatter`` calls needed to render the lattice.
     """
+
     filled_inds_x = []
     filled_inds_y = []
     empty_inds_x = []
@@ -444,12 +596,27 @@ def _get_inds_for_circ_matr_plot(matrix: np.ndarray):
     return filled_inds_x, filled_inds_y, empty_inds_x, empty_inds_y
 
 def _dual_species_get_inds_for_circ_matr_plot(matrix: np.ndarray):
-    r""" Given a matrix whose entries $$ \in {0,1, 2} $$,
-         returns lists of coordinates which give the locations
-         of the 1s and 0s, respectively, in the matrix.
-        
-         Used to minimize calls to `plt.scatter()` during
-         `dual_species_image()` and `make_dual_species_gif()` """
+    """
+    Collect plotting coordinates for a dual-species occupancy matrix.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Three-dimensional occupancy matrix whose last axis stores the two-species
+        occupation state for each lattice site.
+
+    Returns
+    -------
+    tuple of list
+        Six lists containing the x and y coordinates for species 1 sites,
+        species 2 sites, and empty sites, in that order.
+
+    Notes
+    -----
+    This helper groups coordinates so callers can minimize the number of
+    ``plt.scatter`` calls needed to render the lattice.
+    """
+
     blue_inds_x = []
     blue_inds_y = []
     yellow_inds_x = []
@@ -473,6 +640,24 @@ def _dual_species_get_inds_for_circ_matr_plot(matrix: np.ndarray):
 
 
 def _check_and_fix_lims(ax: Axes, xlen: int, ylen: int) -> None:
+    """
+    Expand plot limits to keep the full lattice comfortably in view.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes whose current limits are inspected and adjusted.
+    xlen : int
+        Number of lattice columns.
+    ylen : int
+        Number of lattice rows.
+
+    Returns
+    -------
+    None
+        The axes limits are modified in place when expansion is needed.
+    """
+
     xleft, xright = ax.get_xlim()
     ybottom, ytop = ax.get_ylim()
     pct_extension = 0.05

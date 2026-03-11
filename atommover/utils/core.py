@@ -12,9 +12,32 @@ from typing import Tuple
 
 class Configurations(IntEnum):
     """
-    Enumerate common target configurations for atom arrays.
-    To be used in conjunction with `AtomArray.generate_target()`
+    Enumeration class for predefined atomic configuration patterns.
+
+    This enum is used in conjunction with `AtomArray.generate_target()`
     and `generate_target_config()` to prepare common patterns of atoms.
+
+    Attributes
+    ----------
+    ZEBRA_HORIZONTAL : int
+        Horizontal zebra stripe pattern configuration.
+    ZEBRA_VERTICAL : int
+        Vertical zebra stripe pattern configuration.
+    CHECKERBOARD : int
+        Alternating checkerboard pattern configuration.
+    MIDDLE_FILL : int
+        Configuration that fills atoms from the middle.
+    Left_Sweep : int
+        Configuration that sweeps atoms from the left.
+    SEPARATE : int
+        Separation configuration for dual-species arrangements only.
+    RANDOM : int
+        Random arrangement configuration.
+
+    Examples
+    --------
+    >>> config = Configurations.CHECKERBOARD
+    >>> atom_array.generate_target(config)
     """
     ZEBRA_HORIZONTAL = 0
     ZEBRA_VERTICAL = 1
@@ -33,18 +56,32 @@ CONFIGURATION_PLOT_LABELS = {Configurations.ZEBRA_HORIZONTAL: 'Horizontal zebra 
 
 class PhysicalParams:
     """
-    Stores physical parameters for array loading, targeting, and transport.
-
+    Class used to store various physical parameters corresponding to atom, array and optical tweezer properties.
     Parameters
     ----------
     AOD_speed : float, optional
-        Tweezer transport speed in um/us.
+        The speed of the moving tweezers, in um/us. Default is 0.1.
     spacing : float, optional
-        Lattice spacing in meters.
+        Spacing between adjacent atoms in the square array, in m. Default is 5e-6.
     loading_prob : float, optional
-        Per-site loading probability.
+        The probability that a single site will be filled during loading. 
+        Must be in range [0, 1]. Default is 0.6.
     target_occup_prob : float, optional
-        Per-site occupation probability for random target generation.
+        If the target configuration is random, the probability that a site in the
+        configuration will be occupied by an atom. Must be in range [0, 1]. 
+        Default is 0.5.
+    Attributes
+    ----------
+        Spacing between adjacent atoms in the square array, in m.
+        The probability that a single site will be filled during loading.
+        The probability that a site in the target configuration will be occupied.
+        The speed of the moving tweezers, in um/us.
+    Raises
+    ------
+    ValueError
+        If `loading_prob` is not in range [0, 1].
+    ValueError
+        If `target_occup_prob` is not in range [0, 1].
     """
     def __init__(self, 
                  AOD_speed: float = 0.1, 
@@ -65,8 +102,30 @@ class PhysicalParams:
 
 class ArrayGeometry(IntEnum):
     """ 
-    Enumerate supported and planned atom-array geometries.
-    See references [LattPy](https://lattpy.readthedocs.io/en/latest/)
+    Class used to specify the geometry of the atom array.
+
+    This is used in `AtomArray` to determine the geometry of the array. 
+    See references [LattPy](https://lattpy.readthedocs.io/en/latest/) for examples of other geometries that could be implemented.
+
+    Currently only supports square geometry, but more geometries may be added in the future.
+
+    Attributes
+    ----------
+    SQUARE : int
+        Square lattice geometry.
+    RECTANGULAR : int
+        Rectangular lattice geometry. NOT SUPPORTED YET (NSY); see CONTRIBUTING.md.
+    TRIANGULAR : int
+        Triangular lattice geometry. NSY.
+    BRAVAIS : int
+        Bravais lattice geometry. NSY.
+    DECORATED_BRAVAIS : int
+        Decorated Bravais lattice geometry. NSY.
+    
+    Examples
+    --------
+    >>> geometry = ArrayGeometry.SQUARE
+    >>> atom_array = AtomArray(geometry=geometry)
     """
     SQUARE = 0
     RECTANGULAR = 1 # NOT SUPPORTED YET (NSY); see CONTRIBUTING.md
@@ -90,26 +149,19 @@ def random_loading(size,
                    rng: np.random.Generator | None = None
                    ) -> NDArray:
     """
-    Sample a random binary occupancy array.
+    Function used to generate initial atom array config.
 
     Parameters
     ----------
-    size : sequence
-        Array shape, with at least two entries.
+    size : list
+        A list of integers specifying the dimensions of the array to be generated. For example, [5,5] would generate a 5x5 array.
     probability : float
-        Probability that a site is occupied.
-    rng : np.random.Generator | None, optional
-        Random number generator.
-
+        The probability that a given site in the array will be occupied by an atom. Must be in range [0, 1].
+    
     Returns
     -------
     np.ndarray
-        ``uint8`` occupancy array with entries in ``{0, 1}``.
-
-    Raises
-    ------
-    ValueError
-        If ``size`` is too short or ``probability`` is outside ``[0, 1]``.
+        A Numpy array of the specified size, where each element is either 0 (unoccupied) or 1 (occupied).
     """
     if len(size) < 2:
         raise ValueError(f"`size` must have at least 2 entries; got {size}.")
@@ -137,27 +189,18 @@ def generate_random_init_target_configs(n_shots: int,
                                         rng: np.random.Generator | None = None,
                                         ) -> Tuple[list, list]:
     """
-    Generate paired random initial and target configurations.
+    Generates random initial and target configurations for atom arrays.
 
     Parameters
     ----------
-    n_shots : int
-        Number of configurations to generate.
-    load_prob : float
-        Per-site loading probability for initial configurations.
-    max_sys_size : int
-        Maximum length along a single axis.
-    target_config : object, optional
-        Target configuration selector.
-    rng : np.random.Generator | None, optional
-        Random number generator.
-
-    Returns
-    -------
-    list
-        Random initial configurations.
-    list
-        Random target configurations.
+    n_shots: int
+        The number of initial and target configurations to generate.
+    load_prob: float
+        The probability that a given site in the initial configuration will be occupied by an atom. Must be in range [0, 1].
+    max_sys_size: int
+        The size of atom array.
+    target_config: Configurations, optional
+        Specify the pattern of the target. If set to `Configurations.RANDOM', it generate target based on load_prob.
     """
     rng = _coerce_rng(rng)
     init_config_storage = []
@@ -181,30 +224,29 @@ def generate_random_init_configs(n_shots: int,
                                  rng: np.random.Generator | None = None,
                                  ) -> list:
     """
-    Generate random initial configurations for one- or two-species arrays.
+    Generates random initial atom array configurations.
 
     Parameters
     ----------
     n_shots : int
-        Number of configurations to generate.
+        The number of configurations (shots) to generate.
     load_prob : float
-        Marginal per-site loading probability.
+        The probability of an individual site being occupied by an atom.
     max_sys_size : int
-        Maximum length along one axis.
+        The row and column size of the square target array.
     n_species : int, optional
-        Number of species. Must be ``1`` or ``2``.
-    rng : np.random.Generator | None, optional
-        Random number generator.
+        The number of atomic species (1 or 2). Default is 1.
 
     Returns
     -------
-    list
-        Randomly generated initial configurations.
+    list of numpy.ndarray
+        A list of generated configurations. If `n_species` is 1, arrays are 2D. 
+        If `n_species` is 2, arrays are 3D with shape (max_sys_size, max_sys_size, 2).
 
     Raises
     ------
     ValueError
-        If ``n_species`` is not supported.
+        If `n_species` is not 1 or 2.
     """
     rng = _coerce_rng(rng)
 
@@ -246,30 +288,35 @@ def generate_random_target_configs(n_shots: int,
                                    rng: np.random.Generator | None = None,
                                    ):
     """
-    Generate random target configurations for one- or two-species arrays.
-
+    Generates random target configurations with specified occupation probability.
+    
+    Creates multiple random target configurations where each site has an independent
+    probability of being occupied by an atom.
+    
     Parameters
     ----------
     n_shots : int
-        Number of configurations to generate.
-    load_prob : float
-        Marginal per-site loading probability.
-    max_sys_size : int
-        Maximum length along one axis.
-    n_species : int, optional
-        Number of species. Must be ``1`` or ``2``.
-    rng : np.random.Generator | None, optional
-        Random number generator.
-
+        The number of target configurations to generate.
+    targ_occup_prob : float
+        The probability that a given site in the target configuration will be occupied
+        by an atom. Must be in range [0, 1].
+    shape : list
+        A list of integers specifying the dimensions of each configuration.
+        For example, [5, 5] generates 5x5 arrays.
+    
     Returns
     -------
-    list
-        Randomly generated target configurations.
-
-    Raises
-    ------
-    ValueError
-        If ``n_species`` is not supported.
+    list of np.ndarray
+        A list of generated target configurations. Each element is a 2D numpy array
+        where each element is either 0 (unoccupied) or 1 (occupied).
+    
+    Examples
+    --------
+    >>> configs = generate_random_target_configs(10, 0.5, [5, 5])
+    >>> len(configs)
+    10
+    >>> configs[0].shape
+    (5, 5)
     """
     rng = _coerce_rng(rng)
     target_config_storage = []
@@ -281,15 +328,60 @@ def generate_random_target_configs(n_shots: int,
 
 def count_atoms_in_columns(matrix: NDArray) -> list:
     """
-    Count atoms in each column.
-
-    Returns a Python list for backward compatibility.
+    Counts the number of atoms in each column of a matrix.
+    
+    Iterates through each column and sums the number of occupied sites (value of 1)
+    in that column.
+    
+    Parameters
+    ----------
+    matrix : np.ndarray or list of lists
+        A 2D array representing the atom configuration where 1 indicates an occupied
+        site and 0 indicates an empty site.
+    
+    Returns
+    -------
+    list of int
+        A list where the i-th element is the number of atoms in the i-th column.
+    
+    Examples
+    --------
+    >>> matrix = [[1, 0, 1], [0, 1, 0], [1, 1, 0]]
+    >>> count_atoms_in_columns(matrix)
+    [2, 2, 1]
     """
     return np.sum(np.asarray(matrix), axis=0).tolist()
 
 
 def left_right_atom_in_row(row: int, direction: int) -> int | None:
-    """Returns the leftmost or rightmost occupied site in a row."""
+    """
+    Finds the leftmost or rightmost atom in a row.
+    
+    Scans a row in the specified direction to locate the first occupied site.
+    
+    Parameters
+    ----------
+    row : np.ndarray or list
+        A 1D array representing a single row where 1 indicates an occupied site
+        and 0 indicates an empty site.
+    direction : int
+        The direction to search: 1 for rightmost atom (forward scan),
+        -1 for leftmost atom (reverse scan).
+    
+    Returns
+    -------
+    int or None
+        The column index of the first atom found in the specified direction,
+        or None if no atom is found in the row.
+    
+    Examples
+    --------
+    >>> row = [0, 1, 0, 1, 0]
+    >>> left_right_atom_in_row(row, 1)  # leftmost (rightward scan)
+    1
+    >>> left_right_atom_in_row(row, -1)  # rightmost (leftward scan)
+    3
+    """
     row_arr = np.asarray(row)
     occupied = np.flatnonzero(row_arr == 1)
     if occupied.size == 0:
@@ -300,7 +392,34 @@ def left_right_atom_in_row(row: int, direction: int) -> int | None:
 
 
 def top_bot_atom_in_col(col, direction):
-    """Returns the topmost or bottommost occupied site in a column."""
+    """
+    Finds the topmost or bottommost atom in a column.
+    
+    Scans a column in the specified direction to locate the first occupied site.
+    
+    Parameters
+    ----------
+    col : np.ndarray or list
+        A 1D array representing a single column where 1 indicates an occupied site
+        and 0 indicates an empty site.
+    direction : int
+        The direction to search: 1 for topmost atom (forward scan),
+        -1 for bottommost atom (reverse scan).
+    
+    Returns
+    -------
+    int or None
+        The row index of the first atom found in the specified direction,
+        or None if no atom is found in the column.
+    
+    Examples
+    --------
+    >>> col = [0, 1, 0, 1, 0]
+    >>> top_bot_atom_in_col(col, 1)  # topmost (downward scan)
+    1
+    >>> top_bot_atom_in_col(col, -1)  # bottommost (upward scan)
+    3
+    """
     col_arr = np.asarray(col)
     occupied = np.flatnonzero(col_arr == 1)
     if occupied.size == 0:
@@ -309,7 +428,29 @@ def top_bot_atom_in_col(col, direction):
 
 
 def find_lowest_atom_in_col(col: int) -> int | None:
-    """Returns the bottommost occupied site in a column."""
+    """
+    Finds the lowest (bottom-most) atom in a column.
+    
+    Scans a column from bottom to top and returns the index of the lowest occupied site.
+    
+    Parameters
+    ----------
+    col : np.ndarray or list
+        A 1D array representing a single column where 1 indicates an occupied site
+        and 0 indicates an empty site. Index 0 is the top, increasing downward.
+    
+    Returns
+    -------
+    int or None
+        The row index of the lowest atom in the column, or None if the column
+        contains no atoms.
+    
+    Examples
+    --------
+    >>> col = [0, 1, 0, 1, 0]
+    >>> find_lowest_atom_in_col(col)
+    3
+    """
     col_arr = np.asarray(col)
     occupied = np.flatnonzero(col_arr == 1)
     if occupied.size == 0:
@@ -323,7 +464,38 @@ def get_move_distance(from_row: int,
                       to_col: int, 
                       spacing: float = 5e-6
                       ) -> float:
-    """Returns the Manhattan distance of a move."""
+    """
+    Calculates the physical distance for moving an atom from one position to another.
+    
+    Computes the Manhattan distance (L1 norm) between two positions in the array
+    and converts it to physical units using the lattice spacing.
+    
+    Parameters
+    ----------
+    from_row : int
+        The row index of the starting position.
+    from_col : int
+        The column index of the starting position.
+    to_row : int
+        The row index of the ending position.
+    to_col : int
+        The column index of the ending position.
+    spacing : float, optional
+        The physical distance between adjacent lattice sites, in meters.
+        Default is 5e-6 m (5 micrometers).
+    
+    Returns
+    -------
+    float
+        The physical distance between the two positions, in meters.
+    
+    Examples
+    --------
+    >>> get_move_distance(0, 0, 2, 3, spacing=5e-6)
+    2.5e-05
+    >>> get_move_distance(1, 1, 1, 4, spacing=1e-6)
+    3e-06
+    """
     move_distance = (abs(from_row - to_row) + abs(from_col - to_col)) * spacing
     return move_distance
 
@@ -422,17 +594,122 @@ def atom_loss_dual(matrix: NDArray,
     return atom_loss(matrix, move_time, lifetime=lifetime, rng=rng)
 
 def count_atoms_in_row(row: int) -> int:
+    """
+    Counts the total number of atoms in a row.
+    
+    Sums the values in the row array, counting each occupied site (value of 1).
+    
+    Parameters
+    ----------
+    row : np.ndarray or list
+        A 1D array representing a single row where 1 indicates an occupied site
+        and 0 indicates an empty site.
+    
+    Returns
+    -------
+    int or float
+        The total number of atoms (occupied sites) in the row.
+    
+    Examples
+    --------
+    >>> row = [1, 0, 1, 1, 0]
+    >>> count_atoms_in_row(row)
+    3
+    """
     return np.sum(row)
 
 def calculate_filling_fraction(atom_count: int, row_length: int) -> float:
+    """
+    Calculates the filling fraction of a row as a percentage.
+    
+    Computes what percentage of sites in a row are occupied by atoms.
+    
+    Parameters
+    ----------
+    atom_count : int or float
+        The number of atoms in the row.
+    row_length : int
+        The total number of sites in the row.
+    
+    Returns
+    -------
+    float
+        The filling fraction as a percentage (0 to 100).
+    
+    Examples
+    --------
+    >>> calculate_filling_fraction(3, 5)
+    60.0
+    >>> calculate_filling_fraction(2, 10)
+    20.0
+    """
     return (atom_count / row_length) * 100
 
 def save_frames(temp_frames: list, combined_frames: list) -> Tuple[list, list]:
+    """
+    Saves temporary frames to the combined frames list and clears the temporary storage.
+    
+    Extends the combined frames list with frames from the temporary buffer and
+    clears the temporary buffer for reuse.
+    
+    Parameters
+    ----------
+    temp_frames : list
+        A temporary list of animation frames to be saved.
+    combined_frames : list
+        The main list that accumulates all frames.
+    
+    Returns
+    -------
+    tuple of (list, list)
+        A tuple containing (cleared_temp_frames, updated_combined_frames).
+    
+    Examples
+    --------
+    >>> temp = [1, 2, 3]
+    >>> combined = []
+    >>> temp_new, combined_new = save_frames(temp, combined)
+    >>> combined_new
+    [1, 2, 3]
+    >>> temp_new
+    []
+    """
     combined_frames.extend(temp_frames)
     temp_frames.clear()
     return temp_frames, combined_frames
 
 def generate_middle_fifty(length: int, filling_threshold: float = 0.5) -> list[int]:
+    """
+    Generates a smaller square array dimension that fills the middle of a larger array.
+    
+    Calculates the maximum size of a centered square that occupies at most a specified
+    fraction of the total array area.
+    
+    Parameters
+    ----------
+    length : int
+        The size of the original square array (length x length).
+    filling_threshold : float, optional
+        The maximum fraction of the array to be filled, in range [0, 1].
+        Default is 0.5.
+    
+    Returns
+    -------
+    list of int
+        A list [max_L, max_L] representing the size of the middle fill rectangle.
+    
+    Notes
+    -----
+    Currently only works for square arrays. Generalization to rectangular arrays
+    is needed (see TODO in source code).
+    
+    Examples
+    --------
+    >>> generate_middle_fifty(10, 0.5)
+    [7, 7]
+    >>> generate_middle_fifty(20, 0.25)
+    [14, 14]
+    """
     # TODO this only works for square arrays, generalize to rectangular
     max_L = length
     while (max_L**2)/(length**2) >= filling_threshold:

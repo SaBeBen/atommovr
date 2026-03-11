@@ -15,7 +15,28 @@ from atommover.utils.move_utils import move_atoms
 from atommover.utils.AtomArray import AtomArray
 from atommover.algorithms.Algorithm_class import Algorithm, get_effective_target_grid
 
-def evaluate_moves(array: AtomArray ,move_list: list):
+def evaluate_moves(array: AtomArray, move_list: list):
+    """
+    Apply a sequence of moves to an ``AtomArray`` and collect timing stats.
+
+    Parameters
+    ----------
+    array : AtomArray
+        The tweezer array to update in place.
+    move_list : list
+        Sequence of move sets returned by an algorithm. Each element is a list of
+        individual moves that can be executed in parallel.
+
+    Returns
+    -------
+    AtomArray
+        The updated array after all moves have been executed.
+    float
+        Total time taken to execute all move sets in parallel.
+    list
+        Two-element list ``[N_parallel_moves, N_non_parallel_moves]`` counting the
+        number of parallel move sets and the total number of individual moves.
+    """
     # making reference time
     t_total = 0
     N_parallel_moves = 0
@@ -52,6 +73,23 @@ class BenchmarkingFigure():
         The kind of figure you want to make. Options are histogram ('hist'), a plot comparing different algorithms ('scale'), or a plot comparing different target configurations for the same algorithm ('pattern').
     """
     def __init__(self, variables: list = ['Success rate'], figure_type: str = 'scale'):
+        """Configure plotting options for benchmarking outputs.
+
+        Parameters
+        ----------
+        variables : list, optional
+            Observables to plot. Must be a subset of
+            ``['Success rate', 'Filling fraction', 'Time', 'Wrong places #', 'Total atoms']``.
+        figure_type : str, optional
+            Desired plot style. Supported values are ``'hist'`` (histogram),
+            ``'scale'`` (compare algorithms), and ``'pattern'`` (compare target
+            configurations).
+
+        Raises
+        ------
+        KeyError
+            If an unsupported variable name is provided.
+        """
         for variable in variables:
             if variable not in ['Success rate', 'Filling fraction', 'Time', 'Wrong places #', 'Total atoms']:
                 raise KeyError(f"Variable '{variable}' is not recognized. The only allowed variables are the following: ['Success rate', 'Filling fraction', 'time', 'Wrong places #', 'Total atoms'].")
@@ -59,6 +97,23 @@ class BenchmarkingFigure():
         self.figure_type = figure_type
 
     def generate_scaling_figure(self, x_axis, benchmarking_results, title, x_label, save, savename = 'Algorithm_scaling'):
+        """Create scaling plots comparing algorithms across system sizes.
+
+        Parameters
+        ----------
+        x_axis : list or array-like
+            Values for the horizontal axis (typically system sizes).
+        benchmarking_results : list of dict
+            Results dictionaries produced by ``Benchmarking.run`` for each algorithm.
+        title : str
+            Plot title.
+        x_label : str
+            Label for the x-axis.
+        save : bool
+            Whether to save the figure to disk.
+        savename : str, optional
+            Filename (without extension) used when ``save`` is ``True``.
+        """
 
         # Iterate over the y-axis variables
         fig, ax = plt.subplots(len(self.y_axis_variables), 1, figsize = (5, 5*len(self.y_axis_variables)))
@@ -101,6 +156,21 @@ class BenchmarkingFigure():
             plt.savefig(f'./figs/'+savename)
 
     def generate_histogram_figure(self, benchmarking_results, title, x_label, save = False, savename = 'Histogram'):
+        """Create histograms for selected observables.
+
+        Parameters
+        ----------
+        benchmarking_results : list of dict
+            Results dictionaries produced by ``Benchmarking.run`` for each algorithm.
+        title : str
+            Plot title (unused but kept for API symmetry).
+        x_label : str
+            Label for the x-axis (unused but kept for API symmetry).
+        save : bool, optional
+            Whether to save the figure to disk.
+        savename : str, optional
+            Filename (without extension) used when ``save`` is ``True``.
+        """
         hist_data = []
         algos_name = []
         fig, ax = plt.subplots(len(self.y_axis_variables), 1, figsize = (5, 5*len(self.y_axis_variables)))
@@ -128,6 +198,23 @@ class BenchmarkingFigure():
 
     
     def generate_pattern_figure(self, x_axis, benchmarking_results, title, x_label, save = False, savename = 'Pattern_scaling'):
+        """Compare performance across different target configurations.
+
+        Parameters
+        ----------
+        x_axis : list or array-like
+            Values for the horizontal axis (typically system sizes).
+        benchmarking_results : list of dict
+            Results dictionaries for each target configuration.
+        title : str
+            Base title for the plots.
+        x_label : str
+            Label for the x-axis.
+        save : bool, optional
+            Whether to save the figure to disk.
+        savename : str, optional
+            Filename (without extension) used when ``save`` is ``True``.
+        """
 
         fig, ax = plt.subplots(len(self.y_axis_variables), 1, figsize = (5, 5*len(self.y_axis_variables)))
         # Iterate over the y-axis variables
@@ -211,6 +298,39 @@ class Benchmarking():
                  n_shots: int = 100,
                  n_species: int = 1,
                  check_sufficient_atoms: bool = True):
+        """Initialize benchmarking sweeps over algorithms, targets, and system sizes.
+
+        Parameters
+        ----------
+        algos : list of Algorithm, optional
+            Algorithms to benchmark.
+        target_configs : list or ndarray, optional
+            Target configurations as ``Configurations`` enums or explicit arrays. If an
+            ndarray, shape must be ``(len(sys_sizes), n_targets)``.
+        error_models_list : list, optional
+            Error models to evaluate.
+        phys_params_list : list, optional
+            Physical parameter sets to sweep.
+        sys_sizes : list, optional
+            Square lattice side lengths to test.
+        rounds_list : list, optional
+            Allowed numbers of rearrangement rounds per run.
+        figure_output : BenchmarkingFigure, optional
+            Plot configuration helper.
+        n_shots : int, optional
+            Number of Monte Carlo shots per configuration.
+        n_species : int, optional
+            Number of atomic species.
+        check_sufficient_atoms : bool, optional
+            If ``True``, regenerate initial states until enough atoms are loaded.
+
+        Raises
+        ------
+        IndexError
+            If explicit ``target_configs`` shapes do not match ``sys_sizes``.
+        TypeError
+            If ``target_configs`` is neither a list nor an ndarray.
+        """
         # initializing the sweep modules (minus target configs, see below)
         self.algos, self.n_algos = algos, len(algos)
         self.system_size_range, self.n_sizes = sys_sizes, len(sys_sizes)
@@ -238,24 +358,66 @@ class Benchmarking():
             raise TypeError("`target_configs` must be a list of Configuration objects or an np.ndarray.")
 
     def save(self, savename):
+        """Persist benchmarking results to ``data/<savename>.nc``.
+
+        Parameters
+        ----------
+        savename : str
+            Base filename for the NetCDF output. ``.nc`` extension is optional.
+        """
         if savename[-3:] == '.nc':
             savename = savename[0:-3]
-        self.benchmarking_results.to_netcdf(f'data/{savename}.nc')
+
+        # NetCDF backends cannot serialize arbitrary Python objects (e.g.
+        # Algorithm instances or per-shot Python lists), so write a temporary
+        # string-cast copy while keeping in-memory results untouched.
+        serializable_results = self.benchmarking_results.copy(deep=True)
+
+        for coord_name in serializable_results.coords:
+            coord = serializable_results.coords[coord_name]
+            if coord.dtype == object:
+                coord_values = np.vectorize(str, otypes=[str])(coord.values)
+                serializable_results = serializable_results.assign_coords(
+                    {coord_name: coord_values}
+                )
+
+        for data_var_name in serializable_results.data_vars:
+            data_var = serializable_results[data_var_name]
+            if data_var.dtype == object:
+                serializable_results[data_var_name] = xr.DataArray(
+                    np.vectorize(str, otypes=[str])(data_var.values),
+                    dims=data_var.dims,
+                    coords=data_var.coords,
+                )
+
+        serializable_results.to_netcdf(f'data/{savename}.nc')
         print(f'Benchmarking object saved to `data/{savename}.nc`')
     
     def load(self, loadname):
+        """Load benchmarking results from ``data/<loadname>.nc`` into the object.
+
+        Parameters
+        ----------
+        loadname : str
+            Base filename for the NetCDF input. ``.nc`` extension is optional.
+        """
         if loadname[-3:] == '.nc':
             loadname = loadname[0:-3]
-        self.benchmarking_results = xr.open_dataset(f'data/{loadname}.nc', engine="netcdf4")
+        self.benchmarking_results = xr.open_dataset(f'data/{loadname}.nc')
         print(f'Data from `data/{loadname}.nc` loaded to `self.benchmarking_results`.')
 
     def load_params_from_dataset(self, dataset: xr.Dataset):
-        """ 
-        Overwrites current parameters for benchmarking sweeps with those 
-        from another xarray.Dataset object (e.g. `self.benchmarking_results`)
-        
-        Useful when wanting to retake data or play around with slightly different parameters.
-        Also useful in recreating the figures from the atommovr paper.
+        """Import sweep parameters from an existing benchmarking dataset.
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            Dataset previously produced by ``Benchmarking.run``.
+
+        Notes
+        -----
+        This overwrites current algorithm, target, system size, error model, and
+        physical parameter settings to match the provided dataset.
         """
         self.algos = dataset['algorithm'].values
         self.target_configs = dataset['target'].values
@@ -272,14 +434,18 @@ class Benchmarking():
         self.n_shots = len(dataset['filling fraction'].values[0][0][0][0][0][0])
 
     def set_observables(self, observables: list):
+        """Set which observables should be plotted in downstream figures.
+
+        Parameters
+        ----------
+        observables : list
+            Subset of available metrics to place on the y-axis when plotting.
+        """
         self.figure_output.y_axis_variables = observables
 
 
     def get_result_array_dims(self):
-        """
-        Updates the size and shape of the storage array
-        based on the current set of parameters.
-        """
+        """Update bookkeeping for result array dimensions based on current sweeps."""
         self.n_algos = len(self.algos)
         if self.istargetlist:
             self.n_targets = len(self.target_configs)
@@ -301,10 +467,12 @@ class Benchmarking():
         self.n_rounds = len(self.rounds_list)
 
     def run(self, do_ejection: bool = False):
-        """
-        Run a round of benchmarking according to the parameters passed to the `Benchmarking()` object. 
-        
-        Saves the results in the variable `self.benchmarking_results`.
+        """Execute benchmarking sweeps and populate ``self.benchmarking_results``.
+
+        Parameters
+        ----------
+        do_ejection : bool, optional
+            If ``True``, allow ejection moves when evaluating success.
         """
 
         # initializing result arrays
@@ -388,6 +556,32 @@ class Benchmarking():
 
             
     def _run_benchmark_round(self, algorithm, do_ejection: bool = False, pattern = None, num_rounds = 1) -> tuple[float, float, list, list, list, list]:
+        """Run repeated shots for a single algorithm/target/size combination.
+
+        Parameters
+        ----------
+        algorithm : Algorithm
+            Algorithm instance to generate moves.
+        do_ejection : bool, optional
+            Whether ejection moves are permitted.
+        pattern : Configurations or ndarray, optional
+            Target configuration when using enumerated targets.
+        num_rounds : int, optional
+            Maximum number of rearrangement rounds allowed per shot.
+
+        Returns
+        -------
+        tuple
+            ``(success_rate, mean_success_time, filling_fractions, wrong_places,
+            atoms_in_arrays, atoms_in_targets, sufficient_rate)`` where
+            ``filling_fractions``, ``wrong_places``, ``atoms_in_arrays``, and
+            ``atoms_in_targets`` are lists per shot.
+
+        Raises
+        ------
+        ValueError
+            If ``num_rounds`` is non-positive or non-integer.
+        """
         success_times = []
         success_flags = []
         filling_fractions = []
@@ -459,8 +653,14 @@ class Benchmarking():
 
 
     def plot_results(self, save = False, savename = None):
-        """
-        NB: This is a placeholder function for future feature development. See BenchmarkingFigure() for more details.
+        """Dispatch plotting based on ``figure_output.figure_type``.
+
+        Parameters
+        ----------
+        save : bool, optional
+            Whether to save the generated plot(s).
+        savename : str, optional
+            Base filename to use when saving figures; defaults depend on figure type.
         """
         if self.figure_output.figure_type == "scale":
             if savename == None:
