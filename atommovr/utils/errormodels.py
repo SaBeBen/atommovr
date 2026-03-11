@@ -49,7 +49,7 @@ class ZeroNoise(ErrorModel):
         pass
 
     def get_atom_loss(self, state: np.ndarray, evolution_time: float, n_species: int = 1) -> tuple[np.ndarray, bool]:
-        """ 
+        r""" 
         Given the current state of the atom array, applies any general loss process
         over the period $\Delta t$ = evolution_time.
 
@@ -146,7 +146,7 @@ class UniformVacuumTweezerError(ErrorModel):
                       state: np.ndarray, 
                       evolution_time: float,
                       n_species: int = 1) -> tuple[np.ndarray, bool]:
-        """ 
+        r""" 
         Given the current state of the atom array, applies any general loss process
         over the period $\Delta t$ = evolution_time.
 

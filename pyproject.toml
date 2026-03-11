@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 
 dependencies = [
   "numpy",
+  "scipy"
   "xarray",
   "numba",
   "matplotlib",
@@ -41,7 +42,7 @@ target-version = ["py310"]     # Python version compatibility
 # =========================
 # Ruff (linter / bug checker)
 # =========================
-[tool.ruff]
+[tool.ruff.lint]
 select = ["E", "F", "B"]      # Enable error rules, pyflakes checks, and Bugbear checks
 ignore = ["E501"]              # Ignore line length (formatter handles it)
 exclude = ["tests/*", "docs/*"] # Optional: skip certain folders if desired

@@ -20,7 +20,7 @@ def format(session):
     session.install("black")
     # Run Black in "check" mode (will fail if code is not formatted)
     # Adjust paths as needed (src contains package, tests contain test code)
-    session.run("black", "--check", "src", "tests")
+    session.run("black", "--check", "atommovr", "tests")
 
 # ------------------------------
 # LINT SESSION
@@ -30,7 +30,7 @@ def lint(session):
     """Run Ruff linter to catch potential bugs or bad patterns."""
     session.install("ruff")
     # Run Ruff on package and tests directories
-    session.run("ruff", "check", "src", "tests")
+    session.run("ruff", "check", "atommovr", "tests")
 
 # ------------------------------
 # TESTS SESSION
