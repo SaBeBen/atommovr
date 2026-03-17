@@ -47,8 +47,11 @@ class TestAtomArrayInitBasic:
             for j in range(3):
                 assert not (array.matrix[i, j, 0] == 1 and array.matrix[i, j, 1] == 1)
 
+
 class TestMoveAtomsFastPath:
-    def test_no_crossed_tones_skips_expensive_cross_bookkeeping(self, monkeypatch) -> None:
+    def test_no_crossed_tones_skips_expensive_cross_bookkeeping(
+        self, monkeypatch
+    ) -> None:
         """
         Performance regression tripwire:
 
@@ -104,14 +107,18 @@ class TestMoveAtomsFastPath:
             n = len(kwargs["move_set"])
             return np.zeros(n, dtype=np.bool_), np.zeros(n, dtype=np.bool_)
 
-        monkeypatch.setattr(AtomArray_mod, "collision_eligibility_from_tones", _fake_eligibility)
+        monkeypatch.setattr(
+            AtomArray_mod, "collision_eligibility_from_tones", _fake_eligibility
+        )
 
         aa.move_atoms(moves)
         assert calls["n"] == 1
 
 
 class TestMoveAtomsInputValidation:
-    def test_non_parallelizable_move_list_raises_valueerror(self, one_atom_array_3x3) -> None:
+    def test_non_parallelizable_move_list_raises_valueerror(
+        self, one_atom_array_3x3
+    ) -> None:
         """
         Document the contract: `move_atoms` rejects non-parallelizable move sets.
 
@@ -147,7 +154,9 @@ class TestMoveAtomsInputValidation:
 
 
 class TestLoadTweezers:
-    def test_load_tweezers_dual_species_resolves_double_occupancy(self, monkeypatch) -> None:
+    def test_load_tweezers_dual_species_resolves_double_occupancy(
+        self, monkeypatch
+    ) -> None:
         """
         Deterministic test for the dual-species overlap-resolution logic in `load_tweezers`.
 
@@ -174,13 +183,20 @@ class TestLoadTweezers:
 
 class TestGenerateTarget:
 
-    @pytest.mark.parametrize("pattern", [Configurations.CHECKERBOARD, 
-                                         Configurations.MIDDLE_FILL, 
-                                         Configurations.RANDOM,
-                                         Configurations.ZEBRA_HORIZONTAL,
-                                         Configurations.ZEBRA_VERTICAL,
-                                         Configurations.Left_Sweep])
-    def test_generate_target_single_species_pattern_shape_and_values(self, pattern) -> None:
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            Configurations.CHECKERBOARD,
+            Configurations.MIDDLE_FILL,
+            Configurations.RANDOM,
+            Configurations.ZEBRA_HORIZONTAL,
+            Configurations.ZEBRA_VERTICAL,
+            Configurations.Left_Sweep,
+        ],
+    )
+    def test_generate_target_single_species_pattern_shape_and_values(
+        self, pattern
+    ) -> None:
         """
         Basic target-generation invariant: correct shape and boolean occupancy for all patterns.
         """
@@ -191,15 +207,22 @@ class TestGenerateTarget:
         assert aa.target.dtype == np.uint8
         assert np.all((aa.target == np.uint8(0)) | (aa.target == np.uint8(1)))
 
-    @pytest.mark.parametrize("pattern", [Configurations.CHECKERBOARD, 
-                                         Configurations.SEPARATE, 
-                                         Configurations.ZEBRA_HORIZONTAL,
-                                         Configurations.ZEBRA_VERTICAL])
-    def test_generate_target_dual_species_pattern_shape_and_values(self, pattern) -> None:
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            Configurations.CHECKERBOARD,
+            Configurations.SEPARATE,
+            Configurations.ZEBRA_HORIZONTAL,
+            Configurations.ZEBRA_VERTICAL,
+        ],
+    )
+    def test_generate_target_dual_species_pattern_shape_and_values(
+        self, pattern
+    ) -> None:
         """
         Basic target-generation invariant: correct shape and boolean occupancy for all patterns.
         """
-        aa = AtomArray(shape=[5,4], n_species=2)
+        aa = AtomArray(shape=[5, 4], n_species=2)
         aa.generate_target(pattern=pattern)
 
         assert aa.target.shape == (5, 4, 2)
@@ -224,9 +247,13 @@ class TestImageHelpers:
         aa = AtomArray(shape=[2, 2], n_species=2)
 
         # prevent actual plotting
-        monkeypatch.setattr(AtomArray_mod, "dual_species_image", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            AtomArray_mod, "dual_species_image", lambda *args, **kwargs: None
+        )
 
-        with pytest.raises(ValueError, match="Invalid entry for parameter 'plotted_species'"):
+        with pytest.raises(
+            ValueError, match="Invalid entry for parameter 'plotted_species'"
+        ):
             aa.image(plotted_species="definitely-not-a-species")
 
     def test_plot_target_config_calls_expected_backend(self, monkeypatch) -> None:
@@ -235,8 +262,16 @@ class TestImageHelpers:
         """
         calls = {"single": 0, "dual": 0}
 
-        monkeypatch.setattr(AtomArray_mod, "single_species_image", lambda *args, **kwargs: calls.__setitem__("single", calls["single"] + 1))
-        monkeypatch.setattr(AtomArray_mod, "dual_species_image", lambda *args, **kwargs: calls.__setitem__("dual", calls["dual"] + 1))
+        monkeypatch.setattr(
+            AtomArray_mod,
+            "single_species_image",
+            lambda *args, **kwargs: calls.__setitem__("single", calls["single"] + 1),
+        )
+        monkeypatch.setattr(
+            AtomArray_mod,
+            "dual_species_image",
+            lambda *args, **kwargs: calls.__setitem__("dual", calls["dual"] + 1),
+        )
 
         aa1 = AtomArray(shape=[2, 2], n_species=1)
         aa1.plot_target_config()
@@ -270,8 +305,12 @@ class TestFlagsStructure:
 
         # We don't require any specific flags here, only that the container is flat.
         assert all(not isinstance(x, list) for x in flags)
+
+
 class TestMoveAtomsContracts:
-    def test_move_atoms_raises_on_negative_occupancy_before_detectors_or_error_model(self, monkeypatch) -> None:
+    def test_move_atoms_raises_on_negative_occupancy_before_detectors_or_error_model(
+        self, monkeypatch
+    ) -> None:
         """
         The physical-state guard should fire before any downstream timing/collision/error
         machinery runs.
@@ -286,7 +325,9 @@ class TestMoveAtomsContracts:
         move = Move(0, 0, 0, 1)
 
         def _boom(*args, **kwargs):
-            raise AssertionError("Downstream detector/error machinery should not run on invalid input state.")
+            raise AssertionError(
+                "Downstream detector/error machinery should not run on invalid input state."
+            )
 
         monkeypatch.setattr(AtomArray_mod, "get_AOD_cmds_from_move_list", _boom)
 
@@ -295,7 +336,9 @@ class TestMoveAtomsContracts:
         with pytest.raises(ValueError, match="negative occupancy"):
             aa.move_atoms([move])
 
-    def test_move_atoms_incomplete_parallel_grid_raises(self, monkeypatch, one_atom_array_3x3) -> None:
+    def test_move_atoms_incomplete_parallel_grid_raises(
+        self, monkeypatch, one_atom_array_3x3
+    ) -> None:
         """
         `move_atoms` should reject an incomplete rectilinear AOD grid.
 
@@ -312,7 +355,7 @@ class TestMoveAtomsContracts:
         ]
 
         curr_horiz = np.array([2, 1, 0], dtype=np.int8)
-        curr_vert  = np.array([0, 1, 2], dtype=np.int8)
+        curr_vert = np.array([0, 1, 2], dtype=np.int8)
 
         monkeypatch.setattr(
             AtomArray_mod,
@@ -325,7 +368,9 @@ class TestMoveAtomsContracts:
 
 
 class TestMoveAtomsSeams:
-    def test_evaluate_moves_sums_per_round_move_times_exactly(self, monkeypatch) -> None:
+    def test_evaluate_moves_sums_per_round_move_times_exactly(
+        self, monkeypatch
+    ) -> None:
         """
         `evaluate_moves` is an orchestrator over repeated `move_atoms` calls.
 
@@ -363,13 +408,20 @@ class TestMoveAtomsSeams:
         assert n_parallel == 3
         assert n_non_parallel == 6
         assert seen_prev_next == [(0, 2, 1), (2, 1, 3), (1, 3, 0)]
-    
-    @pytest.mark.parametrize("error_event", [[True, True, False, True],
-                                             [True, False, True, False],
-                                             [False, False, False, False],
-                                             [True, False, False, True],
-                                             [True, True, True, True]])
-    def test_time_accounting_is_exact_sum_of_enabled_phases_and_travel(self, monkeypatch, error_event) -> None:
+
+    @pytest.mark.parametrize(
+        "error_event",
+        [
+            [True, True, False, True],
+            [True, False, True, False],
+            [False, False, False, False],
+            [True, False, False, True],
+            [True, True, True, True],
+        ],
+    )
+    def test_time_accounting_is_exact_sum_of_enabled_phases_and_travel(
+        self, monkeypatch, error_event
+    ) -> None:
         """
         `move_atoms` should add exactly the enabled phase costs plus geometric travel time,
         and pass that exact total into `error_model.get_atom_loss`.
@@ -382,7 +434,10 @@ class TestMoveAtomsSeams:
         aa.params.spacing = 2.0
         aa.params.AOD_speed = 4.0
 
-        moves = [Move(0, 0, 0, 1), Move(0, 2, 0, 2)]  # distance = 2 -> travel time = 2 / 4 = 0.5
+        moves = [
+            Move(0, 0, 0, 1),
+            Move(0, 2, 0, 2),
+        ]  # distance = 2 -> travel time = 2 / 4 = 0.5
 
         monkeypatch.setattr(AtomArray_mod, "_has_colliding_tones", lambda v, h: False)
         monkeypatch.setattr(
@@ -405,16 +460,18 @@ class TestMoveAtomsSeams:
         (_, _), move_time = aa.move_atoms(moves)
 
         expected = (
-            error_model.pickup_time*int(error_event[0])
-            + error_model.accel_time*int(error_event[1])
-            + error_model.decel_time*int(error_event[2])
-            + error_model.putdown_time*int(error_event[3])
+            error_model.pickup_time * int(error_event[0])
+            + error_model.accel_time * int(error_event[1])
+            + error_model.decel_time * int(error_event[2])
+            + error_model.putdown_time * int(error_event[3])
             + 0.5
         )
         assert move_time == pytest.approx(expected)
         assert error_model.loss_times == [pytest.approx(expected)]
 
-    def test_timing_detectors_receive_prev_curr_next_cmds_and_source_arrays(self, monkeypatch) -> None:
+    def test_timing_detectors_receive_prev_curr_next_cmds_and_source_arrays(
+        self, monkeypatch
+    ) -> None:
         """
         `move_atoms` should pass the correct previous/current/next AOD commands and
         source row/col arrays into the timing-mask detectors.
@@ -435,7 +492,9 @@ class TestMoveAtomsSeams:
         next_h = np.array([0, 32], dtype=np.int8)
         next_v = np.array([0, 34, 0], dtype=np.int8)
 
-        def _fake_get_aod_cmds(matrix: NDArray, move_list: list[Move]) -> tuple[NDArray[np.int8], NDArray[np.int8], bool]:
+        def _fake_get_aod_cmds(
+            matrix: NDArray, move_list: list[Move]
+        ) -> tuple[NDArray[np.int8], NDArray[np.int8], bool]:
             if move_list is curr_moves:
                 return curr_h, curr_v, True
             if move_list is prev_moves:
@@ -480,14 +539,22 @@ class TestMoveAtomsSeams:
             assert np.array_equal(source_cols, np.array([0], dtype=np.int_))
             return np.array([False], dtype=np.bool_), np.array([False], dtype=np.bool_)
 
-        monkeypatch.setattr(AtomArray_mod, "get_AOD_cmds_from_move_list", _fake_get_aod_cmds)
+        monkeypatch.setattr(
+            AtomArray_mod, "get_AOD_cmds_from_move_list", _fake_get_aod_cmds
+        )
         monkeypatch.setattr(AtomArray_mod, "_has_colliding_tones", lambda v, h: False)
-        monkeypatch.setattr(AtomArray_mod, "_detect_pickup_and_accel_masks", _fake_pickup_accel)
-        monkeypatch.setattr(AtomArray_mod, "_detect_decel_and_putdown_masks", _fake_decel_putdown)
+        monkeypatch.setattr(
+            AtomArray_mod, "_detect_pickup_and_accel_masks", _fake_pickup_accel
+        )
+        monkeypatch.setattr(
+            AtomArray_mod, "_detect_decel_and_putdown_masks", _fake_decel_putdown
+        )
 
         aa.move_atoms(curr_moves, prev_move_list=prev_moves, next_move_list=next_moves)
 
-    def test_phase_error_methods_are_not_called_when_masks_are_all_false(self, monkeypatch) -> None:
+    def test_phase_error_methods_are_not_called_when_masks_are_all_false(
+        self, monkeypatch
+    ) -> None:
         """
         Phase-specific error hooks should not be called when all timing masks are false.
         In that case, only geometric travel time should contribute.
@@ -521,7 +588,9 @@ class TestMoveAtomsSeams:
         assert move_time == pytest.approx(expected_travel)
         assert error_model.calls == []
 
-    def test_resolved_primary_events_are_written_back_before_apply(self, monkeypatch) -> None:
+    def test_resolved_primary_events_are_written_back_before_apply(
+        self, monkeypatch
+    ) -> None:
         """
         `move_atoms` should resolve primary events, write them onto the `Move` objects,
         and only then hand the move list to `_apply_moves`.
@@ -555,7 +624,9 @@ class TestMoveAtomsSeams:
         monkeypatch.setattr(
             AtomArray_mod,
             "resolve_primary_events",
-            lambda event_mask: np.array([int(FailureEvent.PICKUP_FAIL)], dtype=np.int32),
+            lambda event_mask: np.array(
+                [int(FailureEvent.PICKUP_FAIL)], dtype=np.int32
+            ),
         )
 
         def _fake_apply_moves(move_list: list[Move]) -> tuple[list[int], list[int]]:
@@ -567,6 +638,7 @@ class TestMoveAtomsSeams:
         (failed, _flags), _ = aa.move_atoms([move])
 
         assert failed == [0]
+
 
 class TestMoveAtomsResults:
     def test_move_atoms_raises_on_negative_occupancy(self) -> None:
@@ -585,93 +657,105 @@ class TestMoveAtomsResults:
 
         with pytest.raises(ValueError, match="negative occupancy"):
             aa.move_atoms([m])
-    
+
     def test_single_move(self):
-        
+
         # 1. Single species
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,1,1,0],
-                                 [1,0,0,0],
-                                 [0,0,1,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 1, 1, 0], [1, 0, 0, 0], [0, 0, 1, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
         # checking that moves get row/col assignments correct
-        _ = array.move_atoms(move_list=[Move(0,1,1,1)])
-        assert np.array_equal(array.matrix, np.array([[0,0,1,0],
-                                                      [1,1,0,0],
-                                                      [0,0,1,0]],
-                                                      dtype = np.uint8
-                                                      ).reshape(3,4,1))
-        
+        _ = array.move_atoms(move_list=[Move(0, 1, 1, 1)])
+        assert np.array_equal(
+            array.matrix,
+            np.array(
+                [[0, 0, 1, 0], [1, 1, 0, 0], [0, 0, 1, 0]], dtype=np.uint8
+            ).reshape(3, 4, 1),
+        )
+
     def test_chain_move(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,1,0],
-                                 [1,1,0,0],
-                                 [0,0,1,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 1, 0], [1, 1, 0, 0], [0, 0, 1, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
         # checking that moves of sites next to one another work properly
-        _ = array.move_atoms(move_list=[Move(1,0,1,1), Move(1,1,1,2)])
-        assert np.array_equal(array.matrix, np.array([[0,0,1,0],
-                                                      [0,1,1,0],
-                                                      [0,0,1,0]]).reshape(3,4,1))
-        
+        _ = array.move_atoms(move_list=[Move(1, 0, 1, 1), Move(1, 1, 1, 2)])
+        assert np.array_equal(
+            array.matrix,
+            np.array([[0, 0, 1, 0], [0, 1, 1, 0], [0, 0, 1, 0]]).reshape(3, 4, 1),
+        )
+
     def test_chain_move_with_absent_atom(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,1,0],
-                                 [0,1,1,0],
-                                 [0,0,1,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 1, 0], [0, 1, 1, 0], [0, 0, 1, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
         # checking that atoms are not used in two moves
-        _ = array.move_atoms(move_list=[Move(2,2,2,1), Move(2,1,2,0)])
-        assert np.array_equal(array.matrix, np.array([[0,0,1,0],
-                                                      [0,1,1,0],
-                                                      [0,1,0,0]]).reshape(3,4,1))
-        
+        _ = array.move_atoms(move_list=[Move(2, 2, 2, 1), Move(2, 1, 2, 0)])
+        assert np.array_equal(
+            array.matrix,
+            np.array([[0, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0]]).reshape(3, 4, 1),
+        )
+
     def test_dual_occupancy_expels_atoms(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,1,0],
-                                 [0,1,1,0],
-                                 [0,1,0,0]], dtype = np.uint8).reshape(3,4,1)
-        [failed_moves,flags], _ = array.move_atoms(move_list=[Move(1,2,0,2)])
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
+        [failed_moves, flags], _ = array.move_atoms(move_list=[Move(1, 2, 0, 2)])
         assert len(failed_moves) == 0
         assert MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY in flags
-        assert np.array_equal(array.matrix, np.array([[0,0,0,0],
-                                                      [0,1,0,0],
-                                                      [0,1,0,0]]).reshape(3,4,1))
-        
-        
+        assert np.array_equal(
+            array.matrix,
+            np.array([[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]]).reshape(3, 4, 1),
+        )
+
     def test_static_crossed_tweezer_expels_atoms(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,1,0],
-                                 [0,1,1,0],
-                                 [0,1,0,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
         # checking that collisions expel both atoms
-        inevitable_collision_moves = [Move(1,2,0,2), Move(0,2,0,2)]
-        [failed_moves,flags], _ = array.move_atoms(move_list=inevitable_collision_moves)
-        assert inevitable_collision_moves[0].fail_event == FailureEvent.COLLISION_AVOIDABLE
-        assert inevitable_collision_moves[1].fail_event == FailureEvent.COLLISION_INEVITABLE
-        assert failed_moves == [0,1]
+        inevitable_collision_moves = [Move(1, 2, 0, 2), Move(0, 2, 0, 2)]
+        [failed_moves, flags], _ = array.move_atoms(
+            move_list=inevitable_collision_moves
+        )
+        assert (
+            inevitable_collision_moves[0].fail_event == FailureEvent.COLLISION_AVOIDABLE
+        )
+        assert (
+            inevitable_collision_moves[1].fail_event
+            == FailureEvent.COLLISION_INEVITABLE
+        )
+        assert failed_moves == [0, 1]
         assert FailureFlag.LOSS in flags
-        assert np.array_equal(array.matrix, np.array([[0,0,0,0],
-                                                      [0,1,0,0],
-                                                      [0,1,0,0]]).reshape(3,4,1))
-    
+        assert np.array_equal(
+            array.matrix,
+            np.array([[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]]).reshape(3, 4, 1),
+        )
+
     @pytest.mark.xfail(
-    reason="Collision logic in aod_timing is incomplete",
-    strict=True,
-)
+        reason="Collision logic in aod_timing is incomplete",
+        strict=True,
+    )
     def test_crossed_moving_tweezers_expel_atoms(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,0,0],
-                                 [0,1,0,0],
-                                 [0,1,0,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
         # checking that crossed tweezers expel atoms
-        crossed_moves = [Move(1,1,2,0), Move(2,1,1,0)]
+        crossed_moves = [Move(1, 1, 2, 0), Move(2, 1, 1, 0)]
         [failed_moves, flags], _ = array.move_atoms(move_list=crossed_moves)
-        assert failed_moves == [0,1]
+        assert failed_moves == [0, 1]
         assert crossed_moves[0].fail_event == FailureEvent.COLLISION_AVOIDABLE
         assert crossed_moves[1].fail_event == FailureEvent.COLLISION_AVOIDABLE
         assert FailureFlag.LOSS in flags
-        assert np.array_equal(array.matrix, np.array([[0,0,0,0],
-                                                      [0,0,0,0],
-                                                      [0,0,0,0]]).reshape(3,4,1))
-        
+        assert np.array_equal(
+            array.matrix,
+            np.array([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]).reshape(3, 4, 1),
+        )
+
     # 2. Dual species
     def test_move_atoms_raises_on_negative_occupancy_dual_species(self) -> None:
         """
@@ -689,183 +773,200 @@ class TestMoveAtomsResults:
 
         with pytest.raises(ValueError, match="negative occupancy"):
             aa.move_atoms([m])
-    
+
     def test_single_move_dual_species(self):
-        
+
         # 1. Single species
-        array = AtomArray(shape=[3,4], n_species = 2)
-        array.matrix[:,:,0] = np.array([[0,1,0,0],
-                                        [0,0,0,0],
-                                        [0,0,1,0]], dtype=np.uint8)
-        array.matrix[:,:,1] = np.array([[0,0,1,0],
-                                        [1,0,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        array = AtomArray(shape=[3, 4], n_species=2)
+        array.matrix[:, :, 0] = np.array(
+            [[0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0]], dtype=np.uint8
+        )
+        array.matrix[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [1, 0, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         # checking that moves get row/col assignments correct
-        _ = array.move_atoms(move_list=[Move(0,1,1,1)])
-        expected_mat = np.zeros([3,4,2])
-        expected_mat[:,:,0] = np.array([[0,0,0,0],
-                                        [0,1,0,0],
-                                        [0,0,1,0]], dtype=np.uint8)
-        expected_mat[:,:,1] = np.array([[0,0,1,0],
-                                        [1,0,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        _ = array.move_atoms(move_list=[Move(0, 1, 1, 1)])
+        expected_mat = np.zeros([3, 4, 2])
+        expected_mat[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]], dtype=np.uint8
+        )
+        expected_mat[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [1, 0, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         assert np.array_equal(array.matrix, expected_mat)
-        
+
     def test_chain_move_dual_species(self):
-        array = AtomArray(shape=[3,4], n_species = 2)
-        array.matrix[:,:,0] = np.array([[0,0,0,0],
-                                        [0,1,0,0],
-                                        [0,0,1,0]], dtype=np.uint8)
-        array.matrix[:,:,1] = np.array([[0,0,1,0],
-                                        [1,0,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        array = AtomArray(shape=[3, 4], n_species=2)
+        array.matrix[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]], dtype=np.uint8
+        )
+        array.matrix[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [1, 0, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         # checking that moves of sites next to one another work properly
-        _ = array.move_atoms(move_list=[Move(1,0,1,1), Move(1,1,1,2)])
-        expected_mat = np.zeros([3,4,2])
-        expected_mat[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,1,0],
-                                        [0,0,1,0]], dtype=np.uint8)
-        expected_mat[:,:,1] = np.array([[0,0,1,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        _ = array.move_atoms(move_list=[Move(1, 0, 1, 1), Move(1, 1, 1, 2)])
+        expected_mat = np.zeros([3, 4, 2])
+        expected_mat[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=np.uint8
+        )
+        expected_mat[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         assert np.array_equal(array.matrix, expected_mat)
-        
+
     def test_chain_move_with_absent_atom_dual_species(self):
-        array = AtomArray(shape=[3,4], n_species = 2)
-        array.matrix[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,1,0],
-                                        [0,0,1,0]], dtype=np.uint8)
-        array.matrix[:,:,1] = np.array([[0,0,1,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        array = AtomArray(shape=[3, 4], n_species=2)
+        array.matrix[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=np.uint8
+        )
+        array.matrix[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         # checking that atoms are not used in two moves
-        _ = array.move_atoms(move_list=[Move(2,2,2,1), Move(2,1,2,0)])
-        expected_mat = np.zeros([3,4,2])
-        expected_mat[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,1,0],
-                                        [0,1,0,0]], dtype=np.uint8)
-        expected_mat[:,:,1] = np.array([[0,0,1,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        _ = array.move_atoms(move_list=[Move(2, 2, 2, 1), Move(2, 1, 2, 0)])
+        expected_mat = np.zeros([3, 4, 2])
+        expected_mat[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0]], dtype=np.uint8
+        )
+        expected_mat[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         assert np.array_equal(array.matrix, expected_mat)
-        
+
     def test_dual_occupancy_expels_atoms_dual_species(self):
-        array = AtomArray(shape=[3,4], n_species = 2)
-        array.matrix[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,1,0],
-                                        [0,1,0,0]], dtype=np.uint8)
-        array.matrix[:,:,1] = np.array([[0,0,1,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        array = AtomArray(shape=[3, 4], n_species=2)
+        array.matrix[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0]], dtype=np.uint8
+        )
+        array.matrix[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         # checking that collisions expel both atoms
-        [failed_moves, flags], _ = array.move_atoms(move_list=[Move(1,2,0,2)])
-        expected_mat = np.zeros([3,4,2])
-        expected_mat[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,0,0],
-                                        [0,1,0,0]], dtype=np.uint8)
-        expected_mat[:,:,1] = np.array([[0,0,0,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        [failed_moves, flags], _ = array.move_atoms(move_list=[Move(1, 2, 0, 2)])
+        expected_mat = np.zeros([3, 4, 2])
+        expected_mat[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+        )
+        expected_mat[:, :, 1] = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         assert np.array_equal(array.matrix, expected_mat)
         assert failed_moves == []
         assert MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY in flags
-        
+
     def test_static_crossed_tweezer_expels_atoms_dual_species(self):
-        array = AtomArray(shape=[3,4], n_species = 2)
-        array.matrix[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,1,0],
-                                        [0,1,0,0]], dtype=np.uint8)
-        array.matrix[:,:,1] = np.array([[0,0,1,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        array = AtomArray(shape=[3, 4], n_species=2)
+        array.matrix[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0]], dtype=np.uint8
+        )
+        array.matrix[:, :, 1] = np.array(
+            [[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         # checking that collisions expel both atoms
-        inevitable_collision_moves = [Move(1,2,0,2), Move(0,2,0,2)]
-        [failed_moves,flags], _ = array.move_atoms(move_list=inevitable_collision_moves)
-        assert failed_moves == [0,1]
-        assert inevitable_collision_moves[0].fail_event == FailureEvent.COLLISION_AVOIDABLE
-        assert inevitable_collision_moves[1].fail_event == FailureEvent.COLLISION_INEVITABLE
+        inevitable_collision_moves = [Move(1, 2, 0, 2), Move(0, 2, 0, 2)]
+        [failed_moves, flags], _ = array.move_atoms(
+            move_list=inevitable_collision_moves
+        )
+        assert failed_moves == [0, 1]
+        assert (
+            inevitable_collision_moves[0].fail_event == FailureEvent.COLLISION_AVOIDABLE
+        )
+        assert (
+            inevitable_collision_moves[1].fail_event
+            == FailureEvent.COLLISION_INEVITABLE
+        )
         assert FailureFlag.LOSS in flags
-        expected_mat = np.zeros([3,4,2])
-        expected_mat[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,0,0],
-                                        [0,1,0,0]], dtype=np.uint8)
-        expected_mat[:,:,1] = np.array([[0,0,0,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        expected_mat = np.zeros([3, 4, 2])
+        expected_mat[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+        )
+        expected_mat[:, :, 1] = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         assert np.array_equal(array.matrix, expected_mat)
-    
+
     @pytest.mark.xfail(
-    reason="Incomplete grid count bug in move_atoms",
-    strict=True,
-)
+        reason="Incomplete grid count bug in move_atoms",
+        strict=True,
+    )
     def test_crossed_moving_tweezers_expel_atoms_dual_species(self):
-        array = AtomArray(shape=[3,4], n_species = 2)
-        array.matrix[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,0,0],
-                                        [0,1,0,0]], dtype=np.uint8)
-        array.matrix[:,:,1] = np.array([[0,0,0,0],
-                                        [0,1,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        array = AtomArray(shape=[3, 4], n_species=2)
+        array.matrix[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+        )
+        array.matrix[:, :, 1] = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         # checking that crossed tweezers expel atoms
-        crossed_moves = [Move(1,1,2,0), Move(2,1,1,0)]
+        crossed_moves = [Move(1, 1, 2, 0), Move(2, 1, 1, 0)]
         _ = array.move_atoms(move_list=crossed_moves)
         assert crossed_moves[0].fail_event == FailureEvent.COLLISION_AVOIDABLE
         assert crossed_moves[1].fail_event == FailureEvent.COLLISION_AVOIDABLE
-        expected_mat = np.zeros([3,4,2])
-        expected_mat[:,:,0] = np.array([[0,0,0,0],
-                                        [0,0,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
-        expected_mat[:,:,1] = np.array([[0,0,0,0],
-                                        [0,0,0,0],
-                                        [0,0,0,0]], dtype=np.uint8)
+        expected_mat = np.zeros([3, 4, 2])
+        expected_mat[:, :, 0] = np.array(
+            [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
+        expected_mat[:, :, 1] = np.array(
+            [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.uint8
+        )
         assert np.array_equal(array.matrix, expected_mat)
 
 
 class TestEvaluateMoves:
     def test_empty_move_list(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,0,0],
-                                 [0,1,0,0],
-                                 [0,1,0,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
 
         moves = []
         time, [n_parallel, n_non_parallel] = array.evaluate_moves(move_set=moves)
         assert time == 0
         assert n_parallel == 0
         assert n_non_parallel == 0
-        assert np.array_equal(array.matrix,np.array([[0,0,0,0],
-                                 [0,1,0,0],
-                                 [0,1,0,0]], dtype = np.uint8).reshape(3,4,1))
-    
+        assert np.array_equal(
+            array.matrix,
+            np.array(
+                [[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+            ).reshape(3, 4, 1),
+        )
+
     def test_parallel_move_and_solitary_move(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,0,0],
-                                 [0,1,0,0],
-                                 [0,1,0,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
 
-        moves = [[Move(1,1,1,2), Move(2,1,2,2)], [Move(1,2,1,3)]]
+        moves = [[Move(1, 1, 1, 2), Move(2, 1, 2, 2)], [Move(1, 2, 1, 3)]]
         time, [n_parallel, n_non_parallel] = array.evaluate_moves(move_set=moves)
         assert time != 0
         assert n_parallel == 2
         assert n_non_parallel == 3
-        assert np.array_equal(array.matrix,np.array([[0,0,0,0],
-                                                     [0,0,0,1],
-                                                     [0,0,1,0]], dtype = np.uint8).reshape(3,4,1))
-        
+        assert np.array_equal(
+            array.matrix,
+            np.array(
+                [[0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]], dtype=np.uint8
+            ).reshape(3, 4, 1),
+        )
+
     def test_crossed_move_and_solitary_move(self):
-        array = AtomArray(shape=[3,4])
-        array.matrix = np.array([[0,0,0,1],
-                                 [0,1,0,0],
-                                 [0,1,0,0]], dtype = np.uint8).reshape(3,4,1)
+        array = AtomArray(shape=[3, 4])
+        array.matrix = np.array(
+            [[0, 0, 0, 1], [0, 1, 0, 0], [0, 1, 0, 0]], dtype=np.uint8
+        ).reshape(3, 4, 1)
 
-        moves = [[Move(1,1,2,2), Move(2,1,1,2)], [Move(0,3,1,3)]]
+        moves = [[Move(1, 1, 2, 2), Move(2, 1, 1, 2)], [Move(0, 3, 1, 3)]]
         time, [n_parallel, n_non_parallel] = array.evaluate_moves(move_set=moves)
         assert time != 0
         assert n_parallel == 2
         assert n_non_parallel == 3
-        assert np.array_equal(array.matrix,np.array([[0,0,0,0],
-                                                     [0,0,0,1],
-                                                     [0,0,0,0]], dtype = np.uint8).reshape(3,4,1))
+        assert np.array_equal(
+            array.matrix,
+            np.array(
+                [[0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0]], dtype=np.uint8
+            ).reshape(3, 4, 1),
+        )
+
 
 class TestEjectDualOccupiedSitesInplace:
     def test_post_apply_cleanup_preserves_matrix_dtype_single_species(self) -> None:
@@ -888,13 +989,17 @@ class TestEjectDualOccupiedSitesInplace:
         source_rows = np.asarray([mv.from_row for mv in move_list], dtype=np.int_)
         source_cols = np.asarray([mv.from_col for mv in move_list], dtype=np.int_)
 
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert aa.matrix.dtype == np.uint8
         assert aa.matrix[1, 1, 0] == np.uint8(0)
         assert flags == [MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY]
 
-    def test_post_apply_cleanup_enforces_values_in_0_1_single_species(self, empty_3x3_atomarray) -> None:
+    def test_post_apply_cleanup_enforces_values_in_0_1_single_species(
+        self, empty_3x3_atomarray
+    ) -> None:
         """
         Invariant test: after multi-occupancy ejection, the occupancy representation
         should be physical again (values only in {0,1} for single species).
@@ -913,7 +1018,9 @@ class TestEjectDualOccupiedSitesInplace:
         aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
 
         assert np.max(aa.matrix[:, :, 0]) <= np.uint8(1)
-        assert np.all((aa.matrix[:, :, 0] == np.uint8(0)) | (aa.matrix[:, :, 0] == np.uint8(1)))
+        assert np.all(
+            (aa.matrix[:, :, 0] == np.uint8(0)) | (aa.matrix[:, :, 0] == np.uint8(1))
+        )
 
     def test_post_apply_cleanup_enforces_values_in_0_1_dual_species_total(self) -> None:
         """
@@ -972,7 +1079,9 @@ class TestEjectDualOccupiedSitesInplace:
         source_rows = np.asarray([], dtype=np.int_)
         source_cols = np.asarray([], dtype=np.int_)
 
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert flags == []
         assert np.all(aa.matrix == np.uint8(0))
@@ -991,7 +1100,9 @@ class TestEjectDualOccupiedSitesInplace:
         source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
 
         before = aa.matrix.copy()
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert flags == []
         assert np.array_equal(aa.matrix, before)
@@ -1011,11 +1122,13 @@ class TestEjectDualOccupiedSitesInplace:
         source_rows = np.asarray([m.from_row for m in move_list], dtype=np.int_)
         source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
 
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert aa.matrix[1, 1, 0] == np.uint8(0)
         assert flags == [MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY]
-        assert getattr(m_hit, "multi_occupancy_flag") == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        assert m_hit.multi_occupancy_flag == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
         assert not hasattr(m_miss, "multi_occupancy_flag")
 
     def test_single_species_tags_source_move_only_if_atom_left_behind(self) -> None:
@@ -1027,20 +1140,32 @@ class TestEjectDualOccupiedSitesInplace:
         aa.matrix[0, 0, 0] = np.uint8(2)  # multi-occupancy at source/destination
 
         # Move A: failed pickup -> atom plausibly remains at source.
-        m_left_behind = self._mk_move(0, 0, 0, 1, MoveType.LEGAL_MOVE, FailureEvent.PICKUP_FAIL)
+        m_left_behind = self._mk_move(
+            0, 0, 0, 1, MoveType.LEGAL_MOVE, FailureEvent.PICKUP_FAIL
+        )
         # Move B: targets the collided tweezer (dest tagging).
-        m_into_collision = self._mk_move(1, 1, 0, 0, MoveType.LEGAL_MOVE, FailureEvent.SUCCESS)
+        m_into_collision = self._mk_move(
+            1, 1, 0, 0, MoveType.LEGAL_MOVE, FailureEvent.SUCCESS
+        )
 
         move_list = [m_left_behind, m_into_collision]
         source_rows = np.asarray([m.from_row for m in move_list], dtype=np.int_)
         source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
 
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert aa.matrix[0, 0, 0] == np.uint8(0)
         assert sorted(flags) == sorted([MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY] * 2)
-        assert getattr(m_left_behind, "multi_occupancy_flag") == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
-        assert getattr(m_into_collision, "multi_occupancy_flag") == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        assert (
+            m_left_behind.multi_occupancy_flag
+            == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        )
+        assert (
+            m_into_collision.multi_occupancy_flag
+            == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        )
 
     def test_single_species_no_atom_moves_are_not_tagged_via_source_rule(self) -> None:
         """
@@ -1052,18 +1177,25 @@ class TestEjectDualOccupiedSitesInplace:
         aa.matrix[0, 0, 0] = np.uint8(2)
 
         m_no_atom = self._mk_move(0, 0, 0, 1, MoveType.LEGAL_MOVE, FailureEvent.NO_ATOM)
-        m_into_collision = self._mk_move(1, 1, 0, 0, MoveType.LEGAL_MOVE, FailureEvent.SUCCESS)
+        m_into_collision = self._mk_move(
+            1, 1, 0, 0, MoveType.LEGAL_MOVE, FailureEvent.SUCCESS
+        )
 
         move_list = [m_no_atom, m_into_collision]
         source_rows = np.asarray([m.from_row for m in move_list], dtype=np.int_)
         source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
 
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert aa.matrix[0, 0, 0] == np.uint8(0)
         assert flags == [MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY]
         assert not hasattr(m_no_atom, "multi_occupancy_flag")
-        assert getattr(m_into_collision, "multi_occupancy_flag") == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        assert (
+            m_into_collision.multi_occupancy_flag
+            == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        )
 
     def test_eject_moves_are_not_tagged_via_source_rule(self) -> None:
         """
@@ -1074,21 +1206,32 @@ class TestEjectDualOccupiedSitesInplace:
         aa = AtomArray(shape=[2, 2], n_species=1)
         aa.matrix[0, 0, 0] = np.uint8(2)
 
-        m_eject = self._mk_move(0, 0, 0, 1, MoveType.EJECT_MOVE, FailureEvent.PICKUP_FAIL)
-        m_into_collision = self._mk_move(1, 1, 0, 0, MoveType.LEGAL_MOVE, FailureEvent.SUCCESS)
+        m_eject = self._mk_move(
+            0, 0, 0, 1, MoveType.EJECT_MOVE, FailureEvent.PICKUP_FAIL
+        )
+        m_into_collision = self._mk_move(
+            1, 1, 0, 0, MoveType.LEGAL_MOVE, FailureEvent.SUCCESS
+        )
 
         move_list = [m_eject, m_into_collision]
         source_rows = np.asarray([m.from_row for m in move_list], dtype=np.int_)
         source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
 
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert aa.matrix[0, 0, 0] == np.uint8(0)
         assert flags == [MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY]
         assert not hasattr(m_eject, "multi_occupancy_flag")
-        assert getattr(m_into_collision, "multi_occupancy_flag") == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        assert (
+            m_into_collision.multi_occupancy_flag
+            == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        )
 
-    def test_dual_species_multi_occupancy_detects_sum_over_species_and_ejects(self) -> None:
+    def test_dual_species_multi_occupancy_detects_sum_over_species_and_ejects(
+        self,
+    ) -> None:
         """
         For dual-species arrays, a tweezer is multi-occupied if total occupancy across
         species exceeds one (e.g., (1,1) at the same tweezer).
@@ -1102,38 +1245,47 @@ class TestEjectDualOccupiedSitesInplace:
         source_rows = np.asarray([m.from_row for m in move_list], dtype=np.int_)
         source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
 
-        flags = aa._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        flags = aa._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
 
         assert np.all(aa.matrix[1, 1, :] == np.uint8(0))
         assert flags == [MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY]
-        assert getattr(m_hit, "multi_occupancy_flag") == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
+        assert m_hit.multi_occupancy_flag == MultiOccupancyFlag.MULTI_ATOM_OCCUPANCY
 
 
 def _make_atomarray_single(matrix2d_or3d: NDArray) -> AtomArray:
     aa = AtomArray.__new__(AtomArray)
     aa.n_species = 1
-    aa.shape = matrix2d_or3d.shape[:2]   # IMPORTANT: rows, cols only
+    aa.shape = matrix2d_or3d.shape[:2]  # IMPORTANT: rows, cols only
     aa.matrix = np.array(matrix2d_or3d, copy=True)
     return aa
+
 
 def _make_atomarray_dual(matrix3d: NDArray) -> AtomArray:
     aa = AtomArray.__new__(AtomArray)
     aa.n_species = 2
-    aa.shape = matrix3d.shape[:2]   # IMPORTANT: rows, cols only
+    aa.shape = matrix3d.shape[:2]  # IMPORTANT: rows, cols only
     aa.matrix = np.array(matrix3d, copy=True)
     return aa
 
+
 class TestHelpers:
-    def test_atomarray_test_helper_preserves_matrix_after_shape_assignment(self) -> None:
+    def test_atomarray_test_helper_preserves_matrix_after_shape_assignment(
+        self,
+    ) -> None:
         mat = np.array([[[1], [0]]], dtype=np.uint8)
         aa = _make_atomarray_single(mat)
         assert np.array_equal(aa.matrix, mat)
 
-    def test_atomarray_test_helper_preserves_dual_matrix_after_shape_assignment(self) -> None:
+    def test_atomarray_test_helper_preserves_dual_matrix_after_shape_assignment(
+        self,
+    ) -> None:
         mat = np.zeros((1, 3, 2), dtype=np.uint8)
         mat[0, 1, 0] = 1
         aa = _make_atomarray_single(mat)
         assert np.array_equal(aa.matrix, mat)
+
 
 class TestSetAttr:
     def test_setting_shape_resets_single_species_buffers(self) -> None:
@@ -1214,13 +1366,14 @@ class TestSetAttr:
         assert np.all(aa.target_Rb == np.uint8(0))
         assert np.all(aa.target_Cs == np.uint8(0))
 
+
 class TestApplyMoves:
     def test_apply_moves_single_species_success_legal_move(self) -> None:
         aa = _make_atomarray_single(np.array([[[1], [0], [0]]], dtype=np.uint8))
         moves = [Move(0, 0, 0, 1)]
 
-        assert aa.matrix.shape == (1,3,1)
-        assert aa.matrix[0,0,0] == 1
+        assert aa.matrix.shape == (1, 3, 1)
+        assert aa.matrix[0, 0, 0] == 1
         assert moves[0].from_row == 0
         assert moves[0].from_col == 0
         assert moves[0].to_row == 0
@@ -1266,14 +1419,16 @@ class TestApplyMoves:
         expected = np.array([[[1], [0], [0]]], dtype=np.uint8)
         assert np.array_equal(aa.matrix, expected)
 
-    def test_apply_moves_single_species_occupied_destination_not_vacated_is_illegal(self) -> None:
+    def test_apply_moves_single_species_occupied_destination_not_vacated_is_illegal(
+        self,
+    ) -> None:
         aa = _make_atomarray_single(np.array([[[1], [1], [0]]], dtype=np.uint8))
         moves = [Move(0, 0, 0, 1)]  # destination occupied, and no move vacates (0,1)
 
         aa._apply_moves_single_species(moves)
 
         assert moves[0].movetype == MoveType.ILLEGAL_MOVE
-    
+
     def test_apply_two_moves_single_species_no_pickup_collision(self) -> None:
         aa = _make_atomarray_single(np.array([[[1], [1], [0]]], dtype=np.uint8))
         moves = [Move(0, 0, 0, 1), Move(0, 1, 0, 2)]
@@ -1306,7 +1461,9 @@ class TestApplyMoves:
         expected = np.array([[[0], [0], [0]]], dtype=np.uint8)
         assert np.array_equal(aa.matrix, expected)
 
-    def test_apply_moves_single_species_crossed_moving_removes_atom_from_source(self) -> None:
+    def test_apply_moves_single_species_crossed_moving_removes_atom_from_source(
+        self,
+    ) -> None:
         aa = _make_atomarray_single(np.array([[[1], [0], [0]]], dtype=np.uint8))
         moves = [Move(0, 0, 0, 1), Move(0, 1, 0, 0)]
         moves[0].set_failure_event(FailureEvent.COLLISION_AVOIDABLE)
@@ -1321,8 +1478,10 @@ class TestApplyMoves:
 
         expected = np.array([[[0], [0], [0]]], dtype=np.uint8)
         assert np.array_equal(aa.matrix, expected)
-    
-    def test_apply_moves_single_species_crossed_static_removes_atom_from_source(self) -> None:
+
+    def test_apply_moves_single_species_crossed_static_removes_atom_from_source(
+        self,
+    ) -> None:
         aa = _make_atomarray_single(np.array([[[1], [0], [0]]], dtype=np.uint8))
         moves = [Move(0, 0, 0, 0), Move(0, 1, 0, 0)]
         moves[0].set_failure_event(FailureEvent.COLLISION_INEVITABLE)
@@ -1379,7 +1538,7 @@ class TestApplyMoves:
         expected = np.zeros((1, 3, 2), dtype=np.uint8)
         expected[0, 1, 0] = 1
         assert np.array_equal(aa.matrix, expected)
-    
+
     def test_apply_moves_dual_species_chain_moves_classified_legal(self) -> None:
         mat = np.zeros((1, 3, 2), dtype=np.uint8)
         mat[0, 0, 0] = 1

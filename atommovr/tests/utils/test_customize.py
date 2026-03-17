@@ -9,7 +9,10 @@ from atommovr.utils.customize import (
     EDGECOL,
     ARROWCOL,
 )
+
 dclass = None
+
+
 def test_species_names_are_strings():
     assert isinstance(SPECIES1NAME, str)
     assert isinstance(SPECIES2NAME, str)

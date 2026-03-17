@@ -12,17 +12,42 @@ import random
 import numpy as np
 from numpy.typing import NDArray
 from typing import Tuple, List
-from collections import deque, Counter
+from collections import Counter
 
-from atommovr.utils.core import PhysicalParams, ArrayGeometry, Configurations, random_loading, generate_middle_fifty
+from atommovr.utils.core import (
+    PhysicalParams,
+    ArrayGeometry,
+    Configurations,
+    random_loading,
+    generate_middle_fifty,
+)
 from atommovr.utils.animation import dual_species_image, single_species_image
-from atommovr.utils.move_utils import MoveType, MultiOccupancyFlag, get_AOD_cmds_from_move_list, alloc_event_mask
+from atommovr.utils.move_utils import (
+    MoveType,
+    MultiOccupancyFlag,
+    get_AOD_cmds_from_move_list,
+    alloc_event_mask,
+)
 from atommovr.utils.Move import Move
-from atommovr.utils.aod_timing import _detect_pickup_and_accel_masks, _detect_decel_and_putdown_masks, _has_colliding_tones, _find_colliding_tones, collision_eligibility_from_tones
-from atommovr.utils.failure_policy import FailureBit, FailureEvent, FailureFlag, bit_value, suppress_inplace, resolve_primary_events
+from atommovr.utils.aod_timing import (
+    _detect_pickup_and_accel_masks,
+    _detect_decel_and_putdown_masks,
+    _has_colliding_tones,
+    _find_colliding_tones,
+    collision_eligibility_from_tones,
+)
+from atommovr.utils.failure_policy import (
+    FailureBit,
+    FailureEvent,
+    FailureFlag,
+    bit_value,
+    suppress_inplace,
+    resolve_primary_events,
+)
 from atommovr.utils.ErrorModel import ErrorModel
 from atommovr.utils.errormodels import ZeroNoise
 from atommovr.utils.customize import SPECIES1NAME, SPECIES2NAME
+
 
 class AtomArray:
     """
@@ -80,37 +105,50 @@ class AtomArray:
     ...     error_model=error_model,
     ... )
     """
-    def __init__(self, shape: list | None = None, n_species: int = 1, params: PhysicalParams | None = None, error_model: ErrorModel = ZeroNoise(), geom: ArrayGeometry = ArrayGeometry.RECTANGULAR):
+
+    def __init__(
+        self,
+        shape: list | None = None,
+        n_species: int = 1,
+        params: PhysicalParams | None = None,
+        error_model: ErrorModel = ZeroNoise(),
+        geom: ArrayGeometry = ArrayGeometry.RECTANGULAR,
+    ):
         self.geom = geom
         if params is None:
             params = PhysicalParams()
         if shape is None:
-            shape = [10,10]
+            shape = [10, 10]
         super().__setattr__("shape", shape)
-        if n_species in [1,2] and type(n_species) == int:
+        if n_species in [1, 2] and type(n_species) == int:
             self.n_species = n_species
         else:
-            raise ValueError(f"Invalid entry for parameter `n_species`: {n_species}. The simulator only supports single and dual species arrays.")
+            raise ValueError(
+                f"Invalid entry for parameter `n_species`: {n_species}. The simulator only supports single and dual species arrays."
+            )
         self.params = params
         self.error_model = error_model
 
-        self.matrix = np.zeros([self.shape[0], self.shape[1], self.n_species], dtype = np.uint8)
-        self.target = np.zeros([self.shape[0], self.shape[1], self.n_species], dtype = np.uint8)
-        self.target_Rb = np.zeros([self.shape[0], self.shape[1]], dtype = np.uint8)
-        self.target_Cs = np.zeros([self.shape[0], self.shape[1]], dtype = np.uint8)
+        self.matrix = np.zeros(
+            [self.shape[0], self.shape[1], self.n_species], dtype=np.uint8
+        )
+        self.target = np.zeros(
+            [self.shape[0], self.shape[1], self.n_species], dtype=np.uint8
+        )
+        self.target_Rb = np.zeros([self.shape[0], self.shape[1]], dtype=np.uint8)
+        self.target_Cs = np.zeros([self.shape[0], self.shape[1]], dtype=np.uint8)
 
     def __setattr__(self, key, value):
         if key == "shape":
-            self.matrix = np.zeros([value[0], value[1], self.n_species], dtype = np.uint8)
-            self.target = np.zeros([value[0], value[1], self.n_species], dtype = np.uint8)
-            self.target_Rb = np.zeros([value[0], value[1]], dtype = np.uint8)
-            self.target_Cs = np.zeros([value[0], value[1]], dtype = np.uint8)
+            self.matrix = np.zeros([value[0], value[1], self.n_species], dtype=np.uint8)
+            self.target = np.zeros([value[0], value[1], self.n_species], dtype=np.uint8)
+            self.target_Rb = np.zeros([value[0], value[1]], dtype=np.uint8)
+            self.target_Cs = np.zeros([value[0], value[1]], dtype=np.uint8)
             # (Optional) run any custom logic here
         # Always delegate to superclass to avoid recursion
         super().__setattr__(key, value)
-      
 
-    def load_tweezers(self) -> None: # TODO: rewrite this to speed things up.
+    def load_tweezers(self) -> None:  # TODO: rewrite this to speed things up.
         """
         Populate the array with a stochastic initial loading configuration.
 
@@ -130,11 +168,13 @@ class AtomArray:
             This method updates internal state in place.
         """
         if self.n_species == 1:
-            self.matrix[:,:,:] = random_loading(self.shape, self.params.loading_prob).reshape(self.shape[0], self.shape[1],1)
+            self.matrix[:, :, :] = random_loading(
+                self.shape, self.params.loading_prob
+            ).reshape(self.shape[0], self.shape[1], 1)
         if self.n_species == 2:
-            dual_species_prob = 2 - 2*math.sqrt(1-self.params.loading_prob)
-            self.matrix[:,:,0] = random_loading(self.shape, dual_species_prob/2)
-            self.matrix[:,:,1] = random_loading(self.shape, dual_species_prob/2)
+            dual_species_prob = 2 - 2 * math.sqrt(1 - self.params.loading_prob)
+            self.matrix[:, :, 0] = random_loading(self.shape, dual_species_prob / 2)
+            self.matrix[:, :, 1] = random_loading(self.shape, dual_species_prob / 2)
 
             # Randomly leave one atom if there are two atoms share the same (x,y) coordinate
             for i in range(len(self.matrix)):
@@ -142,10 +182,15 @@ class AtomArray:
                     if self.matrix[i][j][0] == 1 and self.matrix[i][j][1] == 1:
                         random_index = random.randint(0, 1)
                         self.matrix[i][j][random_index] = 0
-        
-        self.last_loaded_config = copy.deepcopy(self.matrix) # can just use .copy()
 
-    def generate_target(self, pattern: Configurations = Configurations.CHECKERBOARD, middle_size: list | None = None, occupation_prob: float = 0.5):
+        self.last_loaded_config = copy.deepcopy(self.matrix)  # can just use .copy()
+
+    def generate_target(
+        self,
+        pattern: Configurations = Configurations.CHECKERBOARD,
+        middle_size: list | None = None,
+        occupation_prob: float = 0.5,
+    ):
         """
         Generate a target occupation pattern for the current array.
 
@@ -178,13 +223,24 @@ class AtomArray:
         if middle_size is None:
             middle_size = []
         if self.n_species == 1:
-            self._generate_single_species_target(pattern, middle_size = middle_size, occupation_prob=occupation_prob)
+            self._generate_single_species_target(
+                pattern, middle_size=middle_size, occupation_prob=occupation_prob
+            )
         elif self.n_species == 2:
-            self._generate_dual_species_target(pattern, middle_size = middle_size, occupation_prob=occupation_prob)
+            self._generate_dual_species_target(
+                pattern, middle_size=middle_size, occupation_prob=occupation_prob
+            )
         else:
-            raise ValueError(f"Unrecognized entry '{self.n_species}' for parameter `n_species`. The simulator only supports single and dual species arrays.")
-        
-    def image(self, move_list: List[Move] | None = None, plotted_species: str = 'all', savename: str = '') -> None:
+            raise ValueError(
+                f"Unrecognized entry '{self.n_species}' for parameter `n_species`. The simulator only supports single and dual species arrays."
+            )
+
+    def image(
+        self,
+        move_list: List[Move] | None = None,
+        plotted_species: str = "all",
+        savename: str = "",
+    ) -> None:
         """
         Plot a snapshot of the current atom-array state.
 
@@ -221,23 +277,37 @@ class AtomArray:
                 move_list[0]
             except TypeError:
                 move_list = [move_list]
-        
+
         if self.n_species == 1:
-            single_species_image(self.matrix, move_list = move_list, savename = savename)
+            single_species_image(self.matrix, move_list=move_list, savename=savename)
         elif self.n_species == 2:
             if type(self) != np.ndarray:
                 plotted_arrays = self.matrix
             else:
                 plotted_arrays = self
 
-            if plotted_species.lower() == 'all':
-                dual_species_image(plotted_arrays, move_list = move_list, savename = savename)
+            if plotted_species.lower() == "all":
+                dual_species_image(
+                    plotted_arrays, move_list=move_list, savename=savename
+                )
             elif plotted_species.lower() == SPECIES1NAME.lower():
-                dual_species_image(plotted_arrays, color_scheme = 'blue', move_list = move_list, savename = savename)
+                dual_species_image(
+                    plotted_arrays,
+                    color_scheme="blue",
+                    move_list=move_list,
+                    savename=savename,
+                )
             elif plotted_species.lower() == SPECIES2NAME.lower():
-                dual_species_image(plotted_arrays, color_scheme = 'yellow', move_list = move_list, savename = savename)
+                dual_species_image(
+                    plotted_arrays,
+                    color_scheme="yellow",
+                    move_list=move_list,
+                    savename=savename,
+                )
             else:
-                raise ValueError(f"Invalid entry for parameter 'plotted_species': {plotted_species}. Please choose from ['{SPECIES1NAME}','{SPECIES2NAME}', 'all'].")
+                raise ValueError(
+                    f"Invalid entry for parameter 'plotted_species': {plotted_species}. Please choose from ['{SPECIES1NAME}','{SPECIES2NAME}', 'all']."
+                )
 
     def plot_target_config(self) -> None:
         """
@@ -292,13 +362,15 @@ class AtomArray:
             if round_ind == 0:
                 prev_move_list = []
             else:
-                prev_move_list = move_set[round_ind-1]
+                prev_move_list = move_set[round_ind - 1]
             try:
-                next_move_list = move_set[round_ind+1]
+                next_move_list = move_set[round_ind + 1]
             except IndexError:
                 next_move_list = []
-            
-            [failed_moves, flags], move_time = self.move_atoms(move_list, prev_move_list, next_move_list)
+
+            [failed_moves, flags], move_time = self.move_atoms(
+                move_list, prev_move_list, next_move_list
+            )
             N_parallel_moves += 1
             N_non_parallel_moves += len(move_list)
 
@@ -307,12 +379,11 @@ class AtomArray:
 
         return float(t_total), [N_parallel_moves, N_non_parallel_moves]
 
-
     def move_atoms(
         self,
-        move_list: List[Move], 
-        prev_move_list: List[Move] | None = None, # NEW for long moves upgrade
-        next_move_list: List[Move] | None = None, # NEW for long moves upgrade
+        move_list: List[Move],
+        prev_move_list: List[Move] | None = None,  # NEW for long moves upgrade
+        next_move_list: List[Move] | None = None,  # NEW for long moves upgrade
     ) -> Tuple[List, float]:
         """
         Apply one parallel round of atom transport with failure sampling and timing.
@@ -354,7 +425,7 @@ class AtomArray:
             parallelizable, or if the move list is incomplete relative to the
             active AOD tone intersections.
         """
-        
+
         if prev_move_list is None:
             prev_move_list = []
         if next_move_list is None:
@@ -367,17 +438,17 @@ class AtomArray:
             raise ValueError("Atom array cannot have values outside of {0,1}.")
         if np.min(self.matrix) < 0:
             raise ValueError("Atom array cannot have negative occupancy values.")
-        
+
         n_moves = len(move_list)
         if n_moves == 0:
-            return [[],[]], 0.0
+            return [[], []], 0.0
         # 0.3 make sure the moves are physically parallelizable (for all three move lists)
         curr_horiz, curr_vert, curr_success = get_AOD_cmds_from_move_list(
             self.matrix, move_list
         )
         if not curr_success:
             raise ValueError(f"Non-parallelizable moves in move_list: {move_list}.")
-        
+
         n_active_rows = int(np.count_nonzero(curr_horiz))
         n_active_cols = int(np.count_nonzero(curr_vert))
         expected_n_moves = n_active_rows * n_active_cols
@@ -387,33 +458,41 @@ class AtomArray:
                 f"{n_active_rows} x {n_active_cols} = {expected_n_moves} "
                 f"tweezer intersections, but got {n_moves} moves."
             )
-        
+
         if len(next_move_list) > 0:
             next_horiz, next_vert, next_success = get_AOD_cmds_from_move_list(
                 self.matrix, next_move_list
             )
             if not next_success:
-                raise ValueError(f"Non-parallelizable moves in next_move_list: {next_move_list}.")
+                raise ValueError(
+                    f"Non-parallelizable moves in next_move_list: {next_move_list}."
+                )
         else:
-            next_horiz, next_vert = np.zeros(len(curr_horiz), dtype = np.int8), np.zeros(len(curr_vert), dtype = np.int8)
-        
+            next_horiz, next_vert = np.zeros(len(curr_horiz), dtype=np.int8), np.zeros(
+                len(curr_vert), dtype=np.int8
+            )
+
         if len(prev_move_list) > 0:
             prev_horiz, prev_vert, prev_success = get_AOD_cmds_from_move_list(
                 self.matrix, prev_move_list
             )
             if not prev_success:
-                raise ValueError(f"Non-parallelizable moves in prev_move_list: {prev_move_list}.")
+                raise ValueError(
+                    f"Non-parallelizable moves in prev_move_list: {prev_move_list}."
+                )
         else:
-            prev_horiz, prev_vert = np.zeros(len(curr_horiz), dtype = np.int8), np.zeros(len(curr_vert), dtype = np.int8)
-
+            prev_horiz, prev_vert = np.zeros(len(curr_horiz), dtype=np.int8), np.zeros(
+                len(curr_vert), dtype=np.int8
+            )
 
         # --- Building collision masks at the tone level ---
-        has_colliding_tones = _has_colliding_tones(curr_vert,curr_horiz)
+        has_colliding_tones = _has_colliding_tones(curr_vert, curr_horiz)
         if has_colliding_tones:
-            (v_collision_inevitable,
-             v_collision_avoidable,
-             h_collision_inevitable,
-             h_collision_avoidable,
+            (
+                v_collision_inevitable,
+                v_collision_avoidable,
+                h_collision_inevitable,
+                h_collision_avoidable,
             ) = _find_colliding_tones(curr_vert, curr_horiz)
 
         # --- Allocate per-move event mask (aligned 1:1 with move_list order) ---
@@ -424,9 +503,9 @@ class AtomArray:
         source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
 
         # -------------------------------------------------------------------------
-        # 0) Deterministic "NO_ATOM" tagging 
+        # 0) Deterministic "NO_ATOM" tagging
         # -------------------------------------------------------------------------
-        has_atom = (np.sum(self.matrix[source_rows, source_cols, :], axis=-1) > 0)
+        has_atom = np.sum(self.matrix[source_rows, source_cols, :], axis=-1) > 0
         no_atom_eligible = ~has_atom
         if no_atom_eligible.any():
             event_mask[no_atom_eligible] |= bit_value(FailureBit.NO_ATOM)
@@ -436,21 +515,27 @@ class AtomArray:
         #    NB: This replaces `_find_and_resolve_crossed_moves` (deprecated)
         # -------------------------------------------------------------------------
         if has_colliding_tones:
-            eligible_collision_inevitable, eligible_collision_avoidable = collision_eligibility_from_tones(
-                move_set=move_list,
-                v_collision_inevitable=v_collision_inevitable,
-                v_collision_avoidable=v_collision_avoidable,
-                h_collision_inevitable=h_collision_inevitable,
-                h_collision_avoidable=h_collision_avoidable,
-                source_rows = source_rows,
-                source_cols = source_cols,
+            eligible_collision_inevitable, eligible_collision_avoidable = (
+                collision_eligibility_from_tones(
+                    move_set=move_list,
+                    v_collision_inevitable=v_collision_inevitable,
+                    v_collision_avoidable=v_collision_avoidable,
+                    h_collision_inevitable=h_collision_inevitable,
+                    h_collision_avoidable=h_collision_avoidable,
+                    source_rows=source_rows,
+                    source_cols=source_cols,
+                )
             )
 
             if eligible_collision_inevitable.any():
-                self.error_model.apply_inevitable_collision_mask(event_mask, eligible_collision_inevitable)
+                self.error_model.apply_inevitable_collision_mask(
+                    event_mask, eligible_collision_inevitable
+                )
 
             if eligible_collision_avoidable.any():
-                self.error_model.apply_avoidable_collision_mask(event_mask, eligible_collision_avoidable)
+                self.error_model.apply_avoidable_collision_mask(
+                    event_mask, eligible_collision_avoidable
+                )
 
         # -------------------------------------------------------------------------
         # 2) Pickup / Accel eligibility from AOD timing analysis
@@ -484,7 +569,7 @@ class AtomArray:
             next_vert,
             move_list,
             source_cols,
-            source_rows
+            source_rows,
         )
 
         if eligible_decel.any():
@@ -511,11 +596,13 @@ class AtomArray:
         # 6) Apply moves (with `fail_flag` and `fail_event` attributes)
         # -------------------------------------------------------------------------
         failed_moves, flags = self._apply_moves(move_list)
-        
+
         # -------------------------------------------------------------------------
         # 7) Eject atoms from multi-occupied tweezers
         # -------------------------------------------------------------------------
-        multi_occupancy_flags = self._eject_dual_occupied_sites_inplace(move_list, source_rows, source_cols)
+        multi_occupancy_flags = self._eject_dual_occupied_sites_inplace(
+            move_list, source_rows, source_cols
+        )
         if len(multi_occupancy_flags) > 0:
             flags.extend(multi_occupancy_flags)
 
@@ -528,25 +615,25 @@ class AtomArray:
         # 8) Find maximum move time and sample from vacuum loss probability dist.
         # -------------------------------------------------------------------------
         max_distance = 0
-        for move in move_list: # moves_wo_crossing
-            dist = move.distance*self.params.spacing
+        for move in move_list:  # moves_wo_crossing
+            dist = move.distance * self.params.spacing
             if dist > max_distance:
                 max_distance = dist
-        move_time += max_distance/self.params.AOD_speed
-        self.matrix, loss_flag = self.error_model.get_atom_loss(self.matrix,
-                                                                evolution_time=move_time, 
-                                                                n_species=self.n_species)
+        move_time += max_distance / self.params.AOD_speed
+        self.matrix, loss_flag = self.error_model.get_atom_loss(
+            self.matrix, evolution_time=move_time, n_species=self.n_species
+        )
         if loss_flag != 0:
             flags.append(loss_flag)
 
         return [failed_moves, flags], move_time
-    
+
     def _eject_dual_occupied_sites_inplace(
-            self,
-            move_list: List[Move],
-            source_rows: NDArray,
-            source_cols: NDArray,
-        ) -> List[MultiOccupancyFlag]:
+        self,
+        move_list: List[Move],
+        source_rows: NDArray,
+        source_cols: NDArray,
+    ) -> List[MultiOccupancyFlag]:
         """
         Enforce the “≤ 1 atom per optical tweezer” invariant after modifying `matrix`
         from a list of `Move` objects.
@@ -606,10 +693,14 @@ class AtomArray:
 
         h, w = multi_occ_mask.shape
         coll_rows, coll_cols = np.where(multi_occ_mask)
-        coll_site_ids = coll_rows.astype(np.int64) * np.int64(w) + coll_cols.astype(np.int64)
+        coll_site_ids = coll_rows.astype(np.int64) * np.int64(w) + coll_cols.astype(
+            np.int64
+        )
 
         to_site_ids = to_rows.astype(np.int64) * np.int64(w) + to_cols.astype(np.int64)
-        from_site_ids = source_rows.astype(np.int64) * np.int64(w) + source_cols.astype(np.int64)
+        from_site_ids = source_rows.astype(np.int64) * np.int64(w) + source_cols.astype(
+            np.int64
+        )
 
         hits_dest = np.isin(to_site_ids, coll_site_ids)
 
@@ -625,7 +716,9 @@ class AtomArray:
             & (fail_flags != int(FailureFlag.NO_ATOM))
             & (movetypes != int(MoveType.EJECT_MOVE))
         )
-        hits_source_and_left_atom = left_atom_behind & np.isin(from_site_ids, coll_site_ids)
+        hits_source_and_left_atom = left_atom_behind & np.isin(
+            from_site_ids, coll_site_ids
+        )
 
         tagged = hits_dest | hits_source_and_left_atom
         idx = np.where(tagged)[0]
@@ -636,7 +729,12 @@ class AtomArray:
 
         return flags
 
-    def _generate_single_species_target(self, pattern: Configurations = Configurations.MIDDLE_FILL, middle_size: list | None = None, occupation_prob: float = 0.5) -> None:
+    def _generate_single_species_target(
+        self,
+        pattern: Configurations = Configurations.MIDDLE_FILL,
+        middle_size: list | None = None,
+        occupation_prob: float = 0.5,
+    ) -> None:
         """
         Build a standard single-species target configuration.
 
@@ -661,32 +759,50 @@ class AtomArray:
         None
             This method updates ``self.target`` in place.
         """
-        array = np.zeros([self.shape[0], self.shape[1]], dtype = np.uint8)
+        array = np.zeros([self.shape[0], self.shape[1]], dtype=np.uint8)
 
         if middle_size is None or len(middle_size) == 0:
             middle_size = generate_middle_fifty(self.shape[0], occupation_prob)
-            
-        if pattern == Configurations.ZEBRA_HORIZONTAL: # every other row
+
+        if pattern == Configurations.ZEBRA_HORIZONTAL:  # every other row
             for i in range(0, self.shape[0], 2):
-                array[i,:] = np.uint8(1)
-        elif pattern == Configurations.ZEBRA_VERTICAL: # every other col
+                array[i, :] = np.uint8(1)
+        elif pattern == Configurations.ZEBRA_VERTICAL:  # every other col
             for i in range(0, self.shape[1], 2):
-                array[:,i] = np.uint8(1)
-        elif pattern == Configurations.CHECKERBOARD: # checkerboard
-            array = np.indices(self.shape, dtype=np.uint8).sum(axis=0, dtype=np.uint8) % 2
-        elif pattern == Configurations.MIDDLE_FILL: # middle fill
-            mrow = np.zeros([1,self.shape[1]], dtype=np.uint8)
-            mrow[0,int(self.shape[1]/2-middle_size[1]/2):int(self.shape[1]/2-middle_size[1]/2)+middle_size[1]] = np.uint8(1)
-            for i in range(int(self.shape[0]/2-middle_size[0]/2), int(self.shape[0]/2-middle_size[0]/2)+middle_size[0]):
-                array[i,:] = mrow
+                array[:, i] = np.uint8(1)
+        elif pattern == Configurations.CHECKERBOARD:  # checkerboard
+            array = (
+                np.indices(self.shape, dtype=np.uint8).sum(axis=0, dtype=np.uint8) % 2
+            )
+        elif pattern == Configurations.MIDDLE_FILL:  # middle fill
+            mrow = np.zeros([1, self.shape[1]], dtype=np.uint8)
+            mrow[
+                0,
+                int(self.shape[1] / 2 - middle_size[1] / 2) : int(
+                    self.shape[1] / 2 - middle_size[1] / 2
+                )
+                + middle_size[1],
+            ] = np.uint8(1)
+            for i in range(
+                int(self.shape[0] / 2 - middle_size[0] / 2),
+                int(self.shape[0] / 2 - middle_size[0] / 2) + middle_size[0],
+            ):
+                array[i, :] = mrow
         elif pattern == Configurations.Left_Sweep:
             for i in range(middle_size[0]):
-                array[:,i] = np.uint8(1)
+                array[:, i] = np.uint8(1)
         elif pattern == Configurations.RANDOM:
-            array = random_loading(self.shape,probability=self.params.target_occup_prob)
+            array = random_loading(
+                self.shape, probability=self.params.target_occup_prob
+            )
         self.target = array.reshape([self.shape[0], self.shape[1], 1])
 
-    def _generate_dual_species_target(self, pattern: Configurations = Configurations.ZEBRA_HORIZONTAL, middle_size: list | None = None, occupation_prob: float = 0.5) -> None:
+    def _generate_dual_species_target(
+        self,
+        pattern: Configurations = Configurations.ZEBRA_HORIZONTAL,
+        middle_size: list | None = None,
+        occupation_prob: float = 0.5,
+    ) -> None:
         """
         Build a standard dual-species target configuration.
 
@@ -711,51 +827,75 @@ class AtomArray:
             This method updates ``self.target_Rb``, ``self.target_Cs``, and
             ``self.target`` in place.
         """
-        self.target_Rb = np.zeros([self.shape[0], self.shape[1]], dtype = np.uint8)
-        self.target_Cs = np.zeros([self.shape[0], self.shape[1]], dtype = np.uint8)
-        
+        self.target_Rb = np.zeros([self.shape[0], self.shape[1]], dtype=np.uint8)
+        self.target_Cs = np.zeros([self.shape[0], self.shape[1]], dtype=np.uint8)
+
         if middle_size is None or len(middle_size) == 0:
             middle_size = generate_middle_fifty(self.shape[0], occupation_prob)
-        
+
         # Horizontal zebra stripes mixed species pattern
         if pattern == Configurations.ZEBRA_HORIZONTAL:
-            for i in range(int(self.shape[0]/2-middle_size[0]/2), int(self.shape[0]/2-middle_size[0]/2)+middle_size[0]):
-                for j in range(int(self.shape[1]/2-middle_size[1]/2), int(self.shape[1]/2-middle_size[1]/2)+middle_size[1]):
+            for i in range(
+                int(self.shape[0] / 2 - middle_size[0] / 2),
+                int(self.shape[0] / 2 - middle_size[0] / 2) + middle_size[0],
+            ):
+                for j in range(
+                    int(self.shape[1] / 2 - middle_size[1] / 2),
+                    int(self.shape[1] / 2 - middle_size[1] / 2) + middle_size[1],
+                ):
                     if i % 2 == 0:
-                        self.target_Cs[i,j] = np.uint8(1)
+                        self.target_Cs[i, j] = np.uint8(1)
                     else:
-                        self.target_Rb[i,j] = np.uint8(1)
+                        self.target_Rb[i, j] = np.uint8(1)
 
         # Vertical zebra stripes mixed species pattern
         if pattern == Configurations.ZEBRA_VERTICAL:
-            for i in range(int(self.shape[0]/2-middle_size[0]/2), int(self.shape[0]/2-middle_size[0]/2)+middle_size[0]):
-                for j in range(int(self.shape[1]/2-middle_size[1]/2), int(self.shape[1]/2-middle_size[1]/2)+middle_size[1]):
+            for i in range(
+                int(self.shape[0] / 2 - middle_size[0] / 2),
+                int(self.shape[0] / 2 - middle_size[0] / 2) + middle_size[0],
+            ):
+                for j in range(
+                    int(self.shape[1] / 2 - middle_size[1] / 2),
+                    int(self.shape[1] / 2 - middle_size[1] / 2) + middle_size[1],
+                ):
                     if j % 2 == 0:
-                        self.target_Cs[i,j] = np.uint8(1)
+                        self.target_Cs[i, j] = np.uint8(1)
                     else:
-                        self.target_Rb[i,j] = np.uint8(1)
+                        self.target_Rb[i, j] = np.uint8(1)
 
         if pattern == Configurations.CHECKERBOARD:
-            for i in range(int(self.shape[0]/2-middle_size[0]/2), int(self.shape[0]/2-middle_size[0]/2)+middle_size[0]):
-                for j in range(int(self.shape[1]/2-middle_size[1]/2), int(self.shape[1]/2-middle_size[1]/2)+middle_size[1]):
-                    if (i+j) % 2 == 0:
-                        self.target_Rb[i,j] = np.uint8(1)
+            for i in range(
+                int(self.shape[0] / 2 - middle_size[0] / 2),
+                int(self.shape[0] / 2 - middle_size[0] / 2) + middle_size[0],
+            ):
+                for j in range(
+                    int(self.shape[1] / 2 - middle_size[1] / 2),
+                    int(self.shape[1] / 2 - middle_size[1] / 2) + middle_size[1],
+                ):
+                    if (i + j) % 2 == 0:
+                        self.target_Rb[i, j] = np.uint8(1)
                     else:
-                        self.target_Cs[i,j] = np.uint8(1)
+                        self.target_Cs[i, j] = np.uint8(1)
 
         if pattern == Configurations.SEPARATE:
-            for i in range(int(self.shape[0]/2-middle_size[0]/2), int(self.shape[0]/2-middle_size[0]/2)+middle_size[0]):
-                for j in range(int(self.shape[1]/2-middle_size[1]/2), int(self.shape[1]/2-middle_size[1]/2)+middle_size[1]):
-                    if j < int(self.shape[1]/2):
-                        self.target_Cs[i,j] = np.uint8(1)
+            for i in range(
+                int(self.shape[0] / 2 - middle_size[0] / 2),
+                int(self.shape[0] / 2 - middle_size[0] / 2) + middle_size[0],
+            ):
+                for j in range(
+                    int(self.shape[1] / 2 - middle_size[1] / 2),
+                    int(self.shape[1] / 2 - middle_size[1] / 2) + middle_size[1],
+                ):
+                    if j < int(self.shape[1] / 2):
+                        self.target_Cs[i, j] = np.uint8(1)
                     else:
-                        self.target_Rb[i,j] = np.uint8(1)
+                        self.target_Rb[i, j] = np.uint8(1)
 
-        self.target = np.stack([self.target_Rb, self.target_Cs], axis=2, dtype = np.uint8)
-    
+        self.target = np.stack([self.target_Rb, self.target_Cs], axis=2, dtype=np.uint8)
+
     def _get_duplicate_vals_from_list(self, l: list) -> list:
-        return [k for k,v in Counter(l).items() if v>1]
-    
+        return [k for k, v in Counter(l).items() if v > 1]
+
     def _apply_moves(self, moves: list) -> Tuple[List, List]:
         """
         Dispatch move application to the species-specific implementation.
@@ -781,7 +921,7 @@ class AtomArray:
             return self._apply_moves_single_species(moves)
         elif self.n_species == 2:
             return self._apply_moves_dual_species(moves)
-    
+
     def _apply_moves_single_species(
         self,
         moves: List[Move],
@@ -844,8 +984,7 @@ class AtomArray:
             n_rows, n_cols = int(state_before.shape[0]), int(state_before.shape[1])
 
         dest_in_bounds = (
-            (to_rows >= 0) & (to_rows < n_rows) &
-            (to_cols >= 0) & (to_cols < n_cols)
+            (to_rows >= 0) & (to_rows < n_rows) & (to_cols >= 0) & (to_cols < n_cols)
         )
 
         # ---- Pre-move occupancy (row, col) ----
@@ -857,7 +996,9 @@ class AtomArray:
         elif state_before.ndim == 3:
             occ_before = np.sum(state_before, axis=-1)  # robust if shape (...,1)
         else:
-            raise ValueError(f"Unexpected matrix ndim for single-species move application: {state_before.ndim}")
+            raise ValueError(
+                f"Unexpected matrix ndim for single-species move application: {state_before.ndim}"
+            )
 
         src_has_atom = occ_before[from_rows, from_cols] > 0
 
@@ -908,8 +1049,8 @@ class AtomArray:
         # is_loss = np.asarray([mv.atom_was_lost() for mv in moves], dtype=bool)
         flags_arr = np.asarray([int(mv.fail_flag) for mv in moves], dtype=np.int32)
         movetypes = np.asarray([int(mv.movetype) for mv in moves], dtype=np.int32)
-        is_success = (flags_arr == int(FailureFlag.SUCCESS))
-        is_loss    = (flags_arr == int(FailureFlag.LOSS))
+        is_success = flags_arr == int(FailureFlag.SUCCESS)
+        is_loss = flags_arr == int(FailureFlag.LOSS)
 
         failed_moves: list[int] = []
         flags: list[int] = []
@@ -925,11 +1066,10 @@ class AtomArray:
             # single-species storage assumed (..., 1)
             occ = self.matrix[:, :, 0]
 
-        is_legal_or_illegal = (
-            (movetypes == int(MoveType.LEGAL_MOVE)) |
-            (movetypes == int(MoveType.ILLEGAL_MOVE))
+        is_legal_or_illegal = (movetypes == int(MoveType.LEGAL_MOVE)) | (
+            movetypes == int(MoveType.ILLEGAL_MOVE)
         )
-        is_eject = (movetypes == int(MoveType.EJECT_MOVE))
+        is_eject = movetypes == int(MoveType.EJECT_MOVE)
 
         # Successful legal/illegal: source -> dest
         idx = np.where(is_success & is_legal_or_illegal)[0]
@@ -1015,8 +1155,7 @@ class AtomArray:
             n_rows, n_cols = int(state_before.shape[0]), int(state_before.shape[1])
 
         dest_in_bounds = (
-            (to_rows >= 0) & (to_rows < n_rows) &
-            (to_cols >= 0) & (to_cols < n_cols)
+            (to_rows >= 0) & (to_rows < n_rows) & (to_cols >= 0) & (to_cols < n_cols)
         )
 
         # Pre-move site occupancy counts (0,1,2 possible)
@@ -1025,7 +1164,9 @@ class AtomArray:
         dst_counts = np.zeros(n, dtype=np.int64)
         inb_idx = np.where(dest_in_bounds)[0]
         if inb_idx.size > 0:
-            dst_counts[inb_idx] = np.sum(state_before[to_rows[inb_idx], to_cols[inb_idx], :], axis=1)
+            dst_counts[inb_idx] = np.sum(
+                state_before[to_rows[inb_idx], to_cols[inb_idx], :], axis=1
+            )
 
         # Parallel semantics: destination is "vacated" if it is a source of any move in this batch
         source_sites = {(int(r), int(c)) for r, c in zip(from_rows, from_cols)}
@@ -1039,9 +1180,9 @@ class AtomArray:
         # Destination is blocked only if occupied and not vacated by a batch move
         dst_blocked = (dst_counts > 0) & (~dst_vacated_by_batch)
 
-        no_atom_mask = (src_counts == 0)
-        valid_source_mask = (src_counts == 1)
-        weird_source_mask = (src_counts != 1)  # conservative handling if malformed state
+        no_atom_mask = src_counts == 0
+        valid_source_mask = src_counts == 1
+        weird_source_mask = src_counts != 1  # conservative handling if malformed state
 
         eject_mask = valid_source_mask & (~dest_in_bounds)
         legal_mask = valid_source_mask & dest_in_bounds & (~dst_blocked)
@@ -1077,11 +1218,10 @@ class AtomArray:
                 failed_moves.append(i)
                 flags.append(int(flags_arr[i]))
 
-        is_legal_or_illegal = (
-            (movetypes == int(MoveType.LEGAL_MOVE)) |
-            (movetypes == int(MoveType.ILLEGAL_MOVE))
+        is_legal_or_illegal = (movetypes == int(MoveType.LEGAL_MOVE)) | (
+            movetypes == int(MoveType.ILLEGAL_MOVE)
         )
-        is_eject = (movetypes == int(MoveType.EJECT_MOVE))
+        is_eject = movetypes == int(MoveType.EJECT_MOVE)
 
         # Species identity from pre-move state
         src_species0 = state_before[from_rows, from_cols, 0] > 0

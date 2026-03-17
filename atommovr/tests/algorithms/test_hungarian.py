@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from atommovr.algorithms.source import Hungarian_works as hw
 
@@ -88,6 +87,7 @@ class TestGENERATE_ASSIGNMENTS_FAST:
             assert len(start) == 2
             assert len(end) == 2
 
+
 ## test functions to verify that this
 
 
@@ -104,7 +104,9 @@ class TestDefineCurrentAndTarget:
                 matrix, target = _make_random_case(rng, (side, side))
 
                 ref_current, ref_target = hw.define_current_and_target(matrix, target)
-                new_current, new_target = hw.define_current_and_target_fast(matrix, target)
+                new_current, new_target = hw.define_current_and_target_fast(
+                    matrix, target
+                )
 
                 assert new_current == ref_current
                 assert new_target == ref_target
@@ -135,7 +137,9 @@ class TestGenerateCostMatrix:
         for n_current in [0, 1, 2, 5, 10]:
             for n_target in [0, 1, 3, 7]:
                 for _ in range(50):
-                    current = [tuple(x) for x in rng.integers(0, 20, size=(n_current, 2))]
+                    current = [
+                        tuple(x) for x in rng.integers(0, 20, size=(n_current, 2))
+                    ]
                     target = [tuple(x) for x in rng.integers(0, 20, size=(n_target, 2))]
 
                     ref_cost = hw.generate_cost_matrix(current, target)
@@ -206,7 +210,7 @@ class TestHungarianAlgorithmWorks:
         """
         rng = np.random.default_rng(3)
 
-        for side in [6,8,10]:
+        for side in [6, 8, 10]:
             for _ in range(20):
                 matrix, target = _make_random_case(rng, (side, side))
 

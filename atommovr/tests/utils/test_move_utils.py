@@ -1,10 +1,10 @@
-
 import copy
 import numpy as np
 import pytest
 
 from atommovr.utils.Move import Move
 from atommovr.utils import move_utils as mu
+
 
 def _clone_move(move: Move) -> Move:
     """
@@ -23,6 +23,7 @@ def _clone_moves(moves: list[Move]) -> list[Move]:
     """
     return [_clone_move(move) for move in moves]
 
+
 def _has_legacy_midpoint_crossing(moves: list[Move]) -> bool:
     """
     Return whether two or more moves share the same midpoint, matching the
@@ -35,6 +36,7 @@ def _has_legacy_midpoint_crossing(moves: list[Move]) -> bool:
             return True
         seen.add(midpoint)
     return False
+
 
 class TestDETECT_DESTRUCTIVE_AOD_CMD_MASK:
     def test_detects_pattern_2_1(self) -> None:
@@ -147,14 +149,13 @@ class TestMOVE_ATOMS_NOISELESS:
         vertical tones and by active horizontal tones.
         """
 
-        matrix = np.zeros([6,5,1], dtype = np.uint8)
+        matrix = np.zeros([6, 5, 1], dtype=np.uint8)
         matrix[0, :, 0] = [0, 1, 1, 0, 1]
         matrix[1, :, 0] = [1, 1, 1, 0, 1]
         matrix[2, :, 0] = [1, 1, 1, 0, 1]
         matrix[3, :, 0] = [1, 0, 0, 0, 0]
         matrix[4, :, 0] = [0, 0, 0, 0, 1]
         matrix[5, :, 0] = [0, 0, 0, 0, 0]
-
 
         h_cmds = np.array([0, 1, 3, 0, 1], dtype=np.uint8)
         v_cmds = np.array([1, 1, 2, 0, 0, 0], dtype=np.uint8)
@@ -163,7 +164,7 @@ class TestMOVE_ATOMS_NOISELESS:
 
         out = mu.move_atoms_noiseless(matrix, _clone_moves(moves))
 
-        expected = np.zeros([6,5,1], dtype = np.uint8)
+        expected = np.zeros([6, 5, 1], dtype=np.uint8)
         expected[0, :, 0] = [0, 0, 0, 0, 1]
         expected[1, :, 0] = [1, 0, 0, 0, 1]
         expected[2, :, 0] = [1, 0, 0, 0, 0]
@@ -202,7 +203,9 @@ class TestMOVE_ATOMS_NOISELESS:
 
         for side in [4, 5, 8]:
             for _ in range(100):
-                matrix = (rng.random((side, side, 1)) < 0.25).astype(np.uint8, copy=False)
+                matrix = (rng.random((side, side, 1)) < 0.25).astype(
+                    np.uint8, copy=False
+                )
 
                 n_moves = int(rng.integers(1, 6))
                 moves: list[Move] = []
@@ -238,6 +241,7 @@ class TestMOVE_ATOMS_NOISELESS:
 
                 new_matrix = mu.move_atoms_noiseless(matrix.copy(), _clone_moves(moves))
                 assert np.array_equal(new_matrix, ref_matrix)
+
 
 class TestMOVE_ATOMS:
     def test_matches_original_on_simple_legal_moves(self) -> None:
@@ -325,7 +329,9 @@ class TestMOVE_ATOMS:
 
         for side in [4, 5, 8]:
             for _ in range(100):
-                matrix = (rng.random((side, side, 1)) < 0.25).astype(np.uint8, copy=False)
+                matrix = (rng.random((side, side, 1)) < 0.25).astype(
+                    np.uint8, copy=False
+                )
 
                 n_moves = int(rng.integers(1, 8))
                 moves: list[Move] = []
@@ -352,14 +358,19 @@ class TestMOVE_ATOMS:
                         mu.move_atoms_fast(matrix.copy(), new_moves)
 
                     assert str(new_exc.value) == str(ref_exc)
-                    assert [m.fail_flag for m in new_moves] == [m.fail_flag for m in ref_moves]
+                    assert [m.fail_flag for m in new_moves] == [
+                        m.fail_flag for m in ref_moves
+                    ]
                     continue
 
                 new_matrix, new_meta = mu.move_atoms_fast(matrix.copy(), new_moves)
 
                 assert np.array_equal(new_matrix, ref_matrix)
                 assert new_meta == ref_meta
-                assert [m.fail_flag for m in new_moves] == [m.fail_flag for m in ref_moves]
+                assert [m.fail_flag for m in new_moves] == [
+                    m.fail_flag for m in ref_moves
+                ]
+
 
 # class TestMOVE_ATOMS_COMPAT_FAST:
 #     def test_matches_3d_fast_on_2d_projection(self) -> None:
@@ -381,6 +392,7 @@ class TestMOVE_ATOMS:
 
 #         assert np.array_equal(actual_2d, expected_3d[:, :, 0])
 #         assert actual_meta == expected_meta
+
 
 class TestAllocEventMask:
     def test_alloc_event_mask_shape_and_dtype(self) -> None:
@@ -444,7 +456,9 @@ class TestGetAODCmdsFromMoveList:
 
 
 class TestMoveAtoms:
-    def test_unsigned_input_is_recast_back_and_internal_is_signed(self, monkeypatch) -> None:
+    def test_unsigned_input_is_recast_back_and_internal_is_signed(
+        self, monkeypatch
+    ) -> None:
         init = np.zeros((2, 2, 1), dtype=np.uint8)
         init[0, 0] = 1
         moves = [Move(0, 0, 0, 1)]
@@ -452,11 +466,19 @@ class TestMoveAtoms:
         seen_signed = {"ok": False}
         real_apply = mu._apply_moves
 
-        def _wrapped_apply(init_matrix, matrix_copy, move_set, duplicate_move_inds, look_for_flag=False):
+        def _wrapped_apply(
+            init_matrix, matrix_copy, move_set, duplicate_move_inds, look_for_flag=False
+        ):
             # This is the key assertion: internal working copy must be signed.
             assert np.issubdtype(matrix_copy.dtype, np.signedinteger)
             seen_signed["ok"] = True
-            return real_apply(init_matrix, matrix_copy, move_set, duplicate_move_inds, look_for_flag=look_for_flag)
+            return real_apply(
+                init_matrix,
+                matrix_copy,
+                move_set,
+                duplicate_move_inds,
+                look_for_flag=look_for_flag,
+            )
 
         monkeypatch.setattr(mu, "_apply_moves", _wrapped_apply)
 
@@ -493,7 +515,7 @@ class TestGetDuplicateValsFromList:
             midpoints.append((move.midx, move.midy))
         d = mu._get_duplicate_vals_from_list(midpoints)
         assert d == [(0.5, 0.0)]
-    
+
     def test_noop(self) -> None:
         moves = []
         midpoints = []
@@ -501,7 +523,7 @@ class TestGetDuplicateValsFromList:
             midpoints.append((move.midx, move.midy))
         d = mu._get_duplicate_vals_from_list(midpoints)
         assert d == []
-    
+
     def test_no_duplicates(self) -> None:
         moves = [Move(0, 1, 0, 0), Move(1, 1, 1, 2)]
         midpoints = []
@@ -513,11 +535,11 @@ class TestGetDuplicateValsFromList:
 
 class TestFindAndResolveCrossedMoves:
     def test_marks_all_but_first_as_crossed_static(self) -> None:
-        moves = [Move(1,0,0,0), Move(0, 0, 1, 0)]
+        moves = [Move(1, 0, 0, 0), Move(0, 0, 1, 0)]
         matrix = np.zeros((2, 2), dtype=np.uint8)
-        matrix[0,0] = np.uint8(1)
+        matrix[0, 0] = np.uint8(1)
         mat_out, dup = mu._find_and_resolve_crossed_moves(moves, matrix)
-        assert dup == [0,1]
+        assert dup == [0, 1]
         assert np.array_equal(np.zeros((2, 2), dtype=np.uint8), mat_out)
 
         assert int(moves[0].fail_flag) == 3
@@ -526,8 +548,7 @@ class TestFindAndResolveCrossedMoves:
 
 class TestApplyMoves:
     def test_legal_move(self) -> None:
-        init = np.array([[1, 0],
-                         [0, 0]], dtype=float)
+        init = np.array([[1, 0], [0, 0]], dtype=float)
         out = copy.deepcopy(init)
         m = Move(0, 0, 0, 1)
         m.failure_flag = 0
@@ -537,11 +558,8 @@ class TestApplyMoves:
         assert failed == []
 
     def test_no_atom_to_move(self) -> None:
-        init = np.array([[0, 0],
-                         [0, 0]], dtype=float)
+        init = np.array([[0, 0], [0, 0]], dtype=float)
         out = copy.deepcopy(init)
         m = Move(0, 0, 0, 1)
         result_out, failed, fl = mu._apply_moves(init, out, [m])
         assert np.array_equal(result_out, np.zeros((2, 2)))
-
-

@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-import copy
 
 from atommovr.utils.core import (
     Configurations,
@@ -24,10 +23,10 @@ from atommovr.utils.core import (
     generate_middle_fifty,
 )
 
-
 ###########################
 # Test Enum Classes       #
 ###########################
+
 
 class TestConfigurations:
     """Tests for the Configurations enum class."""
@@ -63,10 +62,16 @@ class TestConfigurations:
 
     def test_configuration_plot_labels(self):
         """Test that CONFIGURATION_PLOT_LABELS has proper mappings."""
-        assert CONFIGURATION_PLOT_LABELS[Configurations.ZEBRA_HORIZONTAL] == 'Horizontal zebra stripes'
-        assert CONFIGURATION_PLOT_LABELS[Configurations.CHECKERBOARD] == 'Checkerboard'
-        assert CONFIGURATION_PLOT_LABELS[Configurations.MIDDLE_FILL] == 'Middle fill rectangle'
-        assert CONFIGURATION_PLOT_LABELS[Configurations.RANDOM] == 'Random'
+        assert (
+            CONFIGURATION_PLOT_LABELS[Configurations.ZEBRA_HORIZONTAL]
+            == "Horizontal zebra stripes"
+        )
+        assert CONFIGURATION_PLOT_LABELS[Configurations.CHECKERBOARD] == "Checkerboard"
+        assert (
+            CONFIGURATION_PLOT_LABELS[Configurations.MIDDLE_FILL]
+            == "Middle fill rectangle"
+        )
+        assert CONFIGURATION_PLOT_LABELS[Configurations.RANDOM] == "Random"
 
 
 class TestArrayGeometry:
@@ -94,6 +99,7 @@ class TestArrayGeometry:
 # Test PhysicalParams     #
 ###########################
 
+
 class TestPhysicalParams:
     """Tests for the PhysicalParams class."""
 
@@ -108,10 +114,7 @@ class TestPhysicalParams:
     def test_custom_initialization(self):
         """Test custom parameter values."""
         params = PhysicalParams(
-            AOD_speed=0.2,
-            spacing=1e-5,
-            loading_prob=0.8,
-            target_occup_prob=0.7
+            AOD_speed=0.2, spacing=1e-5, loading_prob=0.8, target_occup_prob=0.7
         )
         assert params.AOD_speed == 0.2
         assert params.spacing == 1e-5
@@ -122,7 +125,7 @@ class TestPhysicalParams:
         """Test boundary values (0 and 1) for loading_prob."""
         params_zero = PhysicalParams(loading_prob=0)
         assert params_zero.loading_prob == 0
-        
+
         params_one = PhysicalParams(loading_prob=1)
         assert params_one.loading_prob == 1
 
@@ -130,7 +133,7 @@ class TestPhysicalParams:
         """Test boundary values (0 and 1) for target_occup_prob."""
         params_zero = PhysicalParams(target_occup_prob=0)
         assert params_zero.target_occup_prob == 0
-        
+
         params_one = PhysicalParams(target_occup_prob=1)
         assert params_one.target_occup_prob == 1
 
@@ -158,6 +161,7 @@ class TestPhysicalParams:
 ###########################
 # Test Random Generation  #
 ###########################
+
 
 class TestRandomLoading:
     """Tests for random_loading function."""
@@ -298,6 +302,7 @@ class TestGenerateRandomInitTargetConfigs:
 # Test Atom Counting      #
 ###########################
 
+
 class TestCountAtomsInColumns:
     """Tests for count_atoms_in_columns function."""
 
@@ -371,9 +376,10 @@ class TestCountAtomsInRow:
 # Test Atom Locating      #
 ###########################
 
+
 class TestLeftRightAtomInRow:
     """Tests for left_right_atom_in_row function.
-    
+
     Note: direction=1 finds rightmost atom (reverse scan),
           direction=-1 finds leftmost atom (forward scan).
     """
@@ -419,7 +425,7 @@ class TestLeftRightAtomInRow:
 
 class TestTopBotAtomInCol:
     """Tests for top_bot_atom_in_col function.
-    
+
     Note: direction=1 finds bottommost atom (reverse scan),
           direction=-1 finds topmost atom (forward scan).
     """
@@ -480,6 +486,7 @@ class TestFindLowestAtomInCol:
 # Test Movement           #
 ###########################
 
+
 class TestGetMoveDistance:
     """Tests for get_move_distance function."""
 
@@ -528,6 +535,7 @@ class TestGetMoveDistance:
 ###########################
 # Test Atom Loss          #
 ###########################
+
 
 class TestAtomLoss:
     """Tests for atom_loss function."""
@@ -630,6 +638,7 @@ class TestAtomLossDual:
 ###########################
 # Test Utility Functions  #
 ###########################
+
 
 class TestCalculateFillingFraction:
     """Tests for calculate_filling_fraction function."""

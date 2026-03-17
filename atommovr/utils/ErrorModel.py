@@ -2,9 +2,11 @@
 
 import numpy as np
 
-from atommovr.utils.Move import Move
-from atommovr.utils.failure_policy import FailureBit, FailureEvent
-from atommovr.utils.error_utils import apply_bernoulli_event_inplace, set_event_bit_inplace
+from atommovr.utils.failure_policy import FailureBit
+from atommovr.utils.error_utils import (
+    apply_bernoulli_event_inplace,
+    set_event_bit_inplace,
+)
 
 
 class ErrorModel:
@@ -82,36 +84,41 @@ class ErrorModel:
     custom logic.
     - If you override `__init__`, call `super().__init__(...)`.
     """
-    def __init__(self,
-                 putdown_time: float = 0,
-                 pickup_time: float = 0,
-                 accel_time: float = 0,
-                 decel_time: float = 0,
-                 pickup_fail_rate: float = 0,
-                 putdown_fail_rate: float = 0,
-                 accel_fail_rate: float = 0,
-                 decel_fail_rate: float = 0,
-                 lifetime: float = np.inf,
-                 seed: int | None = None):
+
+    def __init__(
+        self,
+        putdown_time: float = 0,
+        pickup_time: float = 0,
+        accel_time: float = 0,
+        decel_time: float = 0,
+        pickup_fail_rate: float = 0,
+        putdown_fail_rate: float = 0,
+        accel_fail_rate: float = 0,
+        decel_fail_rate: float = 0,
+        lifetime: float = np.inf,
+        seed: int | None = None,
+    ):
         self.name = "Generic ErrorModel object"
         self.rng = np.random.default_rng(seed)
 
-        self.putdown_time = putdown_time # s
-        self.pickup_time = pickup_time # s
-        self.accel_time = accel_time # s
-        self.decel_time = decel_time # s
+        self.putdown_time = putdown_time  # s
+        self.pickup_time = pickup_time  # s
+        self.accel_time = accel_time  # s
+        self.decel_time = decel_time  # s
 
         self.pickup_fail_rate = pickup_fail_rate
         self.putdown_fail_rate = putdown_fail_rate
         self.accel_fail_rate = accel_fail_rate
         self.decel_fail_rate = decel_fail_rate
 
-        self.lifetime = lifetime # s
+        self.lifetime = lifetime  # s
 
     def __repr__(self) -> str:
         return self.name
-    
-    def apply_pickup_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+
+    def apply_pickup_errors_mask(
+        self, event_mask: np.ndarray, eligible: np.ndarray
+    ) -> None:
         """
         Apply pickup failures to eligible moves by setting FailureBit.PICKUP_FAIL.
         Updates `event_mask` in-place.
@@ -124,7 +131,9 @@ class ErrorModel:
             rng=self.rng,
         )
 
-    def apply_putdown_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+    def apply_putdown_errors_mask(
+        self, event_mask: np.ndarray, eligible: np.ndarray
+    ) -> None:
         """
         Apply putdown failures to eligible moves by setting FailureBit.PUTDOWN_FAIL.
         Updates `event_mask` in-place.
@@ -137,7 +146,9 @@ class ErrorModel:
             rng=self.rng,
         )
 
-    def apply_accel_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+    def apply_accel_errors_mask(
+        self, event_mask: np.ndarray, eligible: np.ndarray
+    ) -> None:
         """
         Apply acceleration failures to eligible moves by setting FailureBit.ACCEL_FAIL.
         Updates `event_mask` in-place.
@@ -150,7 +161,9 @@ class ErrorModel:
             rng=self.rng,
         )
 
-    def apply_decel_errors_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+    def apply_decel_errors_mask(
+        self, event_mask: np.ndarray, eligible: np.ndarray
+    ) -> None:
         """
         Apply deceleration failures to eligible moves by setting FailureBit.DECEL_FAIL.
         Updates `event_mask` in-place.
@@ -162,8 +175,10 @@ class ErrorModel:
             bit=FailureBit.DECEL_FAIL,
             rng=self.rng,
         )
-    
-    def apply_inevitable_collision_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+
+    def apply_inevitable_collision_mask(
+        self, event_mask: np.ndarray, eligible: np.ndarray
+    ) -> None:
         """
         Deterministically tag victims of inevitable collisions (always lost in policy).
 
@@ -175,7 +190,9 @@ class ErrorModel:
             bit=FailureBit.COLLISION_INEVITABLE,
         )
 
-    def apply_avoidable_collision_mask(self, event_mask: np.ndarray, eligible: np.ndarray) -> None:
+    def apply_avoidable_collision_mask(
+        self, event_mask: np.ndarray, eligible: np.ndarray
+    ) -> None:
         """
         Deterministically tag victims of avoidable collisions.
 
@@ -188,11 +205,13 @@ class ErrorModel:
             bit=FailureBit.COLLISION_AVOIDABLE,
         )
 
-    def get_atom_loss(self, state: np.ndarray, evolution_time: float, n_species: int = 1) -> tuple[np.ndarray, bool]:
-        """ 
-        Simulates a general loss process and returns the modified state of 
+    def get_atom_loss(
+        self, state: np.ndarray, evolution_time: float, n_species: int = 1
+    ) -> tuple[np.ndarray, bool]:
+        """
+        Simulates a general loss process and returns the modified state of
         the array.
-        
+
         :param state: the current state of the array
         :type state: np.ndarray
         :param evolution_time: the time it took to execute the last time of moves, or the time since the error syndrome was last simulated.

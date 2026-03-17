@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import Iterable
 
 import numpy as np
 import pytest
@@ -10,7 +9,12 @@ import atommovr.utils as movr
 from atommovr.utils.AtomArray import AtomArray
 
 from atommovr.algorithms.source import bc_new
-from atommovr.tests.support.helpers import _assert_binary_occupancy_3d, _moves_to_tuples, _n_atoms, _replay_and_check_noiseless_conservation
+from atommovr.tests.support.helpers import (
+    _moves_to_tuples,
+    _n_atoms,
+    _replay_and_check_noiseless_conservation,
+)
+
 
 def _ref_get_all_moves_btwn_rows(
     init_config: np.ndarray,
@@ -47,7 +51,9 @@ def _ref_get_all_moves_btwn_rows(
     return moves, len(moves)
 
 
-def _ref_prebalance_above(current_state,start_row, end_row, n_targets, round_moves, direction):
+def _ref_prebalance_above(
+    current_state, start_row, end_row, n_targets, round_moves, direction
+):
     n_movable_above = 0
     n_movable = 0
     row_offset = 0
@@ -57,31 +63,72 @@ def _ref_prebalance_above(current_state,start_row, end_row, n_targets, round_mov
         boundary_row = end_row
     while n_movable_above == 0:
         if bc_new._int_sum(current_state) < n_targets:
-            raise Exception('Insufficient atoms.')
+            raise Exception("Insufficient atoms.")
         try:
             # move_set = []
-            for off in range(row_offset+1)[::-1]: # TODO: figure out if this should be the -1 thing or if it makes more sense to do something else
-                above_moves, n_movable = bc_new.get_all_moves_btwn_rows(current_state,boundary_row+(1+off)*direction, boundary_row+off*direction)
-                if n_movable != 0 and np.sum(current_state[start_row: end_row + 1, :]) < n_targets: # check if there are atoms that can be moved, and if so move them
-                    current_state, _ = movr.move_atoms(current_state,above_moves)
-                    round_moves.append(above_moves) # NEW
-                else: # if no atoms can be moved, figure out why
-                    n_in_from_row = bc_new._int_sum(current_state[boundary_row+(1+off)*direction,:])
-                    if n_in_from_row > 0: # if there are no spots for new atoms to come, make space by pushing atoms farther inside
+            for off in range(row_offset + 1)[
+                ::-1
+            ]:  # TODO: figure out if this should be the -1 thing or if it makes more sense to do something else
+                above_moves, n_movable = bc_new.get_all_moves_btwn_rows(
+                    current_state,
+                    boundary_row + (1 + off) * direction,
+                    boundary_row + off * direction,
+                )
+                if (
+                    n_movable != 0
+                    and np.sum(current_state[start_row : end_row + 1, :]) < n_targets
+                ):  # check if there are atoms that can be moved, and if so move them
+                    current_state, _ = movr.move_atoms(current_state, above_moves)
+                    round_moves.append(above_moves)  # NEW
+                else:  # if no atoms can be moved, figure out why
+                    n_in_from_row = bc_new._int_sum(
+                        current_state[boundary_row + (1 + off) * direction, :]
+                    )
+                    if (
+                        n_in_from_row > 0
+                    ):  # if there are no spots for new atoms to come, make space by pushing atoms farther inside
                         rows_in = 0
-                        stuck_row = boundary_row+off*direction
+                        stuck_row = boundary_row + off * direction
                         while n_movable == 0:
                             # stuck_row = boundary_row+off*direction
-                            for r_in in range(-1,rows_in)[::-1]:
+                            for r_in in range(-1, rows_in)[::-1]:
 
-                                space_moves, n_sp_movable = bc_new.get_all_moves_btwn_rows(current_state,stuck_row-r_in*direction, stuck_row-(1+r_in)*direction)
-                                if n_sp_movable != 0 and np.sum(current_state[start_row: end_row + 1, :]) < n_targets: # check if there are atoms that can be moved, and if so move them
-                                    current_state, _ = movr.move_atoms(current_state,space_moves)
+                                space_moves, n_sp_movable = (
+                                    bc_new.get_all_moves_btwn_rows(
+                                        current_state,
+                                        stuck_row - r_in * direction,
+                                        stuck_row - (1 + r_in) * direction,
+                                    )
+                                )
+                                if (
+                                    n_sp_movable != 0
+                                    and np.sum(
+                                        current_state[start_row : end_row + 1, :]
+                                    )
+                                    < n_targets
+                                ):  # check if there are atoms that can be moved, and if so move them
+                                    current_state, _ = movr.move_atoms(
+                                        current_state, space_moves
+                                    )
                                     round_moves.append(space_moves)
-                                    above_moves, n_movable = bc_new.get_all_moves_btwn_rows(current_state,stuck_row, stuck_row-direction)
+                                    above_moves, n_movable = (
+                                        bc_new.get_all_moves_btwn_rows(
+                                            current_state,
+                                            stuck_row,
+                                            stuck_row - direction,
+                                        )
+                                    )
                                     # NEW
-                                    if np.sum(current_state[start_row: end_row + 1, :]) < n_targets and n_movable != 0:
-                                        current_state, _ = movr.move_atoms(current_state,above_moves)
+                                    if (
+                                        np.sum(
+                                            current_state[start_row : end_row + 1, :]
+                                        )
+                                        < n_targets
+                                        and n_movable != 0
+                                    ):
+                                        current_state, _ = movr.move_atoms(
+                                            current_state, above_moves
+                                        )
                                         round_moves.append(above_moves)
                             rows_in += 1
             if n_movable > 0:
@@ -93,65 +140,73 @@ def _ref_prebalance_above(current_state,start_row, end_row, n_targets, round_mov
     return current_state, round_moves
 
 
-def _ref_move_across_rows(current_state: np.ndarray, n_to_move: int, i: int, j: int, m: int, dir = -1):
+def _ref_move_across_rows(
+    current_state: np.ndarray, n_to_move: int, i: int, j: int, m: int, dir=-1
+):
     """
     Moves `n_to_move` atoms from row m to m-1 if dir = -1 or vice versa. If there aren't
     enough atoms, can access additional rows (subject to the constraint
     i < row and row < j).
     """
 
-    round_moves = [] # master list of all moves taken in this procedure
+    round_moves = []  # master list of all moves taken in this procedure
     n_left_to_move = n_to_move
-    
+
     ## specifying rows to move across and ROIs
     if dir == 1:
-        start_row = m-1
+        start_row = m - 1
         end_row = m
         low_ind_roi = m
-        high_ind_roi = j+1
+        high_ind_roi = j + 1
         low_ind_source = i
         high_ind_source = m
     elif dir == -1:
         start_row = m
-        end_row = m-1
+        end_row = m - 1
         low_ind_roi = i
         high_ind_roi = m
         low_ind_source = m
-        high_ind_source = j+1
+        high_ind_source = j + 1
     else:
         raise ValueError('Parameter "dir" must be -1 or 1.')
-    
+
     ## sanity check to make sure we have sufficient atoms
     n_atoms_in_source = bc_new._int_sum(current_state[low_ind_source:high_ind_source])
     n_atoms_in_roi = bc_new._int_sum(current_state[low_ind_roi:high_ind_roi])
     if n_atoms_in_source < n_to_move:
-        raise Exception(f'Insufficient atoms. Only {n_atoms_in_source} in the source region (we need {n_to_move} more; only {n_atoms_in_roi} currently).')
-    
+        raise Exception(
+            f"Insufficient atoms. Only {n_atoms_in_source} in the source region (we need {n_to_move} more; only {n_atoms_in_roi} currently)."
+        )
+
     ## continue looping until we move sufficient atoms.
     try_count = 0
     while n_left_to_move != 0 and try_count < 1000:
         try_count += 1
         n_movable_dir = 0
         row_offset = 0
-        last_moves = [0] # placeholder
+        last_moves = [0]  # placeholder
         ## we loop until we are able to move atoms
         try_count2 = 0
         while n_movable_dir == 0 and try_count2 < 1000:
             try_count2 += 1
             try:
                 move_set = []
-                for off in range(row_offset+1)[::-1]:
+                for off in range(row_offset + 1)[::-1]:
                     across_move = 1
-                    from_row = start_row+(off*dir)
-                    to_row = end_row+(off*dir)
-                    if i>from_row or i>to_row or j<from_row or j<to_row:
+                    from_row = start_row + (off * dir)
+                    to_row = end_row + (off * dir)
+                    if i > from_row or i > to_row or j < from_row or j < to_row:
                         raise IndexError
                     # above_moves, n_movable = get_all_moves_btwn_rows(current_state,from_row, to_row)
-                    from_cols, to_cols, n_movable = bc_new._get_all_moves_btwn_rows_cols_checked(
-                        current_state, from_row, to_row
+                    from_cols, to_cols, n_movable = (
+                        bc_new._get_all_moves_btwn_rows_cols_checked(
+                            current_state, from_row, to_row
+                        )
                     )
 
-                    if n_movable != 0 and n_left_to_move != 0: # check if there are atoms that can be moved, and if so move them
+                    if (
+                        n_movable != 0 and n_left_to_move != 0
+                    ):  # check if there are atoms that can be moved, and if so move them
                         above_moves = [
                             movr.Move(from_row, int(fc), to_row, int(tc))
                             for fc, tc in zip(from_cols, to_cols)
@@ -160,32 +215,49 @@ def _ref_move_across_rows(current_state: np.ndarray, n_to_move: int, i: int, j: 
                             moves_to_run = above_moves[:n_left_to_move]
                         else:
                             moves_to_run = above_moves
-                        current_state, _ = movr.move_atoms(current_state,moves_to_run)
+                        current_state, _ = movr.move_atoms(current_state, moves_to_run)
                         n_left_to_move -= len(moves_to_run)
-                        move_set.append(moves_to_run) 
-                    else: # if atoms CANNOT be moved
-                        n_in_from_row = bc_new._int_sum(current_state[from_row,:])
+                        move_set.append(moves_to_run)
+                    else:  # if atoms CANNOT be moved
+                        n_in_from_row = bc_new._int_sum(current_state[from_row, :])
                         ## Scenario 1: there are atoms to move, but no place to put them in the new row, so we have to clear room in ROI
                         if n_in_from_row > 0 and len(last_moves) > 0:
                             clear_space_in_roi_moves = []
                             rows_into_ROI = 0
                             while n_movable == 0:
-                                stuck_row = start_row+dir*off
-                                for r_in in range(rows_into_ROI+1)[::-1]: # NKH change 05-09
-                                    from_row = stuck_row+(1+r_in)*dir
-                                    to_row = stuck_row+(2+r_in)*dir
-                                    if i>from_row or i>to_row or j<from_row or j<to_row:
+                                stuck_row = start_row + dir * off
+                                for r_in in range(rows_into_ROI + 1)[
+                                    ::-1
+                                ]:  # NKH change 05-09
+                                    from_row = stuck_row + (1 + r_in) * dir
+                                    to_row = stuck_row + (2 + r_in) * dir
+                                    if (
+                                        i > from_row
+                                        or i > to_row
+                                        or j < from_row
+                                        or j < to_row
+                                    ):
                                         raise IndexError
                                     # space_moves, n_sp_movable = get_all_moves_btwn_rows(current_state,from_row, to_row)
-                                    from_sp_cols, to_sp_cols, n_sp_movable = bc_new._get_all_moves_btwn_rows_cols_checked(
-                                        current_state, from_row, to_row
+                                    from_sp_cols, to_sp_cols, n_sp_movable = (
+                                        bc_new._get_all_moves_btwn_rows_cols_checked(
+                                            current_state, from_row, to_row
+                                        )
                                     )
-                                    if n_sp_movable != 0 and n_left_to_move != 0: # check if there are atoms that can be moved, and if so move them
+                                    if (
+                                        n_sp_movable != 0 and n_left_to_move != 0
+                                    ):  # check if there are atoms that can be moved, and if so move them
                                         space_moves = [
-                                            movr.Move(from_row, int(fcs), to_row, int(tcs))
-                                            for fcs, tcs in zip(from_sp_cols, to_sp_cols)
+                                            movr.Move(
+                                                from_row, int(fcs), to_row, int(tcs)
+                                            )
+                                            for fcs, tcs in zip(
+                                                from_sp_cols, to_sp_cols
+                                            )
                                         ]
-                                        current_state, _ = movr.move_atoms(current_state,space_moves)
+                                        current_state, _ = movr.move_atoms(
+                                            current_state, space_moves
+                                        )
                                         clear_space_in_roi_moves.append(space_moves)
                                         n_movable = n_sp_movable
                                 rows_into_ROI += 1
@@ -196,23 +268,40 @@ def _ref_move_across_rows(current_state: np.ndarray, n_to_move: int, i: int, j: 
                             pull_atoms_from_reservoir_moves = []
                             rows_into_source = 0
                             while n_movable == 0:
-                                stuck_row = start_row+dir*off
-                                for r_in in range(-1,rows_into_source)[::-1]:
-                                    from_row = stuck_row-(2+r_in)*dir
-                                    to_row = stuck_row-(1+r_in)*dir
-                                    if i>from_row or i>to_row or j<from_row or j<to_row:
+                                stuck_row = start_row + dir * off
+                                for r_in in range(-1, rows_into_source)[::-1]:
+                                    from_row = stuck_row - (2 + r_in) * dir
+                                    to_row = stuck_row - (1 + r_in) * dir
+                                    if (
+                                        i > from_row
+                                        or i > to_row
+                                        or j < from_row
+                                        or j < to_row
+                                    ):
                                         raise IndexError
                                     # space_moves, n_sp_movable = get_all_moves_btwn_rows(current_state,from_row, to_row)
-                                    from_sp_cols, to_sp_cols, n_sp_movable = bc_new._get_all_moves_btwn_rows_cols_checked(
-                                        current_state, from_row, to_row
+                                    from_sp_cols, to_sp_cols, n_sp_movable = (
+                                        bc_new._get_all_moves_btwn_rows_cols_checked(
+                                            current_state, from_row, to_row
+                                        )
                                     )
-                                    if n_sp_movable != 0 and n_left_to_move != 0: # check if there are atoms that can be moved, and if so move them
+                                    if (
+                                        n_sp_movable != 0 and n_left_to_move != 0
+                                    ):  # check if there are atoms that can be moved, and if so move them
                                         space_moves = [
-                                            movr.Move(from_row, int(fcs), to_row, int(tcs))
-                                            for fcs, tcs in zip(from_sp_cols, to_sp_cols)
+                                            movr.Move(
+                                                from_row, int(fcs), to_row, int(tcs)
+                                            )
+                                            for fcs, tcs in zip(
+                                                from_sp_cols, to_sp_cols
+                                            )
                                         ]
-                                        current_state, _ = movr.move_atoms(current_state,space_moves)
-                                        pull_atoms_from_reservoir_moves.append(space_moves)
+                                        current_state, _ = movr.move_atoms(
+                                            current_state, space_moves
+                                        )
+                                        pull_atoms_from_reservoir_moves.append(
+                                            space_moves
+                                        )
                                         n_movable = n_sp_movable
                                 rows_into_source += 1
                             if len(pull_atoms_from_reservoir_moves) > 0:
@@ -221,7 +310,7 @@ def _ref_move_across_rows(current_state: np.ndarray, n_to_move: int, i: int, j: 
                 if len(move_set) > 0:
                     round_moves.extend(move_set)
                 last_moves = move_set
-        
+
                 if n_movable > 0:
                     n_movable_dir = n_movable
                     break
@@ -229,7 +318,7 @@ def _ref_move_across_rows(current_state: np.ndarray, n_to_move: int, i: int, j: 
             except IndexError:
                 row_offset += 1
                 break
-        
+
     return current_state, round_moves
 
 
@@ -297,8 +386,12 @@ class TestGetAllMovesBtwnRows:
                 new_moves, new_n = bc_new.get_all_moves_btwn_rows(init, 0, 1)
 
                 assert new_n == ref_n
-                ref_t = [(m.from_row, m.from_col, m.to_row, m.to_col) for m in ref_moves]
-                new_t = [(m.from_row, m.from_col, m.to_row, m.to_col) for m in new_moves]
+                ref_t = [
+                    (m.from_row, m.from_col, m.to_row, m.to_col) for m in ref_moves
+                ]
+                new_t = [
+                    (m.from_row, m.from_col, m.to_row, m.to_col) for m in new_moves
+                ]
                 assert new_t == ref_t
 
     def test_fast_path_empty_source(self) -> None:
@@ -421,8 +514,8 @@ class TestMiddleFillAlgo1D:
 
         _replay_and_check_noiseless_conservation(aa, move_rounds)
         # check that the target is prepared without killing the extra atom
-        assert _n_atoms(aa.matrix) == 4 
-        assert np.array_equal(aa.matrix*aa.target, aa.target)
+        assert _n_atoms(aa.matrix) == 4
+        assert np.array_equal(aa.matrix * aa.target, aa.target)
 
 
 class TestBalanceRows:
@@ -455,6 +548,7 @@ class TestBalanceRows:
         moves = bc_new.balance_rows(init, targ, 0, 3)
         assert moves == []
 
+
 class TestPrebalanceAboveRefactor:
     def test_matches_reference_random_instances(self):
         rng = np.random.default_rng(0)
@@ -463,7 +557,9 @@ class TestPrebalanceAboveRefactor:
             n_rows, n_cols = 10, 12
 
             # 3D occupancy (rows, cols, 1), uint8
-            state3 = (rng.random((n_rows, n_cols, 1)) < 0.15).astype(np.uint8, copy=False)
+            state3 = (rng.random((n_rows, n_cols, 1)) < 0.15).astype(
+                np.uint8, copy=False
+            )
 
             # Choose a small target band
             start_row = int(rng.integers(2, 5))
@@ -498,6 +594,7 @@ class TestPrebalanceAboveRefactor:
 
             assert np.array_equal(new_state, ref_state)
             assert _moves_to_tuples(new_rounds) == _moves_to_tuples(ref_rounds)
+
 
 class TestPrebalance:
     def test_returns_false_when_global_insufficient(self) -> None:
@@ -575,7 +672,7 @@ class TestCompact:
         aa2.target = aa.target.copy()
 
         _replay_and_check_noiseless_conservation(aa2, move_rounds)
-    
+
     def test_compact_emits_no_duplicate_destinations_per_round(self) -> None:
         """
         Regression test: each parallel round emitted by `compact` must have unique
@@ -609,12 +706,13 @@ class TestCompact:
         for k, round_moves in enumerate(move_rounds):
             srcs = [(m.from_row, m.from_col) for m in round_moves]
             dests = [(m.to_row, m.to_col) for m in round_moves]
-            assert len(srcs) == len(set(srcs)), (
-                f"Round {k} has duplicate sources: {srcs}"
-            )
-            assert len(dests) == len(set(dests)), (
-                f"Round {k} has duplicate destinations: {dests}"
-            )
+            assert len(srcs) == len(
+                set(srcs)
+            ), f"Round {k} has duplicate sources: {srcs}"
+            assert len(dests) == len(
+                set(dests)
+            ), f"Round {k} has duplicate destinations: {dests}"
+
 
 class TestBCV2:
     def test_bcv2_rejects_dual_species(self) -> None:

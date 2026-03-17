@@ -14,7 +14,6 @@ from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 from numpy.typing import NDArray
 
-
 # -----------------------------------------------------------------------------
 # Transition tables (kept as-is, but typed + dtyped explicitly)
 # -----------------------------------------------------------------------------
@@ -35,8 +34,18 @@ transition_table_decel_putdown: NDArray[np.bool_] = np.array(
         # next: 0      1      2      3
         [[0, 0], [0, 0], [0, 0], [0, 0]],  # curr=0 (off)
         [[0, 1], [0, 0], [0, 0], [0, 0]],  # curr=1 (hold -> off implies putdown)
-        [[1, 1], [1, 0], [0, 0], [1, 0]],  # curr=2 (moving -> off implies decel+putdown)
-        [[1, 1], [1, 0], [1, 0], [0, 0]],  # curr=3 (moving -> off implies decel+putdown)
+        [
+            [1, 1],
+            [1, 0],
+            [0, 0],
+            [1, 0],
+        ],  # curr=2 (moving -> off implies decel+putdown)
+        [
+            [1, 1],
+            [1, 0],
+            [1, 0],
+            [0, 0],
+        ],  # curr=3 (moving -> off implies decel+putdown)
     ],
     dtype=np.bool_,
 )
@@ -53,6 +62,7 @@ single_tone_transition_table: NDArray[np.bool_] = np.array(
 # Tiny internal helpers
 # -----------------------------------------------------------------------------
 # NOTE: abbreviated docstrings (per your rule) for trivial helpers.
+
 
 def _as_cmd_array(cmds: Sequence[int] | NDArray[np.integer]) -> NDArray[np.int8]:
     """
@@ -74,6 +84,7 @@ def _is_moving_cmd(cmds: NDArray[np.int8]) -> NDArray[np.bool_]:
 # -----------------------------------------------------------------------------
 # Core timing inference (vectorized, no Python index lists)
 # -----------------------------------------------------------------------------
+
 
 def _get_pickup_accel_flags(
     prev_cmds: NDArray[np.int8],
@@ -116,7 +127,9 @@ def _get_pickup_accel_flags(
         n: int = int(curr_cmds.size)
 
     # Forward map: active prev tones -> destination indices in curr index-space.
-    prev_inds: NDArray[np.intp] = np.flatnonzero(prev_cmds) #np.nonzero(prev_cmds != np.int8(0))[0]
+    prev_inds: NDArray[np.intp] = np.flatnonzero(
+        prev_cmds
+    )  # np.nonzero(prev_cmds != np.int8(0))[0]
     if prev_inds.size == 0:
         # No predecessor tones: treat currents as "prev=0 -> curr" transitions.
         remaining_mask: NDArray[np.bool_] = curr_cmds != np.int8(0)
@@ -150,7 +163,9 @@ def _get_pickup_accel_flags(
         valid_dest_inds: NDArray[np.intp] = dest_inds[in_bounds]
         valid_curr_vals: NDArray[np.int8] = curr_cmds[valid_dest_inds]
 
-        flags: NDArray[np.bool_] = transition_table_pickup_accel[valid_prev_vals, valid_curr_vals]
+        flags: NDArray[np.bool_] = transition_table_pickup_accel[
+            valid_prev_vals, valid_curr_vals
+        ]
         pickup_flags: NDArray[np.bool_] = flags[:, 0]
         accel_flags: NDArray[np.bool_] = flags[:, 1]
 
@@ -162,7 +177,7 @@ def _get_pickup_accel_flags(
 
     # Step 2: currents with no predecessor mapping are treated as (prev=0 -> curr).
     remaining_mask = (curr_cmds != np.int8(0)) & (~checked)
-    remaining_inds = np.flatnonzero(remaining_mask)#[0]
+    remaining_inds = np.flatnonzero(remaining_mask)  # [0]
     if remaining_inds.size != 0:
         remaining_vals = curr_cmds[remaining_inds]
         st_flags = single_tone_transition_table[0, remaining_vals]
@@ -226,7 +241,7 @@ def _get_decel_putdown_flags(
             f"curr_cmds and next_cmds must have same length, got {n} and {int(next_cmds.size)}."
         )
 
-    curr_inds = np.flatnonzero(curr_cmds) #np.nonzero(curr_cmds != 0)[0]
+    curr_inds = np.flatnonzero(curr_cmds)  # np.nonzero(curr_cmds != 0)[0]
     if curr_inds.size == 0:
         return False, False, np.zeros_like(curr_cmds), np.zeros_like(curr_cmds)
 
@@ -358,14 +373,19 @@ def _find_cross_axis_accel_tones(
     y_has_motion: bool = bool(_is_moving_cmd(curr_y).any())
     x_has_motion: bool = bool(_is_moving_cmd(curr_x).any())
 
-    accel_x: NDArray[np.intp] = new_x_static if y_has_motion else np.zeros(0, dtype=np.intp)
-    accel_y: NDArray[np.intp] = new_y_static if x_has_motion else np.zeros(0, dtype=np.intp)
+    accel_x: NDArray[np.intp] = (
+        new_x_static if y_has_motion else np.zeros(0, dtype=np.intp)
+    )
+    accel_y: NDArray[np.intp] = (
+        new_y_static if x_has_motion else np.zeros(0, dtype=np.intp)
+    )
     return accel_x, accel_y
 
 
 # -----------------------------------------------------------------------------
 # Public-ish mask builders used by AtomArray.move_atoms
 # -----------------------------------------------------------------------------
+
 
 def _detect_pickup_and_accel_masks(
     prev_h: Optional[NDArray[np.int8]],
@@ -378,7 +398,7 @@ def _detect_pickup_and_accel_masks(
 ) -> Tuple[NDArray[np.bool_], NDArray[np.bool_]]:
     """
     Build per-move pickup/accel eligibility masks from tone evolution.
-    TODO: add check that raises an error if moves in current_move_set do not 
+    TODO: add check that raises an error if moves in current_move_set do not
     correspond to current AOD commands (curr_h and curr_v).
 
     Why this exists
@@ -392,25 +412,31 @@ def _detect_pickup_and_accel_masks(
     if n_moves == 0:
         return np.zeros(0, dtype=np.bool_), np.zeros(0, dtype=np.bool_)
     if source_cols is None:
-        source_cols = np.asarray([m.from_col for m in curr_move_set], dtype=np.intp).reshape(-1)
+        source_cols = np.asarray(
+            [m.from_col for m in curr_move_set], dtype=np.intp
+        ).reshape(-1)
     if source_rows is None:
-        source_rows = np.asarray([m.from_row for m in curr_move_set], dtype=np.intp).reshape(-1)
+        source_rows = np.asarray(
+            [m.from_row for m in curr_move_set], dtype=np.intp
+        ).reshape(-1)
     if int(source_cols.size) != n_moves or int(source_rows.size) != n_moves:
-        raise ValueError("source_cols/source_rows must be 1D and aligned with curr_move_set.")
+        raise ValueError(
+            "source_cols/source_rows must be 1D and aligned with curr_move_set."
+        )
 
     # First-round special case: everything is "picked up".
     if prev_h is None or prev_v is None:
         pickup_mask: NDArray[np.bool_] = np.ones(n_moves, dtype=np.bool_)
-        accel_mask: NDArray[np.bool_] = _is_moving_cmd(curr_h[source_cols]) | _is_moving_cmd(
-            curr_v[source_rows]
-        )
+        accel_mask: NDArray[np.bool_] = _is_moving_cmd(
+            curr_h[source_cols]
+        ) | _is_moving_cmd(curr_v[source_rows])
         return pickup_mask, accel_mask
 
-    _h_needs_pickup, _h_needs_accel, h_pickup_inds, h_accel_inds = _get_pickup_accel_flags(
-        prev_h, curr_h
+    _h_needs_pickup, _h_needs_accel, h_pickup_inds, h_accel_inds = (
+        _get_pickup_accel_flags(prev_h, curr_h)
     )
-    _v_needs_pickup, _v_needs_accel, v_pickup_inds, v_accel_inds = _get_pickup_accel_flags(
-        prev_v, curr_v
+    _v_needs_pickup, _v_needs_accel, v_pickup_inds, v_accel_inds = (
+        _get_pickup_accel_flags(prev_v, curr_v)
     )
 
     # Cross-axis accel supplement.
@@ -420,9 +446,9 @@ def _detect_pickup_and_accel_masks(
 
     # Axis-level tone masks (index-space masks).
     h_pickup_tone: NDArray[np.bool_] = np.zeros(curr_h.size, dtype=np.bool_)
-    h_accel_tone: NDArray[np.bool_] =  np.zeros(curr_h.size, dtype=np.bool_)
+    h_accel_tone: NDArray[np.bool_] = np.zeros(curr_h.size, dtype=np.bool_)
     v_pickup_tone: NDArray[np.bool_] = np.zeros(curr_v.size, dtype=np.bool_)
-    v_accel_tone: NDArray[np.bool_] =  np.zeros(curr_v.size, dtype=np.bool_)
+    v_accel_tone: NDArray[np.bool_] = np.zeros(curr_v.size, dtype=np.bool_)
 
     if h_pickup_inds.size:
         h_pickup_tone[h_pickup_inds] = True
@@ -444,6 +470,7 @@ def _detect_pickup_and_accel_masks(
     # accel_mask = np.asarray(accel_mask, dtype=np.bool_).reshape(n_moves)
     return pickup_mask, accel_mask
 
+
 def _detect_decel_and_putdown_masks(
     curr_h: NDArray[np.int8],
     curr_v: NDArray[np.int8],
@@ -455,7 +482,7 @@ def _detect_decel_and_putdown_masks(
 ) -> Tuple[NDArray[np.bool_], NDArray[np.bool_]]:
     """
     Build per-move decel/putdown eligibility masks from tone evolution.
-    TODO: add check that raises an error if moves in current_move_set do not 
+    TODO: add check that raises an error if moves in current_move_set do not
     correspond to current AOD commands (curr_h and curr_v).
 
     Why this exists
@@ -467,22 +494,28 @@ def _detect_decel_and_putdown_masks(
     if n_moves == 0:
         return np.zeros(0, dtype=np.bool_), np.zeros(0, dtype=np.bool_)
     if source_cols is None:
-        source_cols = np.asarray([m.from_col for m in curr_move_set], dtype=np.intp).reshape(-1)
+        source_cols = np.asarray(
+            [m.from_col for m in curr_move_set], dtype=np.intp
+        ).reshape(-1)
     if source_rows is None:
-        source_rows = np.asarray([m.from_row for m in curr_move_set], dtype=np.intp).reshape(-1)
+        source_rows = np.asarray(
+            [m.from_row for m in curr_move_set], dtype=np.intp
+        ).reshape(-1)
     if int(source_cols.size) != n_moves or int(source_rows.size) != n_moves:
-        raise ValueError("source_cols/source_rows must be 1D and aligned with curr_move_set.")
+        raise ValueError(
+            "source_cols/source_rows must be 1D and aligned with curr_move_set."
+        )
 
-    _h_needs_decel, _h_needs_putdown, h_decel_inds, h_putdown_inds = _get_decel_putdown_flags(
-        curr_h, next_h
+    _h_needs_decel, _h_needs_putdown, h_decel_inds, h_putdown_inds = (
+        _get_decel_putdown_flags(curr_h, next_h)
     )
-    _v_needs_decel, _v_needs_putdown, v_decel_inds, v_putdown_inds = _get_decel_putdown_flags(
-        curr_v, next_v
+    _v_needs_decel, _v_needs_putdown, v_decel_inds, v_putdown_inds = (
+        _get_decel_putdown_flags(curr_v, next_v)
     )
 
-    h_decel_tone: NDArray[np.bool_] =   np.zeros(curr_h.size, dtype=np.bool_)
+    h_decel_tone: NDArray[np.bool_] = np.zeros(curr_h.size, dtype=np.bool_)
     h_putdown_tone: NDArray[np.bool_] = np.zeros(curr_h.size, dtype=np.bool_)
-    v_decel_tone: NDArray[np.bool_] =   np.zeros(curr_v.size, dtype=np.bool_)
+    v_decel_tone: NDArray[np.bool_] = np.zeros(curr_v.size, dtype=np.bool_)
     v_putdown_tone: NDArray[np.bool_] = np.zeros(curr_v.size, dtype=np.bool_)
 
     if h_decel_inds.size:
@@ -499,8 +532,6 @@ def _detect_decel_and_putdown_masks(
     # decel_mask = np.asarray(decel_mask, dtype=np.bool_).reshape(n_moves)
     # putdown_mask = np.asarray(putdown_mask, dtype=np.bool_).reshape(n_moves)
     return decel_mask, putdown_mask
-
-    
 
 
 # -----------------------------------------------------------------------------
@@ -543,7 +574,10 @@ def _has_colliding_tones(
     """
     Axis-pair crossed-tone pre-check used to skip expensive crossed-tone bookkeeping.
     """
-    return _has_colliding_tones_axis(np.concatenate([vert, np.zeros(2, dtype=np.int8), horiz], dtype = np.int8))
+    return _has_colliding_tones_axis(
+        np.concatenate([vert, np.zeros(2, dtype=np.int8), horiz], dtype=np.int8)
+    )
+
 
 def _remove_collisions_axis_np(
     arr: NDArray[np.int_],
@@ -575,13 +609,14 @@ def _remove_collisions_axis_np(
 
     return np.where(mask, 0, a)
 
+
 def _classify_fatal_and_nonfatal_colliding_tones(
     arr: NDArray[np.int_],
     return_clean: bool = False,
 ) -> tuple[NDArray[np.int_] | None, NDArray[np.int_], NDArray[np.int_]]:
     """
     Classify a single-axis set of AOD commands into fatal (inevitable) and nonfatal
-    (avoidable) with pickup error colliding-tone masks, and optionally return a 
+    (avoidable) with pickup error colliding-tone masks, and optionally return a
     cleaned copy of the input.
 
     Collision rules
@@ -591,7 +626,7 @@ def _classify_fatal_and_nonfatal_colliding_tones(
         - middle entry is always fatal (inevitable)
         - if x is 0 or 1: both outer entries are nonfatal (avoidable)
         - if x is 2: left outer entry is nonfatal, right outer entry is fatal
-        - if x is 3: left outer entry is fatal, right outer entry is nonfatal 
+        - if x is 3: left outer entry is fatal, right outer entry is nonfatal
 
     Priority 2 (applied only to adjacent pairs not already covered by a
     priority-1 triad):
@@ -665,7 +700,7 @@ def _classify_fatal_and_nonfatal_colliding_tones(
         pair_23: NDArray[np.bool_] = (left == 2) & (right == 3) & pair_valid
         fatal[:-1] |= pair_23
         fatal[1:] |= pair_23
-    
+
     fatal_idx = np.flatnonzero(fatal)
     nonfatal_idx = np.flatnonzero(nonfatal)
 
@@ -676,11 +711,22 @@ def _classify_fatal_and_nonfatal_colliding_tones(
 
     return None, fatal_idx, nonfatal_idx
 
+
 def _find_colliding_tones(
     vert_AOD_cmds: NDArray[np.int_],
-    horiz_AOD_cmds:NDArray[np.int_],
+    horiz_AOD_cmds: NDArray[np.int_],
     return_clean: bool = False,
-) -> Union[Tuple[NDArray[np.int_], NDArray[np.int_], NDArray[np.int_], NDArray[np.int_], NDArray[np.int_], NDArray[np.int_]], Tuple[NDArray[np.int_], NDArray[np.int_], NDArray[np.int_], NDArray[np.int_]]]:
+) -> Union[
+    Tuple[
+        NDArray[np.int_],
+        NDArray[np.int_],
+        NDArray[np.int_],
+        NDArray[np.int_],
+        NDArray[np.int_],
+        NDArray[np.int_],
+    ],
+    Tuple[NDArray[np.int_], NDArray[np.int_], NDArray[np.int_], NDArray[np.int_]],
+]:
     """
     Report collision indices (fatal vs nonfatal) and optionally return a copy with noncolliding tones replaced with zeros.
 
@@ -689,8 +735,16 @@ def _find_colliding_tones(
     """
 
     if return_clean:
-        v_clean, v_collision_inevitable, v_collision_avoidable = _classify_fatal_and_nonfatal_colliding_tones(vert_AOD_cmds, return_clean=return_clean)
-        h_clean, h_collision_inevitable, h_collision_avoidable = _classify_fatal_and_nonfatal_colliding_tones(horiz_AOD_cmds, return_clean=return_clean)
+        v_clean, v_collision_inevitable, v_collision_avoidable = (
+            _classify_fatal_and_nonfatal_colliding_tones(
+                vert_AOD_cmds, return_clean=return_clean
+            )
+        )
+        h_clean, h_collision_inevitable, h_collision_avoidable = (
+            _classify_fatal_and_nonfatal_colliding_tones(
+                horiz_AOD_cmds, return_clean=return_clean
+            )
+        )
 
         return (
             v_clean,
@@ -702,8 +756,16 @@ def _find_colliding_tones(
         )
 
     else:
-        _, v_collision_inevitable, v_collision_avoidable = _classify_fatal_and_nonfatal_colliding_tones(vert_AOD_cmds, return_clean=return_clean)
-        _, h_collision_inevitable, h_collision_avoidable = _classify_fatal_and_nonfatal_colliding_tones(horiz_AOD_cmds, return_clean=return_clean)
+        _, v_collision_inevitable, v_collision_avoidable = (
+            _classify_fatal_and_nonfatal_colliding_tones(
+                vert_AOD_cmds, return_clean=return_clean
+            )
+        )
+        _, h_collision_inevitable, h_collision_avoidable = (
+            _classify_fatal_and_nonfatal_colliding_tones(
+                horiz_AOD_cmds, return_clean=return_clean
+            )
+        )
 
         return (
             v_collision_inevitable,
@@ -711,7 +773,8 @@ def _find_colliding_tones(
             h_collision_inevitable,
             h_collision_avoidable,
         )
-        
+
+
 def collision_eligibility_from_tones(
     move_set: Sequence[object],
     v_collision_inevitable: NDArray[np.intp],
@@ -750,26 +813,34 @@ def collision_eligibility_from_tones(
 
     # ---- Vertical axis lookup tables ----
     if v_collision_inevitable.size:
-        max_needed_v = int(max(source_rows.max(initial=0), v_collision_inevitable.max(initial=0)))
+        max_needed_v = int(
+            max(source_rows.max(initial=0), v_collision_inevitable.max(initial=0))
+        )
         v_mask = np.zeros(max_needed_v + 1, dtype=np.bool_)
         v_mask[v_collision_inevitable] = True
         eligible_static |= v_mask[source_rows]
 
     if v_collision_avoidable.size:
-        max_needed_v = int(max(source_rows.max(initial=0), v_collision_avoidable.max(initial=0)))
+        max_needed_v = int(
+            max(source_rows.max(initial=0), v_collision_avoidable.max(initial=0))
+        )
         v_mask_m = np.zeros(max_needed_v + 1, dtype=np.bool_)
         v_mask_m[v_collision_avoidable] = True
         eligible_moving |= v_mask_m[source_rows]
 
     # ---- Horizontal axis lookup tables ----
     if h_collision_inevitable.size:
-        max_needed_h = int(max(source_cols.max(initial=0), h_collision_inevitable.max(initial=0)))
+        max_needed_h = int(
+            max(source_cols.max(initial=0), h_collision_inevitable.max(initial=0))
+        )
         h_mask = np.zeros(max_needed_h + 1, dtype=np.bool_)
         h_mask[h_collision_inevitable] = True
         eligible_static |= h_mask[source_cols]
 
     if h_collision_avoidable.size:
-        max_needed_h = int(max(source_cols.max(initial=0), h_collision_avoidable.max(initial=0)))
+        max_needed_h = int(
+            max(source_cols.max(initial=0), h_collision_avoidable.max(initial=0))
+        )
         h_mask_m = np.zeros(max_needed_h + 1, dtype=np.bool_)
         h_mask_m[h_collision_avoidable] = True
         eligible_moving |= h_mask_m[source_cols]

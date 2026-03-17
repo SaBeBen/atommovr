@@ -38,7 +38,9 @@ class TestDualSpeciesGetInds:
         matrix = np.zeros((2, 2, 2))
         matrix[0, 0, 0] = 1  # Species 0 at (0,0)
         matrix[1, 1, 1] = 1  # Species 1 at (1,1)
-        blue_x, blue_y, yellow_x, yellow_y, white_x, white_y = _dual_species_get_inds_for_circ_matr_plot(matrix)
+        blue_x, blue_y, yellow_x, yellow_y, white_x, white_y = (
+            _dual_species_get_inds_for_circ_matr_plot(matrix)
+        )
         assert len(blue_x) == 1
         assert len(yellow_x) == 1
         assert len(white_x) == 2
@@ -46,14 +48,18 @@ class TestDualSpeciesGetInds:
     def test_all_species_0(self):
         matrix = np.zeros((2, 2, 2))
         matrix[:, :, 0] = 1
-        blue_x, blue_y, yellow_x, yellow_y, white_x, white_y = _dual_species_get_inds_for_circ_matr_plot(matrix)
+        blue_x, blue_y, yellow_x, yellow_y, white_x, white_y = (
+            _dual_species_get_inds_for_circ_matr_plot(matrix)
+        )
         assert len(blue_x) == 4
         assert len(yellow_x) == 0
         assert len(white_x) == 0
 
     def test_empty_matrix(self):
         matrix = np.zeros((3, 3, 2))
-        blue_x, blue_y, yellow_x, yellow_y, white_x, white_y = _dual_species_get_inds_for_circ_matr_plot(matrix)
+        blue_x, blue_y, yellow_x, yellow_y, white_x, white_y = (
+            _dual_species_get_inds_for_circ_matr_plot(matrix)
+        )
         assert len(blue_x) == 0
         assert len(yellow_x) == 0
         assert len(white_x) == 9

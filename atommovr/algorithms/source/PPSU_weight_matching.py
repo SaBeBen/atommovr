@@ -2,7 +2,6 @@
 
 
 import ctypes
-import io
 import os
 import platform
 import subprocess
@@ -91,8 +90,10 @@ def load_shared_library() -> ctypes.CDLL:
         build_shared_library()
         return ctypes.CDLL(LIB_PATH)
 
+
 # implementing lazy load to save time
 _LIB = None
+
 
 def _get_lib():
     global _LIB
@@ -118,6 +119,7 @@ def _get_lib():
         _LIB.bttlThreshold.restype = ctypes.c_int
     return _LIB
 
+
 # lib = load_shared_library()
 
 # # Define the function signature for bttlThreshold
@@ -139,6 +141,7 @@ def _get_lib():
 #     ctypes.c_int,  # sprankknown
 # ]
 # lib.bttlThreshold.restype = ctypes.c_int  # Returns the number of iterations
+
 
 def bttl_threshold(col_ptrs, col_ids, col_vals, n, m, sprankknown=0, lbapAlone=1):
     """
@@ -171,9 +174,21 @@ def bttl_threshold(col_ptrs, col_ids, col_vals, n, m, sprankknown=0, lbapAlone=1
 
     # Call the C function
     iterations = lib.bttlThreshold(
-        col_ptrs, col_ids, col_vals, ctypes.c_int(n), ctypes.c_int(m),
-        match, row_match, row_ptrs, row_ids, row_vals,
-        fend_cols, fend_rows, ctypes.c_int(lbapAlone), ctypes.byref(thrshld_g), sprankknown
+        col_ptrs,
+        col_ids,
+        col_vals,
+        ctypes.c_int(n),
+        ctypes.c_int(m),
+        match,
+        row_match,
+        row_ptrs,
+        row_ids,
+        row_vals,
+        fend_cols,
+        fend_rows,
+        ctypes.c_int(lbapAlone),
+        ctypes.byref(thrshld_g),
+        sprankknown,
     )
 
     # Return results
@@ -183,6 +198,7 @@ def bttl_threshold(col_ptrs, col_ids, col_vals, n, m, sprankknown=0, lbapAlone=1
         "row_match": list(row_match),
         "threshold": thrshld_g.value,
     }
+
 
 # Old code that broke github CI
 # import ctypes
@@ -225,7 +241,7 @@ def bttl_threshold(col_ptrs, col_ids, col_vals, n, m, sprankknown=0, lbapAlone=1
 #     else:
 #         # On Unix-like systems (Linux, macOS), use None to get the default C library
 #         libc = ctypes.CDLL(None)
-    
+
 #     try:
 #         stdout_fileno = sys.stdout.fileno()
 #         libc.fflush(None)  # Flush C stdio buffers
