@@ -3,7 +3,7 @@ import numpy as np
 from numpy.typing import NDArray
 import importlib
 
-AtomArray_mod = importlib.import_module("atommover.utils.AtomArray")
+AtomArray_mod = importlib.import_module("atommovr.utils.AtomArray")
 from atommovr.utils.AtomArray import AtomArray
 from atommovr.utils.Move import Move
 from atommovr.utils.move_utils import MoveType, MultiOccupancyFlag
