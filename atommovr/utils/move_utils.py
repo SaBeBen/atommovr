@@ -411,13 +411,14 @@ def _apply_moves(init_matrix: NDArray,
             #   d) no atom to move (there is NO atom in the pickup pos)
 
             # if there is an atom in the pickup pos
-            if int(init_matrix[move.from_row][move.from_col]) == 1:
+            #if int(init_matrix[move.from_row][move.from_col]) == 1: # NB: deprecated in NumPy 1.25
+            if int(np.sum(init_matrix[move.from_row, move.from_col], dtype=np.int64)) == 1:
                 try:
                     # check if there is NO atom in the putdown pos
-                    if int(init_matrix[move.to_row][move.to_col]) == 0 and move.to_col >= 0 and move.to_row >= 0:
+                    if move.to_col >= 0 and move.to_row >= 0 and int(np.sum(init_matrix[move.to_row, move.to_col], dtype=np.int64)) == 0:#int(init_matrix[move.to_row][move.to_col]) == 0:
                         movetype = MoveType.LEGAL_MOVE
                     # check if there is an atom in the putdown pos
-                    elif int(init_matrix[move.to_row][move.to_col]) == 1 and move.to_col >= 0 and move.to_row >= 0:
+                    elif move.to_col >= 0 and move.to_row >= 0 and int(np.sum(init_matrix[move.to_row, move.to_col], dtype=np.int64)) == 1:#int(init_matrix[move.to_row][move.to_col]) == 1:
                         movetype = MoveType.ILLEGAL_MOVE
                     elif move.to_col >= 0 and move.to_row >= 0:
                         raise Exception(f"{int(init_matrix[move.to_row][move.to_col][0])} is not a valid matrix entry.")
