@@ -576,10 +576,6 @@ class TestCompact:
 
         _replay_and_check_noiseless_conservation(aa2, move_rounds)
     
-    @pytest.mark.xfail(
-    reason="Known BCv2 compact() bug: candidate crunch batches can emit duplicate destinations and lose atoms via colliding AOD tones",
-    strict=True,
-)
     def test_compact_emits_no_duplicate_destinations_per_round(self) -> None:
         """
         Regression test: each parallel round emitted by `compact` must have unique
@@ -629,10 +625,6 @@ class TestBCV2:
         with pytest.raises(ValueError, match="single species"):
             bc_new.bcv2(aa, do_ejection=False)
 
-    @pytest.mark.xfail(
-    reason="Known BCv2 compact() bug: candidate crunch batches can emit duplicate destinations and lose atoms under replay",
-    strict=True,
-)
     def test_bcv2_noiseless_conserves_atoms_and_matches_target_region(self) -> None:
         """
         End-to-end noiseless sanity check (without ejection).

@@ -973,7 +973,226 @@ def get_target_locs_old(array):# Find the relevant rows and columns of the targe
     start_row, start_col, end_row, end_col = row_min, col_min, row_max, col_max
     return start_row, start_col, end_row, end_col
 
-def compact(array):
+
+def compact(array) -> list[list[movr.Move]]:
+    """
+    Compact atoms horizontally into the target rectangle using legal shared AOD frames.
+
+    Why this exists
+    ---------------
+    Under the updated collision model, the fully symmetric inward crunch is not a
+    physically admissible shared AOD command pattern: near the condensation column,
+    inward tones from both sides can create colliding tweezers / pile-ups.
+
+    This implementation compares the two admissible "almost symmetric" templates:
+    one with the left center-closing tone removed and one with the right
+    center-closing tone removed. For each template, only rows with positive vote
+    and no induced collision are activated. The higher-scoring legal template is
+    applied each round.
+
+    Parameters
+    ----------
+    array
+        Atom array whose occupancy is to be compacted.
+
+    Returns
+    -------
+    list of list of Move
+        Sequence of applied parallel move rounds.
+    """
+    arr1 = copy.deepcopy(array)
+
+    start_row, start_col, end_row, end_col = get_target_locs(arr1)
+    n_rows: int = len(arr1.target)
+    n_cols: int = len(arr1.target[0])
+
+    global_move_set: list[list[movr.Move]] = []
+    while True:
+        col_counts: np.ndarray = np.sum(
+            arr1.matrix[start_row:end_row + 1, start_col:end_col + 1, 0],
+            axis=0,
+            dtype=np.int64,
+        )
+        min_col_ind: int = int(start_col + int(np.argmin(col_counts)))
+
+        n_target_rows: int = end_row - start_row + 1
+        r_vote_tally: np.ndarray = np.zeros(n_target_rows, dtype=np.float64)
+        l_vote_tally: np.ndarray = np.zeros(n_target_rows, dtype=np.float64)
+        move_arr: np.ndarray = np.zeros((n_target_rows, 2), dtype=object)
+
+        for i, row in enumerate(range(start_row, end_row + 1)):
+            atom_in_row: int = int(arr1.matrix[row, min_col_ind, 0])
+            if atom_in_row != 0:
+                r_vote_tally[i] = -np.e
+                l_vote_tally[i] = -np.e
+
+            move_set, best_atom_set = middle_fill_algo_1d(
+                arr1.matrix[row, :, :].reshape(1, n_cols, 1),
+                arr1.target[row, :, :].reshape(1, n_cols, 1),
+            )
+
+            round0: list[movr.Move] = move_set[0] if (isinstance(move_set, list) and len(move_set) > 0) else []
+            round0_edges: set[tuple[int, int]] = {
+                (int(m.from_col), int(m.to_col)) for m in round0
+            }
+            move_arr[i, 0] = best_atom_set
+            move_arr[i, 1] = round0_edges
+
+        for col in range(n_cols):
+            move_dir: int = int(np.sign(min_col_ind - col))
+            if move_dir == -1:
+                for i, row in enumerate(range(start_row, end_row + 1)):
+                    cond1: bool = bool(r_vote_tally[i] != -np.e)
+                    cond2: bool = bool(int(arr1.matrix[row, col, 0]) == 1)
+                    cond3: bool = bool(col in move_arr[i, 0])
+                    if cond1 and cond2 and cond3:
+                        vote: int = int((int(col), int(col - 1)) in move_arr[i, 1])
+                        r_vote_tally[i] += -1 + 2 * vote
+            elif move_dir == 1:
+                for i, row in enumerate(range(start_row, end_row + 1)):
+                    cond1 = bool(l_vote_tally[i] != -np.e)
+                    cond2 = bool(int(arr1.matrix[row, col, 0]) == 1)
+                    cond3 = bool(col in move_arr[i, 0])
+                    if cond1 and cond2 and cond3:
+                        vote = int((int(col), int(col + 1)) in move_arr[i, 1])
+                        l_vote_tally[i] += -1 + 2 * vote
+
+        total_vote_tally: np.ndarray = r_vote_tally + l_vote_tally
+
+        # Direction-only fallbacks retained from the original implementation.
+        r_comh_AOD_cmds: np.ndarray = np.zeros(n_cols, dtype=np.uint8)
+        l_comh_AOD_cmds: np.ndarray = np.zeros(n_cols, dtype=np.uint8)
+        r_comv_AOD_cmds: np.ndarray = np.zeros(n_rows, dtype=np.uint8)
+        l_comv_AOD_cmds: np.ndarray = np.zeros(n_rows, dtype=np.uint8)
+        r_vote_sum: float = 0.0
+        l_vote_sum: float = 0.0
+
+        for row_ind in range(n_target_rows):
+            n_r_votes: float = float(r_vote_tally[row_ind])
+            n_l_votes: float = float(l_vote_tally[row_ind])
+            abs_row: int = row_ind + start_row
+            if n_r_votes > 0:
+                r_comv_AOD_cmds[abs_row] = np.uint8(1)
+                r_vote_sum += n_r_votes
+            elif n_l_votes > 0:
+                l_comv_AOD_cmds[abs_row] = np.uint8(1)
+                l_vote_sum += n_l_votes
+
+        if min_col_ind + 1 < n_cols:
+            r_comh_AOD_cmds[min_col_ind + 1:] = np.uint8(3)
+        if min_col_ind > 0:
+            l_comh_AOD_cmds[:min_col_ind] = np.uint8(2)
+
+        # Two legal near-symmetric crunch templates:
+        #   left-deleted:  remove (c-1) -> c  by zeroing source column c-1
+        #   right-deleted: remove (c+1) -> c  by zeroing source column c+1
+        left_del_comh_AOD_cmds: np.ndarray = np.zeros(n_cols, dtype=np.uint8)
+        right_del_comh_AOD_cmds: np.ndarray = np.zeros(n_cols, dtype=np.uint8)
+        left_del_comv_AOD_cmds: np.ndarray = np.zeros(n_rows, dtype=np.uint8)
+        right_del_comv_AOD_cmds: np.ndarray = np.zeros(n_rows, dtype=np.uint8)
+
+        if min_col_ind > 0:
+            left_del_comh_AOD_cmds[:min_col_ind] = np.uint8(2)
+            right_del_comh_AOD_cmds[:min_col_ind] = np.uint8(2)
+        if min_col_ind + 1 < n_cols:
+            left_del_comh_AOD_cmds[min_col_ind + 1:] = np.uint8(3)
+            right_del_comh_AOD_cmds[min_col_ind + 1:] = np.uint8(3)
+
+        if min_col_ind - 1 >= 0:
+            left_del_comh_AOD_cmds[min_col_ind - 1] = np.uint8(0)
+        if min_col_ind + 1 < n_cols:
+            right_del_comh_AOD_cmds[min_col_ind + 1] = np.uint8(0)
+
+        left_deleted_collision_mask: np.ndarray = np.zeros(n_rows, dtype=np.bool_)
+        right_deleted_collision_mask: np.ndarray = np.zeros(n_rows, dtype=np.bool_)
+
+        # Left-deleted collisions:
+        #   (c-2 -> c-1) collides with occupied c-1
+        #   (c+1 -> c)   collides with occupied c
+        if min_col_ind - 2 >= 0:
+            left_deleted_collision_mask |= (
+                arr1.matrix[:, min_col_ind - 1, 0].astype(bool)
+                & arr1.matrix[:, min_col_ind - 2, 0].astype(bool)
+            )
+        if min_col_ind + 1 < n_cols:
+            left_deleted_collision_mask |= (
+                arr1.matrix[:, min_col_ind + 1, 0].astype(bool)
+                & arr1.matrix[:, min_col_ind, 0].astype(bool)
+            )
+
+        # Right-deleted collisions:
+        #   (c+2 -> c+1) collides with occupied c+1
+        #   (c-1 -> c)   collides with occupied c
+        if min_col_ind + 2 < n_cols:
+            right_deleted_collision_mask |= (
+                arr1.matrix[:, min_col_ind + 1, 0].astype(bool)
+                & arr1.matrix[:, min_col_ind + 2, 0].astype(bool)
+            )
+        if min_col_ind - 1 >= 0:
+            right_deleted_collision_mask |= (
+                arr1.matrix[:, min_col_ind - 1, 0].astype(bool)
+                & arr1.matrix[:, min_col_ind, 0].astype(bool)
+            )
+
+        left_deleted_vote_sum: float = 0.0
+        right_deleted_vote_sum: float = 0.0
+
+        for row_ind in range(n_target_rows):
+            abs_row = row_ind + start_row
+            row_vote: float = float(total_vote_tally[row_ind])
+            if row_vote <= 0:
+                continue
+
+            if not bool(left_deleted_collision_mask[abs_row]):
+                left_del_comv_AOD_cmds[abs_row] = np.uint8(1)
+                left_deleted_vote_sum += row_vote
+
+            if not bool(right_deleted_collision_mask[abs_row]):
+                right_del_comv_AOD_cmds[abs_row] = np.uint8(1)
+                right_deleted_vote_sum += row_vote
+
+        left_deleted_moves: list[movr.Move] = movr.get_move_list_from_AOD_cmds(
+            left_del_comh_AOD_cmds,
+            left_del_comv_AOD_cmds,
+        )
+        right_deleted_moves: list[movr.Move] = movr.get_move_list_from_AOD_cmds(
+            right_del_comh_AOD_cmds,
+            right_del_comv_AOD_cmds,
+        )
+        r_moves: list[movr.Move] = movr.get_move_list_from_AOD_cmds(
+            r_comh_AOD_cmds,
+            r_comv_AOD_cmds,
+        )
+        l_moves: list[movr.Move] = movr.get_move_list_from_AOD_cmds(
+            l_comh_AOD_cmds,
+            l_comv_AOD_cmds,
+        )
+
+        moves_options: list[list[movr.Move]] = [
+            left_deleted_moves,
+            right_deleted_moves,
+            r_moves,
+            l_moves,
+        ]
+        vote_sums: list[float] = [
+            left_deleted_vote_sum,
+            right_deleted_vote_sum,
+            r_vote_sum,
+            l_vote_sum,
+        ]
+
+        best_ind: int = int(np.argmax(vote_sums))
+        move_list: list[movr.Move] = moves_options[best_ind]
+
+        if move_list != []:
+            arr1.move_atoms(move_list)
+            global_move_set.append(move_list)
+        else:
+            break
+
+    return global_move_set
+
+def compact_old(array):
     arr1 = copy.deepcopy(array)
 
     start_row, start_col, end_row, end_col = get_target_locs(arr1)
