@@ -1,10 +1,12 @@
 """
-Shared test doubles: 
-fake/spy/stub classes or 
+Shared test doubles:
+fake/spy/stub classes or
 lightweight replacement implementations of real collaborators.
 """
+
 import numpy as np
 from numpy.typing import NDArray
+
 
 class TimingSpyErrorModel:
     """
@@ -73,7 +75,8 @@ class TimingSpyErrorModel:
     ) -> tuple[NDArray, int]:
         self.loss_times.append(float(evolution_time))
         return matrix, 0
-    
+
+
 class BoomErrorModel:
     pickup_time = 1.0
     accel_time = 1.0
@@ -81,4 +84,6 @@ class BoomErrorModel:
     putdown_time = 1.0
 
     def __getattr__(self, _name):
-        raise AssertionError("Error model should not be touched on invalid input state.")
+        raise AssertionError(
+            "Error model should not be touched on invalid input state."
+        )

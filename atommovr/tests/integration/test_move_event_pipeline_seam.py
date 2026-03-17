@@ -1,10 +1,14 @@
 import numpy as np
-import pytest
 
 from atommovr.utils.Move import Move
 from atommovr.utils.ErrorModel import ErrorModel
 from atommovr.utils.error_utils import finalize_events_to_moves
-from atommovr.utils.failure_policy import FailureBit, FailureEvent, FailureFlag, bit_value
+from atommovr.utils.failure_policy import (
+    FailureBit,
+    FailureEvent,
+    FailureFlag,
+    bit_value,
+)
 
 
 class _StubMove:
@@ -12,6 +16,7 @@ class _StubMove:
     Minimal duck-typed stand-in for Move used by finalize_events_to_moves().
     We only need set_failure_event(...) for the seam tests.
     """
+
     def __init__(self) -> None:
         self.failure_event = int(FailureEvent.SUCCESS)
         self.set_failure_event_calls: list[int] = []
@@ -26,6 +31,7 @@ def _mask_of(*bits: FailureBit) -> np.uint64:
     for b in bits:
         m |= bit_value(b)
     return m
+
 
 def test_event_pipeline_seam_with_real_move_end_to_end() -> None:
     """
@@ -53,8 +59,12 @@ def test_event_pipeline_seam_with_real_move_end_to_end() -> None:
 
     has_atom = np.array([True, True, True, True, True, False], dtype=bool)
 
-    eligible_collision_inevitable = np.array([False, False, False, True, False, False], dtype=bool)
-    eligible_collision_avoidable = np.array([False, True, False, False, False, False], dtype=bool)
+    eligible_collision_inevitable = np.array(
+        [False, False, False, True, False, False], dtype=bool
+    )
+    eligible_collision_avoidable = np.array(
+        [False, True, False, False, False, False], dtype=bool
+    )
 
     eligible_pickup = np.array([True, False, False, False, False, False], dtype=bool)
     eligible_accel = np.array([True, True, False, False, False, False], dtype=bool)
@@ -84,9 +94,9 @@ def test_event_pipeline_seam_with_real_move_end_to_end() -> None:
     primary = finalize_events_to_moves(moves, event_mask, store_mask_on_move=True)
 
     expected_primary = [
-        FailureEvent.PICKUP_FAIL,     # pickup suppresses accel
+        FailureEvent.PICKUP_FAIL,  # pickup suppresses accel
         FailureEvent.COLLISION_AVOIDABLE,  # crossed_moving suppresses accel
-        FailureEvent.DECEL_FAIL,      # decel suppresses putdown
+        FailureEvent.DECEL_FAIL,  # decel suppresses putdown
         FailureEvent.COLLISION_INEVITABLE,  # dominant
         FailureEvent.SUCCESS,
         FailureEvent.NO_ATOM,
@@ -124,6 +134,7 @@ def test_event_pipeline_seam_with_real_move_empty_inputs() -> None:
     assert primary.shape == (0,)
     assert primary.dtype == np.int32
 
+
 def test_event_pipeline_seam_smoke_end_to_end_mixed_processes() -> None:
     """
     End-to-end seam test for the event pipeline:
@@ -148,8 +159,12 @@ def test_event_pipeline_seam_smoke_end_to_end_mixed_processes() -> None:
     # Build eligibilities (one boolean mask per process)
     has_atom = np.array([True, True, True, True, True, False], dtype=bool)
 
-    eligible_collision_inevitable = np.array([False, False, False, True, False, False], dtype=bool)
-    eligible_collision_avoidable = np.array([False, True, False, False, False, False], dtype=bool)
+    eligible_collision_inevitable = np.array(
+        [False, False, False, True, False, False], dtype=bool
+    )
+    eligible_collision_avoidable = np.array(
+        [False, True, False, False, False, False], dtype=bool
+    )
 
     eligible_pickup = np.array([True, False, False, False, False, False], dtype=bool)
     eligible_accel = np.array([True, True, False, False, False, False], dtype=bool)
@@ -217,7 +232,9 @@ def test_event_pipeline_seam_smoke_end_to_end_mixed_processes() -> None:
     assert moves[5].fail_mask == int(_mask_of(FailureBit.NO_ATOM))
 
 
-def test_event_pipeline_seam_pickup_suppresses_crossed_moving_and_downstream_bits() -> None:
+def test_event_pipeline_seam_pickup_suppresses_crossed_moving_and_downstream_bits() -> (
+    None
+):
     """
     Regression-style seam test:
     If PICKUP_FAIL and CROSSED_MOVING are both tagged, pickup should suppress
@@ -250,7 +267,9 @@ def test_event_pipeline_seam_pickup_suppresses_crossed_moving_and_downstream_bit
     assert moves[0].fail_mask == int(_mask_of(FailureBit.PICKUP_FAIL))
 
 
-def test_event_pipeline_seam_no_atom_blocks_other_processes_when_eligibility_is_gated() -> None:
+def test_event_pipeline_seam_no_atom_blocks_other_processes_when_eligibility_is_gated() -> (
+    None
+):
     """
     Mimics move_atoms() gating: if a move has no atom, move-related eligibilities are
     masked out, and the final result should remain NO_ATOM only.
@@ -276,7 +295,9 @@ def test_event_pipeline_seam_no_atom_blocks_other_processes_when_eligibility_is_
     eligible_accel = np.array([False, True, True], dtype=bool) & has_atom
     eligible_decel = np.array([False, True, True], dtype=bool) & has_atom
     eligible_putdown = np.array([False, True, True], dtype=bool) & has_atom
-    eligible_collision_inevitable = np.array([False, True, False], dtype=bool) & has_atom
+    eligible_collision_inevitable = (
+        np.array([False, True, False], dtype=bool) & has_atom
+    )
     eligible_collision_avoidable = np.array([False, True, False], dtype=bool) & has_atom
 
     em.apply_pickup_errors_mask(event_mask, eligible_pickup)
@@ -290,8 +311,10 @@ def test_event_pipeline_seam_no_atom_blocks_other_processes_when_eligibility_is_
 
     assert primary.tolist() == [
         int(FailureEvent.PICKUP_FAIL),  # move 0
-        int(FailureEvent.NO_ATOM),      # move 1 (all other eligibilities gated off)
-        int(FailureEvent.ACCEL_FAIL),   # move 2: accel + decel + putdown -> accel dominates/suppresses
+        int(FailureEvent.NO_ATOM),  # move 1 (all other eligibilities gated off)
+        int(
+            FailureEvent.ACCEL_FAIL
+        ),  # move 2: accel + decel + putdown -> accel dominates/suppresses
     ]
 
     assert moves[1].fail_mask == int(_mask_of(FailureBit.NO_ATOM))

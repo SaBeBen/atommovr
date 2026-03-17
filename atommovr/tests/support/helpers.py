@@ -1,7 +1,7 @@
 """
-Plain reusable test utilities: 
-small builders, mask constructors, 
-serializers, invariant checkers, 
+Plain reusable test utilities:
+small builders, mask constructors,
+serializers, invariant checkers,
 replay helpers
 """
 
@@ -11,14 +11,19 @@ from numpy.typing import NDArray
 import atommovr.utils as movr
 from atommovr.utils.failure_policy import FailureBit, bit_value
 
+
 def mask_of(*bits: FailureBit) -> np.uint64:
     m = np.uint64(0)
     for b in bits:
         m |= bit_value(b)
     return m
 
+
 def boom(*args, **kwargs):
-    raise AssertionError("Expensive crossed-tone bookkeeping should not run on fast path.")
+    raise AssertionError(
+        "Expensive crossed-tone bookkeeping should not run on fast path."
+    )
+
 
 def _assert_binary_occupancy_3d(matrix: NDArray) -> None:
     """
@@ -51,8 +56,12 @@ def _n_atoms(matrix: NDArray) -> int:
     """
     return int(np.sum(matrix, dtype=np.int64))
 
+
 def _moves_to_tuples(round_moves):
-    return [[(m.from_row, m.from_col, m.to_row, m.to_col) for m in mvlist] for mvlist in round_moves]
+    return [
+        [(m.from_row, m.from_col, m.to_row, m.to_col) for m in mvlist]
+        for mvlist in round_moves
+    ]
 
 
 def _replay_and_check_noiseless_conservation(

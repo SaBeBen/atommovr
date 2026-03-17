@@ -21,8 +21,14 @@ from typing import Iterable, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from atommovr.utils.Move import Move, FailureEvent
-from atommovr.utils.failure_policy import FailureBit, bit_value, suppress_inplace, resolve_primary_events
+from atommovr.utils.Move import Move
+from atommovr.utils.failure_policy import (
+    FailureBit,
+    bit_value,
+    suppress_inplace,
+    resolve_primary_events,
+)
+
 
 def set_event_bit_inplace(
     event_mask: NDArray[np.uint64],
@@ -45,13 +51,17 @@ def set_event_bit_inplace(
     event_size = event_mask.size
     elig_size = eligible.size
     if event_size != elig_size:
-        raise ValueError(f"Size mismatch between 'event_mask' ({event_size}) and 'eligible' ({elig_size}).")
+        raise ValueError(
+            f"Size mismatch between 'event_mask' ({event_size}) and 'eligible' ({elig_size})."
+        )
     if event_size == 0:
         return
     if elig_size == 0:
         return
     if event_mask.ndim != 1 | eligible.ndim != 1:
-        raise ValueError(f"Parameters 'event_mask' and 'eligible' must be 1D arrays, not {event_mask.ndim}D and {eligible.ndim}D.")
+        raise ValueError(
+            f"Parameters 'event_mask' and 'eligible' must be 1D arrays, not {event_mask.ndim}D and {eligible.ndim}D."
+        )
     event_mask[eligible] |= bit_value(bit)
 
 
@@ -84,9 +94,13 @@ def apply_bernoulli_event_inplace(
     """
     # sanity checks
     if event_mask.ndim != 1 or eligible.ndim != 1:
-        raise ValueError(f"Parameters 'event_mask' and 'eligible' must be 1D arrays, not {event_mask.ndim}D and {eligible.ndim}D.")
+        raise ValueError(
+            f"Parameters 'event_mask' and 'eligible' must be 1D arrays, not {event_mask.ndim}D and {eligible.ndim}D."
+        )
     if event_mask.size != eligible.size:
-        raise ValueError(f"Size mismatch between 'event_mask' ({event_mask.size}) and 'eligible' ({eligible.size}).")
+        raise ValueError(
+            f"Size mismatch between 'event_mask' ({event_mask.size}) and 'eligible' ({eligible.size})."
+        )
     if event_mask.size == 0:
         return
     if p_fail == 0.0:
@@ -111,7 +125,9 @@ def eligible_from_indices(n: int, indices: Sequence[int]) -> np.ndarray:
     return m
 
 
-def eligible_from_moves(all_moves: Sequence[Move], subset_moves: Iterable[Move]) -> np.ndarray:
+def eligible_from_moves(
+    all_moves: Sequence[Move], subset_moves: Iterable[Move]
+) -> np.ndarray:
     """
     Build eligibility mask from Move object identity (same object instance).
 
@@ -130,7 +146,9 @@ def eligible_from_moves(all_moves: Sequence[Move], subset_moves: Iterable[Move])
     return eligible
 
 
-def write_primary_events_to_moves(moves: Sequence[Move], primary_events: np.ndarray) -> None:
+def write_primary_events_to_moves(
+    moves: Sequence[Move], primary_events: np.ndarray
+) -> None:
     """
     Write FailureEvent codes back into Move objects (updates fail_flag too).
 

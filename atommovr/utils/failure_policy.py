@@ -24,10 +24,11 @@ import numpy as np
 
 # --- IntEnum classes ---
 
+
 class FailureEvent(IntEnum):
     """
     Tracks the physical mechanism by which a `Move` can fail.
-    
+
     Each event corresponds to a specific physical process during atom transport:
     - SUCCESS: Move completed without errors.
     - PICKUP_FAIL: AOD tweezer failed to capture atom from static tweezer.
@@ -39,20 +40,22 @@ class FailureEvent(IntEnum):
     - DECEL_FAIL: Atom lost during deceleration (heating, etc.).
     - TRANSPORT_FAIL: Atom lost during transport (not yet implemented).
     """
+
     SUCCESS = 0
     PICKUP_FAIL = 1
     PUTDOWN_FAIL = 2
     NO_ATOM = 3
     ACCEL_FAIL = 4
     DECEL_FAIL = 5
-    TRANSPORT_FAIL = 6 # NB: not yet implemented
+    TRANSPORT_FAIL = 6  # NB: not yet implemented
     COLLISION_INEVITABLE = 7
     COLLISION_AVOIDABLE = 8
+
 
 class FailureFlag(IntEnum):
     """
     Tracks the simulation outcome of a `Move` attempt.
-    
+
     This is derived from FailureEvent and determines what happens to the atom
     and how the simulation state should be updated:
     - SUCCESS: Atom successfully moved to destination
@@ -60,14 +63,16 @@ class FailureFlag(IntEnum):
     - LOSS: Atom is lost/ejected from the array
     - NO_ATOM: No atom was present to move
     """
+
     SUCCESS = 0
     NO_PICKUP = 1
     LOSS = 2
     NO_ATOM = 3
 
+
 class FailureBit(IntEnum):
     """
-    Bit positions for the FailureEvent class (this is an IntEnum and not an IntFlag to enable 
+    Bit positions for the FailureEvent class (this is an IntEnum and not an IntFlag to enable
     conversion into Numpy arrays for fast operations).
 
     Notes
@@ -76,20 +81,22 @@ class FailureBit(IntEnum):
     - Each enum value is a *bit position* (not a 1<<value).
     - Existing bit positions MUST NOT change if you want old saved masks to remain readable.
     """
+
     # Existing bits (DO NOT renumber)
     PICKUP_FAIL = 0
     PUTDOWN_FAIL = 1
     NO_ATOM = 2
     ACCEL_FAIL = 3
     DECEL_FAIL = 4
-    TRANSPORT_FAIL = 5        # NB: not implemented yet
-    COLLISION_INEVITABLE = 6        # always lost
-    COLLISION_AVOIDABLE = 7        # suppressed by pickup fail
+    TRANSPORT_FAIL = 5  # NB: not implemented yet
+    COLLISION_INEVITABLE = 6  # always lost
+    COLLISION_AVOIDABLE = 7  # suppressed by pickup fail
+
 
 # --- Explicit policy objects ---
 
 # dictionary mapping events (FailureEvent) to flags for use in simulation (FailureFlag)
-FAILURE_EVENT_TO_FLAG: dict[FailureEvent,FailureFlag] = {
+FAILURE_EVENT_TO_FLAG: dict[FailureEvent, FailureFlag] = {
     FailureEvent.SUCCESS: FailureFlag.SUCCESS,
     FailureEvent.NO_ATOM: FailureFlag.NO_ATOM,
     FailureEvent.PICKUP_FAIL: FailureFlag.NO_PICKUP,
@@ -127,20 +134,24 @@ PRIMARY_EVENT_ORDER: list[FailureBit] = [
 
 # --- Functions for getting integer masks ---
 
+
 def bit_value(bit: FailureBit) -> np.uint64:
     """Return the integer mask value for a given FailureBit."""
     return np.uint64(1) << np.uint64(int(bit))
+
 
 # --- Precomputed bit masks (avoid repeated allocations / loops at runtime) ---
 
 # Internal cache of bit masks for speed; external callers should use bit_value().
 _BITMASK: dict[FailureBit, np.uint64] = {b: bit_value(b) for b in FailureBit}
 
+
 def _or_mask(bits: tuple[FailureBit, ...]) -> np.uint64:
     m = np.uint64(0)
     for b in bits:
         m |= _BITMASK[b]
     return m
+
 
 # --- Suppression / dominance rules (explicit and future-proof) ---
 
@@ -152,7 +163,10 @@ _DOMINANCE_RULES: tuple[tuple[FailureBit, tuple[FailureBit, ...]], ...] = (
     # COLLISION_INEVITABLE dominates everything except NO_ATOM
     (FailureBit.COLLISION_INEVITABLE, (FailureBit.NO_ATOM,)),
     # COLLISION_AVOIDABLE dominates unless NO_ATOM / CROSSED_STATIC / PICKUP_FAIL also occurred
-    (FailureBit.COLLISION_AVOIDABLE, (FailureBit.NO_ATOM, FailureBit.COLLISION_INEVITABLE, FailureBit.PICKUP_FAIL)),
+    (
+        FailureBit.COLLISION_AVOIDABLE,
+        (FailureBit.NO_ATOM, FailureBit.COLLISION_INEVITABLE, FailureBit.PICKUP_FAIL),
+    ),
 )
 
 # Suppression: if TRIGGER_BIT is set, clear exactly these bits (and nothing else).
@@ -167,10 +181,10 @@ _SUPPRESSION_RULES: tuple[tuple[FailureBit, tuple[FailureBit, ...]], ...] = (
             FailureBit.PUTDOWN_FAIL,
         ),
     ),
-    ( # NOTE: although a collision with another tweezer may happen temporally later than other events,
-      #       it is assumed to be completely destructive, whereas transport-related failures may (in 
-      #       later atommovr version) be nondestructive (but cause effects like heating).
-        FailureBit.COLLISION_AVOIDABLE, 
+    (  # NOTE: although a collision with another tweezer may happen temporally later than other events,
+        #       it is assumed to be completely destructive, whereas transport-related failures may (in
+        #       later atommovr version) be nondestructive (but cause effects like heating).
+        FailureBit.COLLISION_AVOIDABLE,
         (
             FailureBit.ACCEL_FAIL,
             FailureBit.TRANSPORT_FAIL,
@@ -195,9 +209,7 @@ _SUPPRESSION_RULES: tuple[tuple[FailureBit, tuple[FailureBit, ...]], ...] = (
     ),
     (
         FailureBit.DECEL_FAIL,
-        (
-            FailureBit.PUTDOWN_FAIL,
-        ),
+        (FailureBit.PUTDOWN_FAIL,),
     ),
 )
 
@@ -271,6 +283,7 @@ def suppress_inplace(event_mask: np.ndarray) -> None:
     # NOTE: this preserves the caller-visible mutation, but the dtype stays as originally provided.
     if m is not event_mask:
         event_mask[:] = m
+
 
 def suppress_inplace_slow(event_mask: np.ndarray) -> None:
     """
@@ -347,7 +360,7 @@ def resolve_primary_events(event_mask: np.ndarray) -> np.ndarray:
     # Ensure unsigned for predictable bit ops (view)
     m = event_mask.astype(np.uint64, copy=False)
 
-    unresolved = (m != 0)
+    unresolved = m != 0
     for bit in PRIMARY_EVENT_ORDER:
         if not np.any(unresolved):
             break

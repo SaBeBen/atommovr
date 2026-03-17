@@ -1,11 +1,10 @@
-name: atommover_env
+name: atommovr_env
 channels:
   - defaults
   - conda-forge
 dependencies:
   - numpy
   - scikit-learn
-  - numba::numba
   - xarray
   - ipykernel
   - matplotlib

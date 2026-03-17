@@ -3,7 +3,6 @@ import pytest
 
 from atommovr.utils.ErrorModel import ErrorModel
 from atommovr.utils.failure_policy import FailureBit, bit_value
-from atommovr.tests.support.helpers import mask_of
 
 
 def test_get_atom_loss_base_model_is_noop() -> None:
@@ -15,9 +14,11 @@ def test_get_atom_loss_base_model_is_noop() -> None:
     assert np.array_equal(new_state, state)
     assert loss_flag is False
 
+
 def test_repr_returns_name() -> None:
     em = ErrorModel(seed=0)
     assert repr(em) == "Generic ErrorModel object"
+
 
 @pytest.mark.parametrize(
     "rate_attr, method_name, bit",
@@ -28,7 +29,9 @@ def test_repr_returns_name() -> None:
         ("decel_fail_rate", "apply_decel_errors_mask", FailureBit.DECEL_FAIL),
     ],
 )
-def test_mask_methods_p0_noop(rate_attr: str, method_name: str, bit: FailureBit) -> None:
+def test_mask_methods_p0_noop(
+    rate_attr: str, method_name: str, bit: FailureBit
+) -> None:
     n = 20
     event_mask = np.zeros(n, dtype=np.uint64)
     eligible = np.ones(n, dtype=bool)
@@ -39,6 +42,7 @@ def test_mask_methods_p0_noop(rate_attr: str, method_name: str, bit: FailureBit)
     getattr(em, method_name)(event_mask, eligible)
 
     assert np.all(event_mask == 0)
+
 
 @pytest.mark.parametrize(
     "rate_attr, method_name",
@@ -57,6 +61,7 @@ def test_mask_methods_empty_event_mask_noop(rate_attr: str, method_name: str) ->
     getattr(em, method_name)(m, eligible)
     assert m.size == 0
 
+
 @pytest.mark.parametrize(
     "rate_attr, method_name, bit",
     [
@@ -66,7 +71,9 @@ def test_mask_methods_empty_event_mask_noop(rate_attr: str, method_name: str) ->
         ("decel_fail_rate", "apply_decel_errors_mask", FailureBit.DECEL_FAIL),
     ],
 )
-def test_mask_methods_p1_sets_all_eligible(rate_attr: str, method_name: str, bit: FailureBit) -> None:
+def test_mask_methods_p1_sets_all_eligible(
+    rate_attr: str, method_name: str, bit: FailureBit
+) -> None:
     n = 21
     event_mask = np.zeros(n, dtype=np.uint64)
     eligible = np.zeros(n, dtype=bool)
@@ -91,7 +98,9 @@ def test_mask_methods_p1_sets_all_eligible(rate_attr: str, method_name: str, bit
         ("decel_fail_rate", "apply_decel_errors_mask", FailureBit.DECEL_FAIL),
     ],
 )
-def test_mask_methods_do_not_clear_existing_bits(rate_attr: str, method_name: str, bit: FailureBit) -> None:
+def test_mask_methods_do_not_clear_existing_bits(
+    rate_attr: str, method_name: str, bit: FailureBit
+) -> None:
     n = 10
     preset = bit_value(FailureBit.NO_ATOM)
 

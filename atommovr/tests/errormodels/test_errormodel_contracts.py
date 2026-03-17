@@ -44,7 +44,9 @@ def test_builtin_models_are_errormodel_subclasses(model_cls) -> None:
 @pytest.mark.parametrize("attr_name", REQUIRED_ATTRS)
 def test_builtin_models_have_required_attributes(model_cls, attr_name: str) -> None:
     model = model_cls(seed=0)
-    assert hasattr(model, attr_name), f"{model_cls.__name__} missing attribute {attr_name}"
+    assert hasattr(
+        model, attr_name
+    ), f"{model_cls.__name__} missing attribute {attr_name}"
 
 
 @pytest.mark.parametrize("model_cls", BUILTIN_MODELS)
@@ -52,14 +54,18 @@ def test_builtin_models_have_required_attributes(model_cls, attr_name: str) -> N
 def test_builtin_models_have_required_methods(model_cls, method_name: str) -> None:
     model = model_cls(seed=0)
     method = getattr(model, method_name, None)
-    assert callable(method), f"{model_cls.__name__}.{method_name} is missing or not callable"
+    assert callable(
+        method
+    ), f"{model_cls.__name__}.{method_name} is missing or not callable"
 
 
 @pytest.mark.parametrize("model_cls", BUILTIN_MODELS)
 def test_builtin_models_mask_methods_smoke(model_cls) -> None:
     model = model_cls(seed=0)
     event_mask = np.zeros(8, dtype=np.uint64)
-    eligible = np.array([True, False, True, False, True, False, True, False], dtype=bool)
+    eligible = np.array(
+        [True, False, True, False, True, False, True, False], dtype=bool
+    )
 
     model.apply_pickup_errors_mask(event_mask, eligible)
     model.apply_putdown_errors_mask(event_mask, eligible)

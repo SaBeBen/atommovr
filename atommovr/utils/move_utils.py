@@ -15,16 +15,19 @@ from atommovr.utils.core import PhysicalParams
 IntArray: TypeAlias = NDArray[np.integer]
 BoolArray: TypeAlias = NDArray[np.bool_]
 
+
 class MoveType(IntEnum):
     """
-    Class to be used in conjunction with `move_atoms()` to track the legality of moves 
+    Class to be used in conjunction with `move_atoms()` to track the legality of moves
     (separately from the `FailureFlag` and `FailureEvent`) classes, which track error
     events.
     """
+
     ILLEGAL_MOVE = 0
     LEGAL_MOVE = 1
     EJECT_MOVE = 2
     NO_ATOM_TO_MOVE = 3
+
 
 class MultiOccupancyFlag(IntEnum):
     """
@@ -39,8 +42,10 @@ class MultiOccupancyFlag(IntEnum):
     This is intentionally separate from `FailureEvent`/`FailureFlag`, which describe
     single-move outcomes determined before `_apply_moves(...)` mutates the array.
     """
+
     SINGLE_OR_NO_OCCUPANCY = 0
     MULTI_ATOM_OCCUPANCY = 1
+
 
 ## Event mask (for vectorization) ##
 def alloc_event_mask(n_moves: int, *, dtype=np.uint64) -> NDArray:
@@ -66,14 +71,16 @@ def alloc_event_mask(n_moves: int, *, dtype=np.uint64) -> NDArray:
     """
     return np.zeros(int(n_moves), dtype=dtype)
 
+
 ## AOD cmd functions ##
 
-AOD_cmd_to_pos_shift = {'1': 0, '2': 1, '3': -1}
+AOD_cmd_to_pos_shift = {"1": 0, "2": 1, "3": -1}
+
 
 def get_move_list_from_AOD_cmds(
-        horiz_AOD_cmds: list[int] | NDArray[np.integer],
-        vert_AOD_cmds: list[int] | NDArray[np.integer]
-    ) -> list[Move]:
+    horiz_AOD_cmds: list[int] | NDArray[np.integer],
+    vert_AOD_cmds: list[int] | NDArray[np.integer],
+) -> list[Move]:
     """
     Convert AOD command vectors into a list of Moves.
 
@@ -108,16 +115,21 @@ def get_move_list_from_AOD_cmds(
         row_cmd = int(vert_AOD_cmds[row_ind])
         if row_cmd == 0:
             continue
-        row_shift = AOD_cmd_to_pos_shift['{}'.format(row_cmd)]
+        row_shift = AOD_cmd_to_pos_shift["{}".format(row_cmd)]
         for col_ind in range(len(horiz_AOD_cmds)):
             col_cmd = int(horiz_AOD_cmds[col_ind])
-            if col_cmd != 0: # and col_cmd*row_cmd != 1:
+            if col_cmd != 0:  # and col_cmd*row_cmd != 1:
                 # make a move
-                col_shift = AOD_cmd_to_pos_shift['{}'.format(col_cmd)]
-                move_list.append(Move(row_ind, col_ind, row_ind+row_shift, col_ind+col_shift))
+                col_shift = AOD_cmd_to_pos_shift["{}".format(col_cmd)]
+                move_list.append(
+                    Move(row_ind, col_ind, row_ind + row_shift, col_ind + col_shift)
+                )
     return move_list
 
-def get_AOD_cmds_from_move_list(matrix: NDArray, move_seq: list[Move], verify: bool = False) -> tuple[NDArray[np.int8], NDArray[np.int8], bool]:
+
+def get_AOD_cmds_from_move_list(
+    matrix: NDArray, move_seq: list[Move], verify: bool = False
+) -> tuple[NDArray[np.int8], NDArray[np.int8], bool]:
     """
     Infer AOD command vectors implied by a proposed parallel move set.
 
@@ -214,13 +226,13 @@ def get_AOD_cmds_from_move_list(matrix: NDArray, move_seq: list[Move], verify: b
 
 
 def move_atoms(
-        init_matrix: NDArray, 
-        moves: list[Move], 
-        error_model: ErrorModel = ZeroNoise(), 
-        params: PhysicalParams = PhysicalParams(), 
-        look_for_flag: bool = False, 
-        error_modeling: bool = False,
-        ) -> tuple[NDArray, list[list]]:
+    init_matrix: NDArray,
+    moves: list[Move],
+    error_model: ErrorModel = ZeroNoise(),
+    params: PhysicalParams = PhysicalParams(),
+    look_for_flag: bool = False,
+    error_modeling: bool = False,
+) -> tuple[NDArray, list[list]]:
     """
     Apply a batch of intended moves to a standalone occupancy matrix.
 
@@ -277,13 +289,15 @@ def move_atoms(
     if error_modeling:
         # evaluating moves from error model
         moves = error_model.get_move_errors(init_matrix, moves)
-    
+
     if not isinstance(init_matrix, np.ndarray):
         raise TypeError("init_matrix must be a numpy array.")
     # if init_matrix.ndim != 3:
     #     raise ValueError(f"init_matrix must be 3D (rows, cols), got ndim={init_matrix.ndim}.")
     if not np.issubdtype(init_matrix.dtype, np.integer):
-        raise TypeError(f"init_matrix must have an integer dtype, got {init_matrix.dtype}.")
+        raise TypeError(
+            f"init_matrix must have an integer dtype, got {init_matrix.dtype}."
+        )
 
     orig_dtype = init_matrix.dtype
     needs_recast: bool = bool(np.issubdtype(orig_dtype, np.unsignedinteger))
@@ -303,43 +317,50 @@ def move_atoms(
     matrix_out, duplicate_move_inds = _find_and_resolve_crossed_moves(moves, matrix_out)
 
     # applying moves on
-    matrix_out, failed_moves, flags = _apply_moves(init_matrix, 
-                                                  matrix_out, 
-                                                  moves, 
-                                                  duplicate_move_inds,
-                                                  look_for_flag = look_for_flag)
+    matrix_out, failed_moves, flags = _apply_moves(
+        init_matrix, matrix_out, moves, duplicate_move_inds, look_for_flag=look_for_flag
+    )
 
     # if there are multiple atoms in a trap, they repel each other
     if np.max(matrix_out) > 1:
         for i in range(len(matrix_out)):
             for j in range(len(matrix_out[0])):
-                if matrix_out[i,j] > 1:
-                    matrix_out[i,j] = 0
+                if matrix_out[i, j] > 1:
+                    matrix_out[i, j] = 0
 
     # calculating the time it took the atoms to be moved
     max_distance = 0
     for move in moves:
-        dist = move.distance*params.spacing + (error_model.putdown_time + error_model.pickup_time)*params.AOD_speed
+        dist = (
+            move.distance * params.spacing
+            + (error_model.putdown_time + error_model.pickup_time) * params.AOD_speed
+        )
         if dist > max_distance:
             max_distance = dist
 
-        move_time = max_distance/params.AOD_speed
+        move_time = max_distance / params.AOD_speed
 
     # evaluating atom loss process from error model
-    matrix_out, _ = error_model.get_atom_loss(matrix_out, move_time, n_species = 1)
+    matrix_out, _ = error_model.get_atom_loss(matrix_out, move_time, n_species=1)
 
     if matrix_out.size > 0 and int(np.min(matrix_out)) < 0:
-        raise ValueError("move_atoms produced negative occupancy; refusing to cast to unsigned dtype.")
-    
+        raise ValueError(
+            "move_atoms produced negative occupancy; refusing to cast to unsigned dtype."
+        )
+
     if needs_recast:
         return matrix_out.astype(orig_dtype, copy=False), [failed_moves, flags]
 
     return matrix_out, [failed_moves, flags]
-    
-def _get_duplicate_vals_from_list(l: list) -> list:
-    return [k for k,v in Counter(l).items() if v>1]
 
-def _find_and_resolve_crossed_moves(move_list: list, matrix_copy: np.ndarray) -> tuple[NDArray, list]:
+
+def _get_duplicate_vals_from_list(l: list) -> list:
+    return [k for k, v in Counter(l).items() if v > 1]
+
+
+def _find_and_resolve_crossed_moves(
+    move_list: list, matrix_copy: np.ndarray
+) -> tuple[NDArray, list]:
     """
     Identifies sets of moves where the AOD tweezers cross over each other (and destroy the atoms).
     NB: this ONLY works for moves where you only move by one column or one row.
@@ -376,22 +397,24 @@ def _find_and_resolve_crossed_moves(move_list: list, matrix_copy: np.ndarray) ->
                     if move.fail_flag != 1:
                         matrix_copy[move.from_row][move.from_col] = 0
                 else:
-                    move.fail_flag = 3 # meaning that there is no atom to move
+                    move.fail_flag = 3  # meaning that there is no atom to move
     return matrix_copy, duplicate_move_inds
 
 
-def _apply_moves(init_matrix: NDArray, 
-                matrix_out: NDArray, 
-                moves: list, 
-                duplicate_move_inds: list = [],
-                look_for_flag: bool = False) -> tuple[NDArray, list, list]:
-    """ 
-    Applies moves to an array of atoms (represented by `matrix_out`). 
+def _apply_moves(
+    init_matrix: NDArray,
+    matrix_out: NDArray,
+    moves: list,
+    duplicate_move_inds: list = [],
+    look_for_flag: bool = False,
+) -> tuple[NDArray, list, list]:
+    """
+    Applies moves to an array of atoms (represented by `matrix_out`).
     The function assumes that any moves which involve crossing tweezers
     have already been filtered out by `find_and_resolve_crossed_moves()`.
-    
+
     NB: `init_matrix` is the initial array before crossed moves were resolved,
-    and `matrix_out` is the array following resolution of crossed moves. 
+    and `matrix_out` is the array following resolution of crossed moves.
     """
     failed_moves = []
     flags = []
@@ -403,39 +426,65 @@ def _apply_moves(init_matrix: NDArray,
         else:
             # fail flag code for the move: SUCCESS[0], PICKUPFAIL[1], PUTDOWNFAIL[2], NOATOM[3]
             # move.fail_flag = random.choices([0, 1, 2], weights=[1-pickup_fail_rate-putdown_fail_rate, pickup_fail_rate, putdown_fail_rate])[0]
-            
-            # Classify the move as: 
+
+            # Classify the move as:
             #   a) legal (there is an atom in the pickup position and NO atom in the putdown position),
             #   b) illegal (there is an atom in the pickup pos and an atom in the putdown pos)
             #   c) eject (there is an atom in the pickup pos and the putdown pos is outside of the array)
             #   d) no atom to move (there is NO atom in the pickup pos)
 
             # if there is an atom in the pickup pos
-            if int(init_matrix[move.from_row][move.from_col]) == 1:
+            # if int(init_matrix[move.from_row][move.from_col]) == 1: # NB: deprecated in NumPy 1.25
+            if (
+                int(np.sum(init_matrix[move.from_row, move.from_col], dtype=np.int64))
+                == 1
+            ):
                 try:
                     # check if there is NO atom in the putdown pos
-                    if int(init_matrix[move.to_row][move.to_col]) == 0 and move.to_col >= 0 and move.to_row >= 0:
+                    if (
+                        move.to_col >= 0
+                        and move.to_row >= 0
+                        and int(
+                            np.sum(
+                                init_matrix[move.to_row, move.to_col], dtype=np.int64
+                            )
+                        )
+                        == 0
+                    ):  # int(init_matrix[move.to_row][move.to_col]) == 0:
                         movetype = MoveType.LEGAL_MOVE
                     # check if there is an atom in the putdown pos
-                    elif int(init_matrix[move.to_row][move.to_col]) == 1 and move.to_col >= 0 and move.to_row >= 0:
+                    elif (
+                        move.to_col >= 0
+                        and move.to_row >= 0
+                        and int(
+                            np.sum(
+                                init_matrix[move.to_row, move.to_col], dtype=np.int64
+                            )
+                        )
+                        == 1
+                    ):  # int(init_matrix[move.to_row][move.to_col]) == 1:
                         movetype = MoveType.ILLEGAL_MOVE
                     elif move.to_col >= 0 and move.to_row >= 0:
-                        raise Exception(f"{int(init_matrix[move.to_row][move.to_col][0])} is not a valid matrix entry.")
+                        raise Exception(
+                            f"{int(init_matrix[move.to_row][move.to_col][0])} is not a valid matrix entry."
+                        )
                     else:
                         raise IndexError
                 except IndexError:
                     movetype = MoveType.EJECT_MOVE
-            else: # if there is no atom in the pickup pos
+            else:  # if there is no atom in the pickup pos
                 movetype = MoveType.NO_ATOM_TO_MOVE
                 move.fail_flag = 3
-            
+
             # if the move fails due to the atom not being picked up or put down correctly, make a note of this.
-            if (move.fail_flag != 0 and look_for_flag):
-                failed_moves.append(move_ind) 
+            if move.fail_flag != 0 and look_for_flag:
+                failed_moves.append(move_ind)
                 flags.append(move.fail_flag)
-                if move.fail_flag == 2: #PUTDOWNFAIL, see above
+                if move.fail_flag == 2:  # PUTDOWNFAIL, see above
                     if matrix_out[move.from_row][move.from_col] == 0:
-                        raise Exception(f"Error occured in MoveType. There is NO atom at ({move.from_row}, {move.from_col}).")
+                        raise Exception(
+                            f"Error occured in MoveType. There is NO atom at ({move.from_row}, {move.from_col})."
+                        )
                     matrix_out[move.from_row][move.from_col] -= 1
             # elif the move is valid, implement it
             elif movetype == MoveType.LEGAL_MOVE or movetype == MoveType.ILLEGAL_MOVE:
@@ -445,7 +494,9 @@ def _apply_moves(init_matrix: NDArray,
             # elif the move is an ejection move or moves an atom into an occupied site, remove the atom(s)
             elif movetype == MoveType.EJECT_MOVE:
                 if matrix_out[move.from_row][move.from_col] == 0:
-                    raise Exception(f"Error occured in MoveType assignment. There is NO atom at ({move.from_row}, {move.from_col}).")
+                    raise Exception(
+                        f"Error occured in MoveType assignment. There is NO atom at ({move.from_row}, {move.from_col})."
+                    )
                 matrix_out[move.from_row][move.from_col] -= 1
     return matrix_out, failed_moves, flags
 
@@ -583,11 +634,11 @@ def build_destructive_support_mask(
     if h_cmds.ndim != 1 or v_cmds.ndim != 1:
         raise ValueError("horiz_cmds and vert_cmds must both be 1D.")
 
-    h_active: BoolArray = h_cmds != 0          # shape (n_cols,)
-    v_active: BoolArray = v_cmds != 0          # shape (n_rows,)
+    h_active: BoolArray = h_cmds != 0  # shape (n_cols,)
+    v_active: BoolArray = v_cmds != 0  # shape (n_rows,)
 
-    h_collided: BoolArray = detect_destructive_aod_cmd_mask(h_cmds)   # cols
-    v_collided: BoolArray = detect_destructive_aod_cmd_mask(v_cmds)   # rows
+    h_collided: BoolArray = detect_destructive_aod_cmd_mask(h_cmds)  # cols
+    v_collided: BoolArray = detect_destructive_aod_cmd_mask(v_cmds)  # rows
 
     # shape (n_rows, n_cols)
     killed_by_h: BoolArray = v_active[:, None] & h_collided[None, :]
@@ -720,7 +771,7 @@ def apply_moves_noiseless(
         dst_in_bounds: bool = 0 <= dst_row < n_rows and 0 <= dst_col < n_cols
         if dst_in_bounds:
             out_2d[dst_row, dst_col] += 1
-    
+
     out_2d[out_2d > 1] = 0
 
     return _restore_single_species_matrix(
@@ -771,6 +822,7 @@ def move_atoms_noiseless(
 
 
 ## fast version
+
 
 def move_atoms_fast(
     init_matrix: NDArray,

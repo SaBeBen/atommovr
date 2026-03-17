@@ -37,13 +37,17 @@ from atommovr.utils.failure_policy import (
     bit_value,
 )
 
+
 def _mask_of(*bits: FailureBit) -> np.uint64:
     m = np.uint64(0)
     for b in bits:
         m |= bit_value(b)
     return m
 
-def test_REGRESSION_pipeline_seam_converging_next_tones_do_not_force_decel_putdown() -> None:
+
+def test_REGRESSION_pipeline_seam_converging_next_tones_do_not_force_decel_putdown() -> (
+    None
+):
     """
     Regression seam test: a converging/crossing pattern in *next* commands must not
     create a spurious decel/putdown eligibility on the current move.
@@ -93,7 +97,9 @@ def test_REGRESSION_pipeline_seam_converging_next_tones_do_not_force_decel_putdo
     assert moves[0].fail_flag == FailureFlag.SUCCESS
 
 
-def test_aod_timing_pickup_accel_or_policy_converging_preimages_accel_triggers() -> None:
+def test_aod_timing_pickup_accel_or_policy_converging_preimages_accel_triggers() -> (
+    None
+):
     """
     Regression/integration seam test for the “OR over predecessor tones” rule.
 
@@ -137,7 +143,9 @@ def test_aod_timing_pickup_accel_or_policy_converging_preimages_accel_triggers()
     assert moves[0].fail_mask == int(_mask_of(FailureBit.ACCEL_FAIL))
 
 
-def test_aod_timing_decel_putdown_not_triggered_by_converging_next_tones_elsewhere() -> None:
+def test_aod_timing_decel_putdown_not_triggered_by_converging_next_tones_elsewhere() -> (
+    None
+):
     """
     Regression/integration seam test for the bug you described:
 
@@ -181,6 +189,7 @@ def test_aod_timing_decel_putdown_not_triggered_by_converging_next_tones_elsewhe
     assert moves[0].fail_event == FailureEvent.SUCCESS
     assert moves[0].fail_flag == FailureFlag.SUCCESS
     assert moves[0].fail_mask == 0
+
 
 def test_aod_timing_event_pipeline_seam_first_round_pickup_and_accel() -> None:
     """
@@ -235,8 +244,10 @@ def test_aod_timing_event_pipeline_seam_end_round_decel_and_putdown() -> None:
     moves = [Move(1, 1, 1, 2)]
     event_mask = np.zeros(1, dtype=np.uint64)
 
-    curr_h_clean = np.array([0, 2, 0, 0], dtype=np.int8)  # moving tone at col 1 (dest index 2)
-    curr_v_clean = np.array([0, 1, 0], dtype=np.int8)     # hold tone at row 1
+    curr_h_clean = np.array(
+        [0, 2, 0, 0], dtype=np.int8
+    )  # moving tone at col 1 (dest index 2)
+    curr_v_clean = np.array([0, 1, 0], dtype=np.int8)  # hold tone at row 1
 
     # Next round: horizontal destination tone disappears -> decel + putdown at source tone
     next_h_clean = np.array([0, 0, 0, 0], dtype=np.int8)

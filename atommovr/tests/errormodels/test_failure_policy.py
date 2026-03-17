@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from atommovr.utils import failure_policy as fp
 from atommovr.utils.failure_policy import (
@@ -39,16 +38,18 @@ def test_suppress_all_bits_collapses_to_no_atom() -> None:
 
 def test_suppress_no_atom_dominates_all() -> None:
     event_mask = np.array(
-        [mask_of(
-            FailureBit.NO_ATOM,
-            FailureBit.PICKUP_FAIL,
-            FailureBit.COLLISION_AVOIDABLE,
-            FailureBit.COLLISION_INEVITABLE,
-            FailureBit.ACCEL_FAIL,
-            FailureBit.DECEL_FAIL,
-            FailureBit.PUTDOWN_FAIL,
-            FailureBit.TRANSPORT_FAIL,
-        )],
+        [
+            mask_of(
+                FailureBit.NO_ATOM,
+                FailureBit.PICKUP_FAIL,
+                FailureBit.COLLISION_AVOIDABLE,
+                FailureBit.COLLISION_INEVITABLE,
+                FailureBit.ACCEL_FAIL,
+                FailureBit.DECEL_FAIL,
+                FailureBit.PUTDOWN_FAIL,
+                FailureBit.TRANSPORT_FAIL,
+            )
+        ],
         dtype=np.uint64,
     )
     suppress_inplace(event_mask)
@@ -57,12 +58,14 @@ def test_suppress_no_atom_dominates_all() -> None:
 
 def test_suppress_collision_inevitable_dominates_except_no_atom() -> None:
     event_mask = np.array(
-        [mask_of(
-            FailureBit.COLLISION_INEVITABLE,
-            FailureBit.PICKUP_FAIL,
-            FailureBit.PUTDOWN_FAIL,
-            FailureBit.ACCEL_FAIL,
-        )],
+        [
+            mask_of(
+                FailureBit.COLLISION_INEVITABLE,
+                FailureBit.PICKUP_FAIL,
+                FailureBit.PUTDOWN_FAIL,
+                FailureBit.ACCEL_FAIL,
+            )
+        ],
         dtype=np.uint64,
     )
     suppress_inplace(event_mask)
@@ -71,31 +74,37 @@ def test_suppress_collision_inevitable_dominates_except_no_atom() -> None:
 
 def test_suppress_pickup_fail_clears_avoidable_collision_and_downstream() -> None:
     event_mask = np.array(
-        [mask_of(
-            FailureBit.PICKUP_FAIL,
-            FailureBit.COLLISION_AVOIDABLE,
-            FailureBit.ACCEL_FAIL,
-            FailureBit.TRANSPORT_FAIL,
-            FailureBit.DECEL_FAIL,
-            FailureBit.PUTDOWN_FAIL,
-        )],
+        [
+            mask_of(
+                FailureBit.PICKUP_FAIL,
+                FailureBit.COLLISION_AVOIDABLE,
+                FailureBit.ACCEL_FAIL,
+                FailureBit.TRANSPORT_FAIL,
+                FailureBit.DECEL_FAIL,
+                FailureBit.PUTDOWN_FAIL,
+            )
+        ],
         dtype=np.uint64,
     )
     suppress_inplace(event_mask)
     assert event_mask[0] == mask_of(FailureBit.PICKUP_FAIL)
 
 
-def test_REGRESSION_suppress_collision_avoidable_clears_downstream_when_not_pickup() -> None:
+def test_REGRESSION_suppress_collision_avoidable_clears_downstream_when_not_pickup() -> (
+    None
+):
     # COLLISION_AVOIDABALE is dominant unless PICKUP_FAIL (per exception list),
     # and also suppresses downstream bits (per suppression rules).
     event_mask = np.array(
-        [mask_of(
-            FailureBit.COLLISION_AVOIDABLE,
-            FailureBit.ACCEL_FAIL,
-            FailureBit.TRANSPORT_FAIL,
-            FailureBit.DECEL_FAIL,
-            FailureBit.PUTDOWN_FAIL,
-        )],
+        [
+            mask_of(
+                FailureBit.COLLISION_AVOIDABLE,
+                FailureBit.ACCEL_FAIL,
+                FailureBit.TRANSPORT_FAIL,
+                FailureBit.DECEL_FAIL,
+                FailureBit.PUTDOWN_FAIL,
+            )
+        ],
         dtype=np.uint64,
     )
     suppress_inplace(event_mask)
@@ -104,12 +113,14 @@ def test_REGRESSION_suppress_collision_avoidable_clears_downstream_when_not_pick
 
 def test_suppress_accel_fail_clears_transport_decel_putdown() -> None:
     event_mask = np.array(
-        [mask_of(
-            FailureBit.ACCEL_FAIL,
-            FailureBit.TRANSPORT_FAIL,
-            FailureBit.DECEL_FAIL,
-            FailureBit.PUTDOWN_FAIL,
-        )],
+        [
+            mask_of(
+                FailureBit.ACCEL_FAIL,
+                FailureBit.TRANSPORT_FAIL,
+                FailureBit.DECEL_FAIL,
+                FailureBit.PUTDOWN_FAIL,
+            )
+        ],
         dtype=np.uint64,
     )
     suppress_inplace(event_mask)
@@ -118,11 +129,13 @@ def test_suppress_accel_fail_clears_transport_decel_putdown() -> None:
 
 def test_suppress_transport_fail_clears_decel_putdown() -> None:
     event_mask = np.array(
-        [mask_of(
-            FailureBit.TRANSPORT_FAIL,
-            FailureBit.DECEL_FAIL,
-            FailureBit.PUTDOWN_FAIL,
-        )],
+        [
+            mask_of(
+                FailureBit.TRANSPORT_FAIL,
+                FailureBit.DECEL_FAIL,
+                FailureBit.PUTDOWN_FAIL,
+            )
+        ],
         dtype=np.uint64,
     )
     suppress_inplace(event_mask)
@@ -131,10 +144,12 @@ def test_suppress_transport_fail_clears_decel_putdown() -> None:
 
 def test_suppress_decel_fail_clears_putdown() -> None:
     event_mask = np.array(
-        [mask_of(
-            FailureBit.DECEL_FAIL,
-            FailureBit.PUTDOWN_FAIL,
-        )],
+        [
+            mask_of(
+                FailureBit.DECEL_FAIL,
+                FailureBit.PUTDOWN_FAIL,
+            )
+        ],
         dtype=np.uint64,
     )
     suppress_inplace(event_mask)
@@ -143,7 +158,15 @@ def test_suppress_decel_fail_clears_putdown() -> None:
 
 def test_suppress_handles_signed_int_dtype() -> None:
     event_mask = np.array(
-        [int(mask_of(FailureBit.PICKUP_FAIL, FailureBit.ACCEL_FAIL, FailureBit.PUTDOWN_FAIL))],
+        [
+            int(
+                mask_of(
+                    FailureBit.PICKUP_FAIL,
+                    FailureBit.ACCEL_FAIL,
+                    FailureBit.PUTDOWN_FAIL,
+                )
+            )
+        ],
         dtype=np.int64,
     )
     suppress_inplace(event_mask)
@@ -153,6 +176,7 @@ def test_suppress_handles_signed_int_dtype() -> None:
 # ----------------------------
 # Table-driven rule verification
 # ----------------------------
+
 
 def test_dominance_rules_match_table() -> None:
     """
@@ -212,9 +236,11 @@ def test_suppression_rules_clear_exactly_table_bits() -> None:
         # And since we didn't include any other bits, the output should be exactly the trigger bit.
         assert out == mask_of(trigger_bit)
 
+
 # ----------------------------
 # Primary event resolution
 # ----------------------------
+
 
 def test_resolve_primary_events_success_when_no_bits() -> None:
     event_mask = np.array([0, 0, 0], dtype=np.uint64)
@@ -228,11 +254,17 @@ def test_resolve_primary_events_uses_precedence_order() -> None:
     # NO_ATOM > COLLISION_INEVITABLE > PICKUP_FAIL > CROSSED_STATIC > ACCEL_FAIL > TRANSPORT_FAIL > DECEL_FAIL > PUTDOWN_FAIL
     event_mask = np.array(
         [
-            mask_of(FailureBit.PUTDOWN_FAIL, FailureBit.DECEL_FAIL),         # -> DECEL_FAIL
-            mask_of(FailureBit.ACCEL_FAIL, FailureBit.PICKUP_FAIL),          # -> PICKUP_FAIL
-            mask_of(FailureBit.TRANSPORT_FAIL, FailureBit.PUTDOWN_FAIL),     # -> TRANSPORT_FAIL
-            mask_of(FailureBit.COLLISION_AVOIDABLE, FailureBit.PICKUP_FAIL), # -> PICKUP_FAIL (precedence only)
-            mask_of(FailureBit.COLLISION_INEVITABLE, FailureBit.ACCEL_FAIL), # -> COLLISION_INEVITABLE
+            mask_of(FailureBit.PUTDOWN_FAIL, FailureBit.DECEL_FAIL),  # -> DECEL_FAIL
+            mask_of(FailureBit.ACCEL_FAIL, FailureBit.PICKUP_FAIL),  # -> PICKUP_FAIL
+            mask_of(
+                FailureBit.TRANSPORT_FAIL, FailureBit.PUTDOWN_FAIL
+            ),  # -> TRANSPORT_FAIL
+            mask_of(
+                FailureBit.COLLISION_AVOIDABLE, FailureBit.PICKUP_FAIL
+            ),  # -> PICKUP_FAIL (precedence only)
+            mask_of(
+                FailureBit.COLLISION_INEVITABLE, FailureBit.ACCEL_FAIL
+            ),  # -> COLLISION_INEVITABLE
         ],
         dtype=np.uint64,
     )
@@ -248,8 +280,10 @@ def test_resolve_primary_events_uses_precedence_order() -> None:
 def test_resolve_primary_events_does_not_require_suppress() -> None:
     event_mask = np.array(
         [
-            mask_of(FailureBit.COLLISION_INEVITABLE, FailureBit.NO_ATOM),          # -> NO_ATOM
-            mask_of(FailureBit.COLLISION_INEVITABLE, FailureBit.PICKUP_FAIL),      # -> COLLISION_INEVITABLE (without suppression)
+            mask_of(FailureBit.COLLISION_INEVITABLE, FailureBit.NO_ATOM),  # -> NO_ATOM
+            mask_of(
+                FailureBit.COLLISION_INEVITABLE, FailureBit.PICKUP_FAIL
+            ),  # -> COLLISION_INEVITABLE (without suppression)
         ],
         dtype=np.uint64,
     )

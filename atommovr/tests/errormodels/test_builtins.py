@@ -13,17 +13,17 @@ class TestZeroNoise:
         em = ZeroNoise()
         assert repr(em) == "ZeroNoise"
 
-
     def test_get_atom_loss_is_noop_single_species(self) -> None:
         em = ZeroNoise(seed=0)
         state = np.array([[1, 0], [0, 1]], dtype=np.uint8)
 
-        new_state, loss_flag = em.get_atom_loss(state, evolution_time=123.0, n_species=1)
+        new_state, loss_flag = em.get_atom_loss(
+            state, evolution_time=123.0, n_species=1
+        )
 
         assert np.array_equal(new_state, state)
         assert loss_flag is False
         assert new_state is not state  # should return a copy
-
 
     def test_get_atom_loss_is_noop_dual_species(self) -> None:
         em = ZeroNoise(seed=0)
@@ -34,7 +34,6 @@ class TestZeroNoise:
         assert np.array_equal(new_state, state)
         assert loss_flag is False
         assert new_state is not state
-
 
     @pytest.mark.parametrize(
         "method_name",
@@ -63,7 +62,6 @@ class TestUniformVacuumTweezerError:
         em = UniformVacuumTweezerError()
         assert repr(em) == "UniformVacuumTweezerError"
 
-
     def test_get_atom_loss_single_species_is_deterministic_for_seed(self) -> None:
         state = np.ones((20, 20), dtype=np.uint8)
 
@@ -75,7 +73,6 @@ class TestUniformVacuumTweezerError:
 
         assert np.array_equal(new1, new2)
         assert flag1 == flag2
-
 
     def test_get_atom_loss_dual_species_is_deterministic_for_seed(self) -> None:
         state = np.ones((20, 20, 2), dtype=np.uint8)
@@ -89,7 +86,6 @@ class TestUniformVacuumTweezerError:
         assert np.array_equal(new1, new2)
         assert flag1 == flag2
 
-
     def test_dual_species_applies_same_site_mask_to_both_channels(self) -> None:
         state = np.ones((12, 13, 2), dtype=np.uint8)
         em = UniformVacuumTweezerError(lifetime=3.0, seed=0)
@@ -100,14 +96,12 @@ class TestUniformVacuumTweezerError:
         assert np.array_equal(new_state[:, :, 0], new_state[:, :, 1])
         assert isinstance(loss_flag, bool)
 
-
     def test_invalid_n_species_raises(self) -> None:
         em = UniformVacuumTweezerError(seed=0)
         state = np.ones((4, 4), dtype=np.uint8)
 
         with pytest.raises(ValueError):
             em.get_atom_loss(state, evolution_time=1.0, n_species=3)
-
 
     def test_lifetime_nonpositive_raises_via_core(self) -> None:
         em = UniformVacuumTweezerError(lifetime=0.0, seed=0)
@@ -116,8 +110,9 @@ class TestUniformVacuumTweezerError:
         with pytest.raises(ValueError):
             em.get_atom_loss(state, evolution_time=1.0, n_species=1)
 
-
-    def test_REGRESSION_inherited_mask_method_uses_seeded_rng_and_sets_bits(self) -> None:
+    def test_REGRESSION_inherited_mask_method_uses_seeded_rng_and_sets_bits(
+        self,
+    ) -> None:
         """
         Regression test for child classes calling ErrorModel.__init__ so self.rng exists.
         """
@@ -134,7 +129,6 @@ class TestUniformVacuumTweezerError:
         assert np.all(event_mask[eligible] == bv)
         assert np.all(event_mask[~eligible] == 0)
 
-
     @pytest.mark.slow
     def test_single_species_survival_rate_is_reasonable_statistically(self) -> None:
         rows, cols = 250, 250
@@ -145,13 +139,14 @@ class TestUniformVacuumTweezerError:
         state = np.ones((rows, cols), dtype=np.uint8)
         em = UniformVacuumTweezerError(lifetime=lifetime, seed=0)
 
-        new_state, _ = em.get_atom_loss(state, evolution_time=evolution_time, n_species=1)
+        new_state, _ = em.get_atom_loss(
+            state, evolution_time=evolution_time, n_species=1
+        )
 
         phat = new_state.mean()
         n = rows * cols
         sigma = np.sqrt(p_survive * (1 - p_survive) / n)
         assert abs(phat - p_survive) <= 5 * sigma
-
 
     @pytest.mark.slow
     def test_dual_species_survival_rate_is_reasonable_statistically(self) -> None:
@@ -163,7 +158,9 @@ class TestUniformVacuumTweezerError:
         state = np.ones((rows, cols, 2), dtype=np.uint8)
         em = UniformVacuumTweezerError(lifetime=lifetime, seed=1)
 
-        new_state, _ = em.get_atom_loss(state, evolution_time=evolution_time, n_species=2)
+        new_state, _ = em.get_atom_loss(
+            state, evolution_time=evolution_time, n_species=2
+        )
 
         # Same site mask should be applied to both species
         assert np.array_equal(new_state[:, :, 0], new_state[:, :, 1])

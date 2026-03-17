@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 
 from atommovr.algorithms.source import Hungarian_works as hw
-from atommovr.utils.move_utils import Move, find_destructive_support_mask_from_moves, move_atoms_noiseless
+from atommovr.utils.move_utils import (
+    Move,
+    find_destructive_support_mask_from_moves,
+    move_atoms_noiseless,
+)
 
 
 def _move_atoms_2d_compat(
@@ -42,6 +46,7 @@ def _move_atoms_2d_compat(
 
     return matrix_out, []
 
+
 def _serialize_parallel_move_set(
     parallel_move_set: list[list[Move]],
 ) -> list[list[tuple[int, int, int, int]]]:
@@ -76,12 +81,10 @@ def _serialize_parallel_groups(
     Convert grouped Move objects into plain tuples for equality checks.
     """
     return [
-        [
-            (move.from_row, move.from_col, move.to_row, move.to_col)
-            for move in group
-        ]
+        [(move.from_row, move.from_col, move.to_row, move.to_col) for move in group]
         for group in groups
     ]
+
 
 def _apply_groups_noiseless(
     matrix: np.ndarray,
@@ -107,7 +110,8 @@ def _apply_moves_sequential_noiseless(
     for move in moves:
         out = move_atoms_noiseless(out, [move])
     return out
-    
+
+
 class TestREGROUP_PARALLEL_MOVES:
     def test_groups_noninterfering_moves_into_valid_batches(self) -> None:
         """
@@ -172,7 +176,9 @@ class TestREGROUP_PARALLEL_MOVES:
 
         assert np.array_equal(grouped_final, sequential_final)
 
-    def test_grouped_execution_matches_sequential_execution_on_random_small_cases(self) -> None:
+    def test_grouped_execution_matches_sequential_execution_on_random_small_cases(
+        self,
+    ) -> None:
         """
         On small generated move sets, every returned batch should be physically
         admissible and grouped execution should match sequential execution.
@@ -184,24 +190,34 @@ class TestREGROUP_PARALLEL_MOVES:
                 matrix = (rng.random((side, side)) < 0.25).astype(np.uint8, copy=False)
                 target = (rng.random((side, side)) < 0.25).astype(np.uint8, copy=False)
 
-                prepared_assignments = hw.generate_assignments(matrix.copy(), target.copy(), [])
+                prepared_assignments = hw.generate_assignments(
+                    matrix.copy(), target.copy(), []
+                )
                 candidate_moves: list[Move] = []
 
-                for start, end in prepared_assignments[: min(4, len(prepared_assignments))]:
+                for start, end in prepared_assignments[
+                    : min(4, len(prepared_assignments))
+                ]:
                     path = hw.generate_path(matrix.copy(), start, end)
                     if path:
                         for boxed_move in path:
                             candidate_moves.append(boxed_move[0])
 
-                groups = hw.regroup_parallel_moves_fast(matrix.copy(), list(candidate_moves))
+                groups = hw.regroup_parallel_moves_fast(
+                    matrix.copy(), list(candidate_moves)
+                )
 
                 for group in groups:
-                    support_mask, ok = find_destructive_support_mask_from_moves(matrix, group)
+                    support_mask, ok = find_destructive_support_mask_from_moves(
+                        matrix, group
+                    )
                     assert ok
                     assert not support_mask.any()
 
                 grouped_final = _apply_groups_noiseless(matrix.copy(), groups)
-                sequential_final = _apply_moves_sequential_noiseless(matrix.copy(), candidate_moves)
+                sequential_final = _apply_moves_sequential_noiseless(
+                    matrix.copy(), candidate_moves
+                )
 
                 assert np.array_equal(grouped_final, sequential_final)
 
@@ -278,6 +294,7 @@ class TestREGROUP_PARALLEL_MOVES:
 
     #             assert _serialize_parallel_groups(new_groups) == _serialize_parallel_groups(ref_groups)
 
+
 class TestTRANSFORM_PATHS_INTO_MOVES:
     @pytest.fixture(autouse=True)
     def _patch_move_atoms(
@@ -290,6 +307,7 @@ class TestTRANSFORM_PATHS_INTO_MOVES:
         behavior from unrelated move_utils API changes.
         """
         monkeypatch.setattr(hw, "move_atoms", _move_atoms_2d_compat)
+
     def test_matches_final_state_on_handcrafted_nonintersecting_paths(self) -> None:
         """
         The fast transform should preserve the final state; exact batch
@@ -345,10 +363,14 @@ class TestTRANSFORM_PATHS_INTO_MOVES:
                 matrix = (rng.random((side, side)) < 0.25).astype(np.uint8, copy=False)
                 target = (rng.random((side, side)) < 0.25).astype(np.uint8, copy=False)
 
-                prepared_assignments = hw.generate_assignments(matrix.copy(), target.copy(), [])
+                prepared_assignments = hw.generate_assignments(
+                    matrix.copy(), target.copy(), []
+                )
                 paths: list[list[list[Move]]] = []
 
-                for start, end in prepared_assignments[: min(4, len(prepared_assignments))]:
+                for start, end in prepared_assignments[
+                    : min(4, len(prepared_assignments))
+                ]:
                     path = hw.generate_path(matrix.copy(), start, end)
                     if path != []:
                         paths.append(path)
@@ -365,12 +387,13 @@ class TestTRANSFORM_PATHS_INTO_MOVES:
                 assert np.array_equal(new_matrix, ref_matrix)
 
                 for group in new_moves:
-                    support_mask, ok = find_destructive_support_mask_from_moves(matrix, group)
+                    support_mask, ok = find_destructive_support_mask_from_moves(
+                        matrix, group
+                    )
                     assert ok
                     assert not support_mask.any()
 
                 assert len(new_moves) <= len(ref_moves)
-    
 
     def test_matches_original_on_handcrafted_intersecting_paths(self) -> None:
         """
@@ -407,7 +430,9 @@ class TestTRANSFORM_PATHS_INTO_MOVES:
         )
 
         assert np.array_equal(new_matrix, ref_matrix)
-        assert _serialize_parallel_move_set(new_moves) == _serialize_parallel_move_set(ref_moves)
+        assert _serialize_parallel_move_set(new_moves) == _serialize_parallel_move_set(
+            ref_moves
+        )
 
     def test_matches_original_on_empty_input(self) -> None:
         """
@@ -427,4 +452,6 @@ class TestTRANSFORM_PATHS_INTO_MOVES:
         )
 
         assert np.array_equal(new_matrix, ref_matrix)
-        assert _serialize_parallel_move_set(new_moves) == _serialize_parallel_move_set(ref_moves)
+        assert _serialize_parallel_move_set(new_moves) == _serialize_parallel_move_set(
+            ref_moves
+        )
