@@ -17,6 +17,7 @@ from atommover.utils.errormodels import ZeroNoise
 from atommover.utils.core import generate_random_target_configs, generate_random_init_configs, PhysicalParams, Configurations, CONFIGURATION_PLOT_LABELS, array_shape_for_geometry
 from atommover.utils.AtomArray import AtomArray
 from atommover.algorithms.Algorithm_class import Algorithm, get_effective_target_grid
+from atommover.algorithms.source.scaling_lower_bound import calculate_Zstar_better
 
 try:
     from tqdm.auto import tqdm as tqdm_auto
@@ -102,7 +103,7 @@ class BenchmarkingFigure():
         self.y_axis_variables = normalized
         self.figure_type = figure_type
 
-    def generate_scaling_figure(self, x_axis_unused, benchmarking_results, title, x_label, save, savename = 'Algorithm_scaling', complexity_summary=None):
+    def generate_scaling_figure(self, x_axis_unused, benchmarking_results, title, x_label, save, savename = 'Algorithm_scaling', complexity_summary=None, analytical_model_fns=None):
         sns.set_theme(style="whitegrid", font_scale=1.15)
 
         def _format_axis(ax_obj, metric_key):
@@ -297,6 +298,20 @@ class BenchmarkingFigure():
                             force_power_fit=(has_complexity_data and not is_success_rate),
                             connect_dots=is_success_rate
                         )
+                    if is_success_rate and analytical_model_fns:
+                        for algo in algo_labels:
+                            key = (str(algo), error_label)
+                            model_fn = analytical_model_fns.get(key)
+                            if model_fn is None:
+                                continue
+                            x_vals = target_counts_da.sel(algorithm=algo).values.reshape(-1)
+                            x_valid = x_vals[np.isfinite(x_vals) & (x_vals > 0)]
+                            if x_valid.size < 2:
+                                continue
+                            x_smooth = np.linspace(x_valid.min(), x_valid.max(), 200)
+                            y_smooth = model_fn(x_smooth)
+                            ax.plot(x_smooth, y_smooth, color=color_map[algo],
+                                    linestyle='--', linewidth=1.5, alpha=0.7)
                     if not plotted_any:
                         plt.close(fig)
                         continue
@@ -696,6 +711,7 @@ class Benchmarking():
         parallel_batch_counts_array = np.zeros(result_array_dims, dtype = 'float')
         array_rows_array = np.zeros(result_array_dims, dtype = 'int64')
         array_cols_array = np.zeros(result_array_dims, dtype = 'int64')
+        zstar_array = np.zeros(result_array_dims, dtype = 'float')
 
         self._benchmark_records = []
         self._current_run_timestamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
@@ -806,7 +822,7 @@ class Benchmarking():
                             algo_label = algo_labels[alg_ind]
                             for round_ind, num_rounds in enumerate(self.rounds_list):
                                 (success_rate, mean_success_time, fill_fracs, wrong_places, atoms_in_arrays, atoms_in_target, sufficient_rate, wall_time, cpu_time, parallel_counts, move_counts,
-                                 per_round_new_fills, per_round_empty_counts) = self._run_benchmark_round(
+                                 per_round_new_fills, per_round_empty_counts, zstar_vals) = self._run_benchmark_round(
                                     algo,
                                     do_ejection=do_ejection,
                                     pattern=pattern,
@@ -821,6 +837,7 @@ class Benchmarking():
                                 target_mean = float(np.mean(atoms_in_target)) if len(atoms_in_target) > 0 else np.nan
                                 parallel_mean = float(np.mean(parallel_counts)) if len(parallel_counts) > 0 else np.nan
                                 moves_mean = float(np.mean(move_counts)) if len(move_counts) > 0 else np.nan
+                                zstar_mean = float(np.nanmean(zstar_vals)) if len(zstar_vals) > 0 else np.nan
                                 # populating result arrays
                                 success_rate_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = success_rate
                                 time_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = mean_success_time
@@ -836,6 +853,7 @@ class Benchmarking():
                                 move_counts_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = moves_mean
                                 array_rows_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = rows
                                 array_cols_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = cols
+                                zstar_array[alg_ind, targ_ind, size_ind, model_ind, param_ind, round_ind] = zstar_mean
 
                                 record = {
                                     'run_timestamp': self._current_run_timestamp,
@@ -863,6 +881,7 @@ class Benchmarking():
                                     'sufficient_atom_rate': sufficient_rate,
                                     'mean_moves_per_shot': moves_mean,
                                     'mean_parallel_batches_per_shot': parallel_mean,
+                                    'mean_zstar': zstar_mean,
                                     'n_shots': self.n_shots,
                                     'n_species': self.tweezer_array.n_species,
                                     'check_sufficient_atoms': self.check_sufficient_atoms,
@@ -902,6 +921,7 @@ class Benchmarking():
         parallel_batches_da = xr.DataArray(parallel_batch_counts_array, dims=dims, coords = coords)
         array_rows_da = xr.DataArray(array_rows_array, dims=dims, coords = coords)
         array_cols_da = xr.DataArray(array_cols_array, dims=dims, coords = coords)
+        zstar_da = xr.DataArray(zstar_array, dims=dims, coords = coords)
         
         self.benchmarking_results = xr.Dataset({'success rate': success_rates_da, 
                             'time': success_times_da, 
@@ -915,7 +935,8 @@ class Benchmarking():
                             'mean moves': move_counts_da,
                             'parallel move batches': parallel_batches_da,
                             'array rows': array_rows_da,
-                            'array cols': array_cols_da})
+                            'array cols': array_cols_da,
+                            'zstar lower bound': zstar_da})
         self.benchmarking_results.attrs.update({
             'do_ejection': bool(do_ejection),
             'n_shots': int(self.n_shots),
@@ -926,6 +947,7 @@ class Benchmarking():
         self._export_runtime_csv()
         self._export_complexity_csv()
         self._export_algorithm_summary_csv()
+        self._compute_analytical_models()
 
         if progress_bars:
             for bar in progress_bars.values():
@@ -966,6 +988,7 @@ class Benchmarking():
             'sufficient_atom_rate',
             'mean_moves_per_shot',
             'mean_parallel_batches_per_shot',
+            'mean_zstar',
             'n_shots',
             'n_species',
             'check_sufficient_atoms',
@@ -1269,7 +1292,75 @@ class Benchmarking():
 
         # retain for callers/tests
         self._algorithm_summary = rows_out
-            
+
+    def _compute_analytical_models(self):
+        """Derive analytical success rate models P(N) = r(N)^N from filling fractions.
+
+        For each (algorithm, error_model) pair the mean filling fraction at each
+        measured system size serves as an empirical per-site fill probability r.
+        Interpolating log(r) across target-site counts and exponentiating by N
+        yields a smooth analytical prediction that can be overlaid on success-rate
+        scatter plots.
+        """
+        ds = getattr(self, 'benchmarking_results', None)
+        if ds is None:
+            self._analytical_models = {}
+            return
+
+        models = {}
+        algo_labels = list(ds.coords['algorithm'].values)
+        err_labels = list(ds.coords['error model'].values)
+        target_sel = ds.coords['target'].values[0]
+        phys_sel = ds.coords['physical params'].values[0]
+        round_sel = ds.coords['num rounds'].values[0]
+
+        for algo in algo_labels:
+            for err in err_labels:
+                base_sel = {
+                    'algorithm': algo,
+                    'target': target_sel,
+                    'error model': err,
+                    'physical params': phys_sel,
+                    'num rounds': round_sel,
+                }
+                fill_fracs = ds['filling fraction'].sel(**base_sel).values.flatten()
+                n_targets = ds['n targets'].sel(**base_sel).values.flatten()
+
+                mask = (
+                    np.isfinite(fill_fracs)
+                    & np.isfinite(n_targets)
+                    & (n_targets > 0)
+                    & (fill_fracs > 0)
+                )
+                if np.count_nonzero(mask) < 2:
+                    continue
+
+                n_arr = n_targets[mask]
+                r_arr = np.clip(fill_fracs[mask], 1e-10, 1.0)
+
+                # aggregate per system size: mean filling fraction per unique N
+                unique_n = np.unique(n_arr)
+                mean_r = np.array([r_arr[n_arr == n].mean() for n in unique_n])
+                if len(unique_n) < 2:
+                    continue
+                log_r = np.log(mean_r)
+
+                def _make_model(n_pts, log_r_pts):
+                    def model(N):
+                        N = np.asarray(N, dtype=float)
+                        log_r_interp = np.interp(
+                            N, n_pts, log_r_pts,
+                            left=log_r_pts[0], right=log_r_pts[-1],
+                        )
+                        return np.exp(N * log_r_interp)
+                    return model
+
+                models[(str(algo), str(err))] = _make_model(
+                    unique_n.copy(), log_r.copy(),
+                )
+
+        self._analytical_models = models
+
     def _run_benchmark_round(self, algorithm, do_ejection: bool = False, pattern = None, num_rounds = 1, precomputed_target: np.ndarray | None = None, random_targets: list[np.ndarray] | None = None, base_target_size: int | None = None) -> tuple[float, float, list, list, list, list, float, float, float, list, list]:
         success_times = []
         success_flags = []
@@ -1280,6 +1371,7 @@ class Benchmarking():
         sufficient_flags = []
         parallel_move_counts = []
         atom_move_counts = []
+        zstar_values = []
         # Per-round diagnostics
         per_round_new_fills_allshots: list[list[int]] = []
         per_round_empty_counts_allshots: list[list[int]] = []
@@ -1354,6 +1446,17 @@ class Benchmarking():
             shot_parallel_batches = 0
             shot_move_count = 0
             t_total = 0.0
+            # Compute Z* (bottleneck lower bound) before rearrangement
+            try:
+                zstar_val = calculate_Zstar_better(
+                    self.tweezer_array.matrix,
+                    self.tweezer_array.target,
+                    self.tweezer_array.n_species,
+                    metric='grid',
+                )
+            except Exception:
+                zstar_val = np.nan
+            zstar_values.append(float(zstar_val))
             # per-shot per-round lists
             shot_new_fills: list[int] = []
             shot_empty_before: list[int] = []
@@ -1441,6 +1544,7 @@ class Benchmarking():
             atom_move_counts,
             per_round_new_fills_allshots,
             per_round_empty_counts_allshots,
+            zstar_values,
         )
 
 
@@ -1459,6 +1563,7 @@ class Benchmarking():
                 savename=savename,
                 save=save,
                 complexity_summary=getattr(self, '_complexity_summary', None),
+                analytical_model_fns=getattr(self, '_analytical_models', None),
             )
 
         elif self.figure_output.figure_type == "hist":

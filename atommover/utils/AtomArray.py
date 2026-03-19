@@ -396,7 +396,7 @@ class AtomArray:
                 if isinstance(val_pickup, np.ndarray) and val_pickup.ndim > 0:
                     val_pickup = val_pickup.item()
                 
-                if int(val_pickup) == 1:
+                if int(val_pickup) >= 1:
 
                     if move.to_col > self.shape[1]-1 or move.to_row > self.shape[0]-1 or move.to_col < 0 or move.to_row < 0:
                         move.movetype = MoveType.EJECT_MOVE
@@ -409,10 +409,8 @@ class AtomArray:
                         if int(val_putdown) == 0:
                             move.movetype = MoveType.LEGAL_MOVE
                         # if the putdown pos is filled, the move is illegal/there will be a collision
-                        elif int(val_putdown) == 1:
-                            move.movetype = MoveType.ILLEGAL_MOVE
                         else:
-                            raise Exception(f"{int(val_putdown)} is not a valid matrix entry.")
+                            move.movetype = MoveType.ILLEGAL_MOVE
                 else: # if there is no atom in the pickup pos
                     move.movetype = MoveType.NO_ATOM_TO_MOVE
                     move.failure_flag = 3

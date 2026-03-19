@@ -101,50 +101,37 @@ def demo_extraction_pipeline():
 
 
 # create a source and a target AtomArray to show start and goal states and visualize them
-def create_demo_arrays():
+def create_demo_arrays(overlay_centroids: bool = True):
     shape = (6, 6)
     arr_source = AtomArray(shape=shape, n_species=1, geom=ArrayGeometry.RECTANGULAR)
     arr_source.load_tweezers()
-    
+
     arr_target = AtomArray(shape=shape, n_species=1, geom=ArrayGeometry.RECTANGULAR)
     arr_target.load_tweezers()
-    # target is a filled rectangle in the center
-    r0 = (shape[0] - 4) // 2
-    c0 = (shape[1] - 4) // 2
-    target_mask = np.zeros(shape, dtype=int)
-    target_mask[r0:r0+4, c0:c0+4] = 1
-    arr_target.matrix[:,:,0] = target_mask
-    
-    # visualize start and goal states with the realistic rendering
-    img_source = arr_source.render_realistic_image(sigma=1.5, brightness=1, image_shape=(1280, 1280), noise_level=0.01, angle=10)
-    img_target = arr_target.render_realistic_image(sigma=1.5, brightness=1, image_shape=(1280, 1280), noise_level=0.01)
-    img_adjusted = arr_source.render_realistic_image(sigma=1.5, brightness=1, image_shape=(1280, 1280), noise_level=0.01)
+    r0, c0 = (shape[0] - 4) // 2, (shape[1] - 4) // 2
+    arr_target.matrix[r0:r0+4, c0:c0+4, 0] = 1
 
-    # run blob detection on the source image and overlay detected centroids
-    spots = int(sum(arr_source.matrix[:,:,0].flatten()))
+    spots = int(arr_source.matrix[:, :, 0].sum())
     print(f"Expecting to detect {spots} blobs in the source image")
 
-    blob_detector = BlobDetection(
-        shape=(shape[0], shape[1]),
-        spots=spots,
-        scale=(1, 1),
-        logger=None,
-    )
-    binary_grid, _, _ = blob_detector.extract_estimate_rotate_and_assign(
-        img_source,
-        grid_shape=shape,
-        visualize=True,
-        return_details=True,
-    )
-    n_detected = 0 if binary_grid is None else np.sum(binary_grid)
-    print(f"Detected {n_detected} blobs on the source image")
+    blob_detector = BlobDetection(shape=(shape[0], shape[1]), spots=spots, scale=(1, 1), logger=None)
 
-    # save images
+    named_imgs = [
+        ('start',    arr_source.render_realistic_image(sigma=1.5, brightness=1, image_shape=(1280, 1280), noise_level=0.01, angle=10)),
+        ('target',   arr_target.render_realistic_image(sigma=1.5, brightness=1, image_shape=(1280, 1280), noise_level=0.01)),
+        ('adjusted', arr_source.render_realistic_image(sigma=1.5, brightness=1, image_shape=(1280, 1280), noise_level=0.01)),
+    ]
+
+    binary_grid, _, _ = blob_detector.extract_estimate_rotate_and_assign(named_imgs[0][1], grid_shape=shape, return_details=True)
+    print(f"Detected {0 if binary_grid is None else int(np.sum(binary_grid))} blobs on the source image")
+
     os.makedirs('figs/imaging', exist_ok=True)
-
-    plt.imsave('figs/imaging/extraction_demo_start_state.png', img_source, cmap='Blues')
-    plt.imsave('figs/imaging/extraction_demo_target_state.png', img_target, cmap='Blues')
-    plt.imsave('figs/imaging/extraction_demo_adjusted_state.png', img_adjusted, cmap='Blues')
+    for name, img in named_imgs:
+        path = f'figs/imaging/extraction_demo_{name}_state.png'
+        plt.imsave(path, img, cmap='Blues')
+        if overlay_centroids:
+            centroids, _ = blob_detector.extract(img)
+            BlobDetection.overlay_centroids(img, centroids, save_path=path.replace('.png', '_centroids.png'))
     plt.close()
 
 
@@ -179,7 +166,7 @@ if __name__ == "__main__":
     print("=" * 40)
     
     try:
-        demo_image_generation()
+        # demo_image_generation()
         demo_extraction_pipeline() 
         create_demo_arrays()
         demo_gif_generation()

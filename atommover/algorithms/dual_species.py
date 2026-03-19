@@ -31,7 +31,7 @@ class InsideOut(Algorithm):
     def __repr__(self):
         return 'InsideOut'
     
-    def get_moves(self, dual_sp_array: AtomArray):
+    def get_moves(self, dual_sp_array: AtomArray, do_ejection: bool = False, **kwargs):
         return inside_out_algorithm(dual_sp_array)
 
 class NaiveParHung(Algorithm):
@@ -42,5 +42,5 @@ class NaiveParHung(Algorithm):
     def __repr__(self):
         return 'NaiveParHung'
     
-    def get_moves(self, dual_sp_array: AtomArray):
-        return naive_par_Hung(dual_sp_array)
+    def get_moves(self, dual_sp_array: AtomArray, do_ejection: bool = False, **kwargs):
+        return naive_par_Hung(dual_sp_array, do_ejection=do_ejection)

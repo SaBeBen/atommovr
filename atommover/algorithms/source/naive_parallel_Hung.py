@@ -1,5 +1,5 @@
 from collections import deque
-from atommover.utils.core import Move
+from atommover.utils.move_utils import Move
 from atommover.utils.AtomArray import AtomArray
 from atommover.algorithms.source.inside_out import *
 from atommover.algorithms.source.Hungarian_works import generate_cost_matrix

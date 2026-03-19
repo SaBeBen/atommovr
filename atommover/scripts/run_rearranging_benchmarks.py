@@ -9,27 +9,46 @@ if repo_root not in sys.path:
 
 from atommover.utils.benchmarking import Benchmarking, BenchmarkingFigure
 from atommover.utils.core import Configurations, PhysicalParams
-from atommover.algorithms.single_species import PCFA, Hungarian, BalanceAndCompact, BCv2, ParallelLBAP, ParallelHungarian, GeneralizedBalance, Tetris
+from atommover.algorithms.single_species import PCFA, Hungarian, BalanceAndCompact, BCv2, ParallelLBAP, ParallelHungarian, GeneralizedBalance, Tetris, BlindCompress, BlindShell, BlindSweep
+from atommover.algorithms.dual_species import InsideOut, NaiveParHung
 from atommover.utils.errormodels import ZeroNoise, UniformVacuumTweezerError, YbRydbergAODErrorModel
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run algorithm benchmarks (PCFA vs Hungarian)")
+    parser = argparse.ArgumentParser(description="Run algorithm benchmarks")
     parser.add_argument("--min_size", type=int, default=10, help="Minimum L for square target")
-    parser.add_argument("--max_size", type=int, default=40, help="Maximum L for square target")
+    parser.add_argument("--max_size", type=int, default=14, help="Maximum L for square target")
+    parser.add_argument("--step_size", type=int, default=1, help="Step between L values")
     parser.add_argument("--shots", type=int, default=50, help="Number of shots per configuration")
     parser.add_argument("--rounds", type=int, default=1, help="Rearrangement rounds")
     parser.add_argument("--save", action="store_true", help="Save xarray results to data/")
     parser.add_argument("--name", type=str, default=None, help="Save name (without extension)")
+    parser.add_argument("--dual", action="store_true",
+                        help="Benchmark dual-species algorithms (InsideOut, NaiveParHung) "
+                             "with n_species=2 and CHECKERBOARD target")
+    parser.add_argument("--ybryd-only", action="store_true",
+                        help="Use only YbRydbergAODErrorModel (skip ZeroNoise and Uniform)")
     args = parser.parse_args()
 
-    algos = [PCFA(), BCv2(), Hungarian(), BalanceAndCompact(), ParallelLBAP(), ParallelHungarian(), GeneralizedBalance(), Tetris()]
-    targets = [Configurations.MIDDLE_FILL]
+    if args.dual:
+        algos = [InsideOut(), NaiveParHung()]
+        targets = [Configurations.CHECKERBOARD]
+        n_species = 2
+    else:
+        algos = [PCFA(), BCv2(), Hungarian(), BalanceAndCompact(), ParallelLBAP(), ParallelHungarian(), GeneralizedBalance(), Tetris(), BlindCompress(), BlindShell(), BlindSweep()]
+        targets = [Configurations.MIDDLE_FILL]
+        n_species = 1
+
     params = [PhysicalParams()]
-    sizes = list(range(args.min_size, args.max_size + 1, 5))
+    sizes = list(range(args.min_size, args.max_size + 1, args.step_size))
 
     if args.name is None:
         args.name = f"benchmark_{'_'.join(algo.__class__.__name__ for algo in algos)}"
+
+    if getattr(args, 'ybryd_only', False):
+        error_models = [YbRydbergAODErrorModel()]
+    else:
+        error_models = [ZeroNoise(), UniformVacuumTweezerError(), YbRydbergAODErrorModel()]
 
     fig = BenchmarkingFigure(
         variables=["Wall time", "Mean moves", "Parallel move batches", "Success rate"],
@@ -38,12 +57,12 @@ def main():
     bench = Benchmarking(
         algos=algos,
         target_configs=targets,
-        error_models_list=[ZeroNoise(), UniformVacuumTweezerError(), YbRydbergAODErrorModel()],
+        error_models_list=error_models,
         phys_params_list=params,
         sys_sizes=sizes,
         rounds_list=[args.rounds],
         n_shots=args.shots,
-        n_species=1,
+        n_species=n_species,
         figure_output=fig,
         per_round_logging=True,
         check_sufficient_atoms=True,

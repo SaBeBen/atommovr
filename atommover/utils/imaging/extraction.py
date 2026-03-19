@@ -678,7 +678,7 @@ class Extractor:
                 centroids_np[:, 0],
                 s=80,
                 facecolors="none",
-                edgecolors="white",
+                edgecolors="red",
                 linewidths=1,
             )
         ax.axis("off")

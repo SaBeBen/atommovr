@@ -21,6 +21,7 @@ except Exception:
     parallel_Hungarian_algorithm_works = None
     parallel_LBAP_algorithm_works = None
     Hungarian_algorithm_works = None
+from atommover.algorithms.source.blind_sort import blind_sort
 from atommover.algorithms.source.pcfa import pcfa_algorithm
 from atommover.utils.core import ArrayGeometry, ArrayGeometrySpec
 from atommover.algorithms.source.tetris import tetris_algorithm
@@ -237,4 +238,78 @@ class Tetris(Algorithm):
         target = _to_single_species_plane(atom_array.target)
         config, moves, _ = tetris_algorithm(state, target)
         return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
-        
+
+
+######################
+# Blind rearrangement #
+######################
+
+class _BlindBase(Algorithm):
+    """Base class for blind rearrangement strategies.
+
+    Blind algorithms generate move plans from the target geometry alone,
+    without reading the current occupancy matrix.
+
+    Supported configurations: ``Configurations.MIDDLE_FILL``."""
+
+    _strategy: str = "compress"  # overridden by subclasses
+
+    def get_moves(self, atom_array: AtomArray, do_ejection: bool = False):
+        if atom_array.n_species != 1:
+            raise ValueError(
+                "Single-species algorithm cannot process atom array with "
+                f"{atom_array.n_species} species."
+            )
+        state = _to_single_species_plane(atom_array.matrix)
+        target = _to_single_species_plane(atom_array.target)
+        config, moves, _ = blind_sort(state, target, strategy=self._strategy)
+        return _finalize_with_standard_ejection(config, atom_array.target, moves, do_ejection)
+
+
+class BlindCompress(_BlindBase):
+    """Simultaneous column then row compression toward the target.
+
+    All sites outside the target column range move horizontally in
+    parallel (one site per batch), followed by vertical compression
+    of all sites outside the target row range.  Maximises per-batch
+    parallelism at the cost of higher total move count.
+
+    Supported configurations: ``Configurations.MIDDLE_FILL``."""
+
+    _strategy = "compress"
+
+    def __repr__(self):
+        return 'BlindCompress'
+
+
+class BlindShell(_BlindBase):
+    """Concentric-shell compression from inside out.
+
+    Processes rectangular shells starting from the one adjacent to the
+    target boundary and expanding outward.  Each shell generates a
+    horizontal batch followed by a vertical batch, each moving atoms
+    one site inward.  Inner shells move first to free destination sites.
+
+    Supported configurations: ``Configurations.MIDDLE_FILL``."""
+
+    _strategy = "shell"
+
+    def __repr__(self):
+        return 'BlindShell'
+
+
+class BlindSweep(_BlindBase):
+    """Four-edge simultaneous inward sweep.
+
+    Each batch simultaneously advances the left, right, top, and bottom
+    boundaries by one site toward the target region.  Interleaves row
+    and column moves within each step, producing fewer total batches
+    than ShellInward when the target is off-centre.
+
+    Supported configurations: ``Configurations.MIDDLE_FILL``."""
+
+    _strategy = "sweep"
+
+    def __repr__(self):
+        return 'BlindSweep'
+
