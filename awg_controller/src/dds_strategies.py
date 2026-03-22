@@ -4,17 +4,17 @@ DDS execution strategies for the Spectrum Instrumentation AWG card.
 
 Four interchangeable paradigms for driving AOD frequency changes during
 atom rearrangement.  All implement the :class:`DDSStrategy` interface and
-can be swapped transparently in :class:`AtommoverController`.
+can be swapped transparently in :class:`atommovrController`.
 
 Strategies
 ----------
-1. **DDSStreamingStrategy** – Current production approach:
+1. **DDSStreamingStrategy** - Current production approach:
    ``DDSCommandQueue`` + ``TIMER`` trigger + FIFO pre-fill.
-2. **DDSRampStrategy** – FPGA-level frequency ramps via
+2. **DDSRampStrategy** - FPGA-level frequency ramps via
    ``frequency_slope()`` (spcm examples 03, 04, 12).
-3. **DDSPatternStrategy** – Pre-loaded patterns with ``CARD`` trigger
+3. **DDSPatternStrategy** - Pre-loaded patterns with ``CARD`` trigger
    synchronisation (spcm example 15).
-4. **DDSCameraTriggeredStrategy** – External camera TTL replaces
+4. **DDSCameraTriggeredStrategy** - External camera TTL replaces
    ``trigger.force()`` for fully hardware-synchronised feedback
    (spcm examples 09 + 15).
 
@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from awg_controller.src.awg_control import AWGBatch, RFRamp
 
-# Optional hardware driver (same guard as atommover_controller.py)
+# Optional hardware driver (same guard as atommovr_controller.py)
 try:
     import spcm
     _HW_AVAILABLE = True
@@ -155,7 +155,7 @@ def _group_ramps_by_channel(batch: Any) -> Dict[int, list]:
 class DDSStrategy(abc.ABC):
     """Interface that every DDS execution strategy must implement.
 
-    The :class:`AtommoverController` delegates all hardware-specific DDS
+    The :class:`atommovrController` delegates all hardware-specific DDS
     logic to a ``DDSStrategy`` instance, making the paradigm swappable
     without touching the control-loop code.
 
@@ -236,14 +236,14 @@ class DDSStrategy(abc.ABC):
 
 
 # =========================================================================
-# Strategy 1 – Streaming (current production approach)
+# Strategy 1 - Streaming (current production approach)
 # =========================================================================
 
 class DDSStreamingStrategy(DDSStrategy):
     """FIFO streaming with ``DDSCommandQueue`` and ``TIMER`` trigger.
 
     This is the current production approach, extracted from
-    ``atommover_controller.py`` and ``cli.py``.
+    ``atommovr_controller.py`` and ``cli.py``.
 
     **Paradigm**: ``DDSCommandQueue`` + ``SPCM_DDS_TRG_SRC_TIMER``
     + FIFO pre-fill + continuous ``write_to_card()`` calls.
@@ -328,7 +328,7 @@ class DDSStreamingStrategy(DDSStrategy):
 
 
 # =========================================================================
-# Strategy 2 – Hardware Frequency Ramps
+# Strategy 2 - Hardware Frequency Ramps
 # =========================================================================
 
 class DDSRampStrategy(DDSStrategy):
@@ -554,7 +554,7 @@ class DDSRampStrategy(DDSStrategy):
 
 
 # =========================================================================
-# Strategy 3 – Pattern-Based
+# Strategy 3 - Pattern-Based
 # =========================================================================
 
 class DDSPatternStrategy(DDSStrategy):
@@ -714,7 +714,7 @@ class DDSPatternStrategy(DDSStrategy):
 
 
 # =========================================================================
-# Strategy 4 – Camera-Triggered Pattern Execution
+# Strategy 4 - Camera-Triggered Pattern Execution
 # =========================================================================
 
 class DDSCameraTriggeredStrategy(DDSStrategy):

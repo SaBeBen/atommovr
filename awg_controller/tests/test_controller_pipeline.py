@@ -1,5 +1,5 @@
 """
-End-to-end pipeline tests for the AtomMover controller.
+End-to-end pipeline tests for the atommovr controller.
 ========================================================
 
 Tests the full pipeline from artificial atom images through rearrangement
@@ -30,7 +30,7 @@ _SCRIPTS_DIR = os.path.join(
     os.path.dirname(__file__), "..", "scripts"
 )
 
-from atommover.algorithms.single_species import (
+from atommovr.algorithms.single_species import (
     BCv2,
     BalanceAndCompact,
     GeneralizedBalance,
@@ -40,8 +40,8 @@ from atommover.algorithms.single_species import (
     ParallelLBAP,
     Tetris,
 )
-from atommover.utils.AtomArray import AtomArray
-from atommover.utils.Move import Move
+from atommovr.utils.AtomArray import AtomArray
+from atommovr.utils.Move import Move
 from awg_controller.src.awg_control import (
     ALL_CHANNEL_0_CORES,
     AWGBatch,
@@ -56,7 +56,7 @@ from awg_controller.src.awg_control import (
     compute_core_assignments,
     validate_hardware_limits,
 )
-from atommover.utils.core import Configurations, PhysicalParams
+from atommovr.utils.core import Configurations, PhysicalParams
 from awg_controller.src.dds_strategies import (
     MAX_SAFE_TRIGGER_LEVEL_V,
     CameraTriggerConfig,
@@ -516,7 +516,7 @@ class TestAlgorithmToRFPipeline:
 # =====================================================================
 
 class TestControllerSimulation:
-    """Test the AtommoverController in simulation mode (spcm unavailable)."""
+    """Test the atommovrController in simulation mode (spcm unavailable)."""
 
     @pytest.fixture
     def controller(self):
@@ -525,8 +525,8 @@ class TestControllerSimulation:
         # _HW_AVAILABLE = False, running in SIM mode.
         sys.path.insert(0, _SCRIPTS_DIR)
 
-        from atommover_controller import (
-            AtommoverController,
+        from atommovr_controller import (
+            atommovrController,
             HardwareConfig,
             SoftwareConfig,
         )
@@ -541,7 +541,7 @@ class TestControllerSimulation:
             ),
         )
         hw = HardwareConfig()
-        ctrl = AtommoverController(sw, hw)
+        ctrl = atommovrController(sw, hw)
         yield ctrl
         ctrl.shutdown()
 
@@ -1001,14 +1001,14 @@ class TestDDSStreamingStrategy:
 # =====================================================================
 
 class TestStrategyIntegration:
-    """Test that strategies integrate with AtommoverController."""
+    """Test that strategies integrate with atommovrController."""
 
     @pytest.fixture(params=["streaming", "ramp", "pattern", "camera_triggered"])
     def controller_with_strategy(self, request):
         """Create a controller in sim mode with each strategy."""
         sys.path.insert(0, _SCRIPTS_DIR)
-        from atommover_controller import (
-            AtommoverController,
+        from atommovr_controller import (
+            atommovrController,
             HardwareConfig,
             SoftwareConfig,
         )
@@ -1029,7 +1029,7 @@ class TestStrategyIntegration:
             ),
         )
         hw = HardwareConfig()
-        ctrl = AtommoverController(sw, hw, strategy=strategy)
+        ctrl = atommovrController(sw, hw, strategy=strategy)
         yield ctrl
         ctrl.shutdown()
 
@@ -1058,8 +1058,8 @@ class TestStrategyIntegration:
     def test_controller_string_strategy(self):
         """Controller should accept strategy as a string name."""
         sys.path.insert(0, _SCRIPTS_DIR)
-        from atommover_controller import (
-            AtommoverController,
+        from atommovr_controller import (
+            atommovrController,
             HardwareConfig,
             SoftwareConfig,
         )
@@ -1071,15 +1071,15 @@ class TestStrategyIntegration:
             aod_settings=_make_simple_settings(grid_rows=6, grid_cols=4),
         )
         hw = HardwareConfig()
-        ctrl = AtommoverController(sw, hw, strategy="ramp")
+        ctrl = atommovrController(sw, hw, strategy="ramp")
         assert ctrl.strategy.name == "ramp"
         ctrl.shutdown()
 
     def test_controller_default_strategy(self):
         """Default strategy should be streaming."""
         sys.path.insert(0, _SCRIPTS_DIR)
-        from atommover_controller import (
-            AtommoverController,
+        from atommovr_controller import (
+            atommovrController,
             HardwareConfig,
             SoftwareConfig,
         )
@@ -1091,6 +1091,6 @@ class TestStrategyIntegration:
             aod_settings=_make_simple_settings(grid_rows=6, grid_cols=4),
         )
         hw = HardwareConfig()
-        ctrl = AtommoverController(sw, hw)
+        ctrl = atommovrController(sw, hw)
         assert ctrl.strategy.name == "streaming"
         ctrl.shutdown()

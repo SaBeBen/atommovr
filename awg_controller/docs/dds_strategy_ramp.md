@@ -20,16 +20,16 @@ sequenceDiagram
     participant FPGA as AWG FPGA
     participant AOD as AOD
 
-    Note over Host,AOD: Trigger 1 – Initialise
+    Note over Host,AOD: Trigger 1 - Initialise
     Host->>FPGA: Set initial freq, phase, amplitude
     FPGA->>AOD: Static RF output at f_start
 
-    Note over Host,AOD: Trigger 2 – Start ramp
+    Note over Host,AOD: Trigger 2 - Start ramp
     Host->>FPGA: frequency_slope(slope ≠ 0)
     FPGA->>AOD: Sweep f_start → f_end (FPGA-driven)
     Note right of FPGA: FPGA increments freq register<br/>at slope Hz/s for 1 timer interval
 
-    Note over Host,AOD: Trigger 3 – Stop ramp
+    Note over Host,AOD: Trigger 3 - Stop ramp
     Host->>FPGA: frequency_slope(0), set exact f_end
     FPGA->>AOD: Static RF output at f_end
 ```
@@ -84,9 +84,9 @@ strategy = DDSRampStrategy(config=RampConfig(
 ### Using with the Controller
 
 ```python
-from atommover_controller import AtommoverController, HardwareConfig, SoftwareConfig
+from atommovr_controller import atommovrController, HardwareConfig, SoftwareConfig
 
-ctrl = AtommoverController(
+ctrl = atommovrController(
     sw_config=SoftwareConfig(...),
     hw_config=HardwareConfig(trigger_timer_s=0.1),  # Ramp duration!
     strategy="ramp",
@@ -96,7 +96,7 @@ ctrl = AtommoverController(
 Or with S-curve:
 
 ```python
-ctrl = AtommoverController(
+ctrl = atommovrController(
     sw_config=SoftwareConfig(...),
     hw_config=HardwareConfig(trigger_timer_s=0.1),
     strategy=DDSRampStrategy(config=RampConfig(use_scurve=True)),

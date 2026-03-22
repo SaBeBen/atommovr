@@ -4,7 +4,7 @@ Hardware control package for driving Spectrum Instrumentation AWG cards with DDS
 
 ## Overview
 
-This package isolates all AWG / DDS control logic from the `atommover` simulation framework. It translates logical atom moves into RF frequency ramps executed by the card's DDS cores, driving acousto-optic deflectors (AODs) that physically reposition trapped atoms.
+This package isolates all AWG / DDS control logic from the `atommovr` simulation framework. It translates logical atom moves into RF frequency ramps executed by the card's DDS cores, driving acousto-optic deflectors (AODs) that physically reposition trapped atoms.
 
 ```mermaid
 flowchart LR
@@ -23,7 +23,7 @@ awg_controller/
 │   ├── awg_control.py       # RFConverter, AODSettings, AWGBatch, hardware constants
 │   └── dds_strategies.py    # 4 DDS strategy classes + registry
 ├── scripts/
-│   └── atommover_controller.py   # Closed-loop feedback controller
+│   └── atommovr_controller.py   # Closed-loop feedback controller
 ├── tests/
 │   ├── test_awg_control.py       # RFConverter unit tests
 │   └── test_controller_pipeline.py  # Full pipeline integration tests
@@ -39,9 +39,9 @@ awg_controller/
 
 ### Spectrum Instrumentation AWG Card
 
-- **DDS cores**: 21 total (indices 0–20)
-- **Channel 0** (V / row AOD): cores 0–7, 12–19 (exclusive); cores 8–11 (flex)
-- **Channel 1** (H / col AOD): cores 8–11 (flex) + core 20 (fixed)
+- **DDS cores**: 21 total (indices 0-20)
+- **Channel 0** (V / row AOD): cores 0-7, 12-19 (exclusive); cores 8-11 (flex)
+- **Channel 1** (H / col AOD): cores 8-11 (flex) + core 20 (fixed)
 - **Maximum tones**: 20 on ch0 (single ch1) or 16 on ch0 + 5 on ch1 (dual ch1)
 - **Amplitude budget**: 40 % of full-scale per channel, distributed equally across active tones
 
@@ -83,8 +83,8 @@ Detailed documentation for each strategy is in `docs/`.
 
 ```python
 from awg_controller.src.awg_control import RFConverter, AODSettings
-from atommover.utils.core import PhysicalParams
-from atommover.utils.Move import Move
+from atommovr.utils.core import PhysicalParams
+from atommovr.utils.Move import Move
 
 settings = AODSettings(
     f_min_v=60e6, f_max_v=100e6,
@@ -101,14 +101,14 @@ print(f"{len(batch.ramps)} ramps, {batch.total_duration_s*1e6:.1f} µs")
 ### Full Controller (simulation mode)
 
 ```python
-from awg_controller.scripts.atommover_controller import (
-    AtommoverController, HardwareConfig, SoftwareConfig,
+from awg_controller.scripts.atommovr_controller import (
+    atommovrController, HardwareConfig, SoftwareConfig,
 )
 
 sw = SoftwareConfig(grid_size=10, target_size=6, algorithm_name="PCFA")
 hw = HardwareConfig(trigger_timer_s=0.2)
 
-with AtommoverController(sw, hw, strategy="ramp") as ctrl:
+with atommovrController(sw, hw, strategy="ramp") as ctrl:
     success = ctrl.run()
 ```
 
@@ -130,14 +130,14 @@ sw = SoftwareConfig(
     ),
 )
 
-with AtommoverController(sw, hw, strategy="pattern") as ctrl:
+with atommovrController(sw, hw, strategy="pattern") as ctrl:
     success = ctrl.run(initial_image="fluorescence.png")
 ```
 
 ### CLI
 
 ```bash
-python awg_controller/scripts/atommover_controller.py \
+python awg_controller/scripts/atommovr_controller.py \
     --algorithm PCFA \
     --grid-rows 10 --grid-cols 5 \
     --target-rows 6 --target-cols 5 \
@@ -164,5 +164,5 @@ This package builds on the [spcm Python driver](https://github.com/SpectrumInstr
 ## Dependencies
 
 - **Runtime**: `numpy`, `spcm` (optional — simulation mode works without it)
-- **Algorithms & imaging**: `atommover.algorithms`, `atommover.utils` (from the parent repo)
+- **Algorithms & imaging**: `atommovr.algorithms`, `atommovr.utils` (from the parent repo)
 - **Tests**: `pytest`, `numpy`

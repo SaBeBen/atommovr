@@ -1,23 +1,18 @@
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
+from setuptools._distutils.ccompiler import new_compiler
+from setuptools._distutils.sysconfig import customize_compiler
 import os
 import sys
+import shlex
 
-# Path to output directory
-output_dir = os.path.abspath("")
-os.makedirs(output_dir, exist_ok=True)
-
-# Define the extension as a shared library (not a Python importable module)
-# Path to output directory
-output_dir = os.path.abspath("")
-os.makedirs(output_dir, exist_ok=True)
+HERE = os.path.dirname(os.path.abspath(__file__))
+output_dir = HERE
 
 extra_compile_args = []
-if sys.platform == "win32":
-    # MSVC specific flags (example: disable warning C4100: unreferenced formal parameter)
-    extra_compile_args=['/wd4100', '/wd4101']
-else:
-    # GCC/Clang flags
+extra_link_args = []
+
+if sys.platform != "win32":
     extra_compile_args = [
         "-fPIC",
         "-Wno-unused-but-set-variable",
@@ -26,24 +21,49 @@ else:
         "-Wno-unreachable-code",
     ]
 
-# Define the extension as a shared library (not a Python importable module)
+archflags = shlex.split(os.environ.get("ARCHFLAGS", ""))
+if archflags:
+    extra_compile_args.extend(archflags)
+    extra_link_args.extend(archflags)
+
 c_extension = Extension(
-    name="libmatching_placeholder",  # name won't be used for output
+    name="libmatching_placeholder",
     sources=[
-        "bottleneckBipartiteMatching.c",
-        "matrixUtils.c",
-        "mmio.c",
-        "extern/cheap.c",
-        "extern/matching.c",
+        os.path.join(HERE, "bottleneckBipartiteMatching.c"),
+        os.path.join(HERE, "matrixUtils.c"),
+        os.path.join(HERE, "mmio.c"),
+        os.path.join(HERE, "extern", "cheap.c"),
+        os.path.join(HERE, "extern", "matching.c"),
     ],
-    include_dirs=["extern"],
+    include_dirs=[os.path.join(HERE, "extern")],
     extra_compile_args=extra_compile_args,
-    libraries=[] if sys.platform == "win32" else ["m"],
+    extra_link_args=extra_link_args,
+    libraries=["m"] if sys.platform != "win32" else [],
 )
 
+
 class BuildSharedLibrary(build_ext):
-    def build_extensions(self):
-        # Compile source files into object files
+    
+    def run(self) -> None:
+        """
+        Build only the PPSU shared library.
+
+        Why this exists
+        ---------------
+        This project needs a plain shared library for ctypes, not a Python
+        extension module with setuptools' normal filename/copy semantics.
+        Overriding ``run`` avoids setuptools attempting to copy a nonexistent
+        placeholder extension artifact after the custom shared library has
+        already been built.
+        """
+        self.compiler = new_compiler(
+            compiler=self.compiler,
+            verbose=self.verbose,
+        )
+        customize_compiler(self.compiler)
+        self.build_shared_library()
+
+    def build_shared_library(self) -> None:
         for ext in self.extensions:
             objects = self.compiler.compile(
                 ext.sources,
@@ -51,12 +71,15 @@ class BuildSharedLibrary(build_ext):
                 extra_postargs=ext.extra_compile_args,
             )
 
-            # Link into a shared object
             lib_path = os.path.join(output_dir, "libmatching_for_PPSU.so")
             self.compiler.link_shared_object(
-                objects, lib_path, libraries=ext.libraries
+                objects,
+                lib_path,
+                libraries=ext.libraries,
+                extra_postargs=getattr(ext, "extra_link_args", []),
             )
             print(f"Built shared library: {lib_path}")
+
 
 setup(
     name="libmatching_for_PPSU",

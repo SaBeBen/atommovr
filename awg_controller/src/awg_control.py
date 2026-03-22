@@ -15,8 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List
 
-from atommover.utils.Move import Move
-from atommover.utils.core import PhysicalParams
+from atommovr.utils.Move import Move
+from atommovr.utils.core import PhysicalParams
 
 
 # ---------------------------------------------------------------------------

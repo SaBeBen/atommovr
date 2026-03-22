@@ -106,9 +106,9 @@ strategy = DDSCameraTriggeredStrategy(config=CameraTriggerConfig(
 ### Using with the Controller
 
 ```python
-from atommover_controller import AtommoverController, HardwareConfig, SoftwareConfig
+from atommovr_controller import atommovrController, HardwareConfig, SoftwareConfig
 
-ctrl = AtommoverController(
+ctrl = atommovrController(
     sw_config=SoftwareConfig(...),
     hw_config=HardwareConfig(trigger_timer_s=0.2),
     strategy=DDSCameraTriggeredStrategy(
@@ -120,7 +120,7 @@ ctrl = AtommoverController(
 Or via name (uses default 1.5 V trigger level):
 
 ```python
-ctrl = AtommoverController(
+ctrl = atommovrController(
     sw_config=SoftwareConfig(...),
     hw_config=HardwareConfig(),
     strategy="camera_triggered",

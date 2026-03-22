@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AtomMover Production Controller
+atommovr Production Controller
 ================================
 Orchestrates the complete atom-rearrangement feedback loop:
 
@@ -49,24 +49,24 @@ except ImportError:
     _HW_AVAILABLE = False
 
 #  atommovr imports 
-from atommover.algorithms.single_species import (
+from atommovr.algorithms.single_species import (
     PCFA, Hungarian, Tetris, BalanceAndCompact,
     BCv2, ParallelLBAP, ParallelHungarian, GeneralizedBalance,
 )
-from atommover.utils.AtomArray import AtomArray
+from atommovr.utils.AtomArray import AtomArray
 from awg_controller.src.awg_control import (
     AODSettings, AWGBatch,
     MAX_AMPLITUDE_PCT_PER_CHANNEL, RFConverter, RFRamp,
     validate_hardware_limits,
 )
-from atommover.utils.core import Configurations, PhysicalParams
+from atommovr.utils.core import Configurations, PhysicalParams
 from awg_controller.src.dds_strategies import (
     DDSStrategy,
     DDSStreamingStrategy,
     STRATEGY_REGISTRY,
     get_strategy,
 )
-from atommover.utils.imaging.extraction import (
+from atommovr.utils.imaging.extraction import (
     BlobDetection,
     estimate_grid_rotation_fit_rect,
     fit_grid_and_assign,
@@ -79,13 +79,13 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("atommover_controller.log"),
+        logging.FileHandler("atommovr_controller.log"),
     ],
 )
 log = logging.getLogger(__name__)
 
 if not _HW_AVAILABLE:
-    log.warning("spcm not found – running in SIMULATION mode (no hardware I/O).")
+    log.warning("spcm not found - running in SIMULATION mode (no hardware I/O).")
 
 
 @dataclass
@@ -95,7 +95,7 @@ class HardwareConfig:
     #: Device paths, e.g. ["/dev/spcm0"]  or  ["/dev/spcm0", "/dev/spcm1"]
     card_paths: List[str] = field(default_factory=lambda: ["/dev/spcm0"])
 
-    #: Output amplitude – manufacturer maximum is 1.6 V into 50 Ω
+    #: Output amplitude - manufacturer maximum is 1.6 V into 50 Ω
     max_amplitude_v: float = 1.6
 
     #: Output impedance
@@ -159,7 +159,7 @@ _ALGORITHM_REGISTRY = {
 }
 
 
-class AtommoverController:
+class atommovrController:
     """End-to-end atom rearrangement controller.
 
     Parameters
@@ -263,7 +263,7 @@ class AtommoverController:
                 # 3. Activate card clock (MUST come after channel config)
                 card.write_setup()
 
-                # 4–6. Strategy-specific DDS creation + configuration
+                # 4-6. Strategy-specific DDS creation + configuration
                 dds = self.strategy.create_dds(card, channels)
                 self.strategy.configure(dds, card, self.hw, core_map)
                 self.strategy.prefill(dds, holding, self.hw)
@@ -367,7 +367,7 @@ class AtommoverController:
         # 1. Blob detection
         blobs = BlobDetection(self.sw.blob_params).detect(image)
         if len(blobs) == 0:
-            log.warning("No blobs detected – returning empty occupancy matrix.")
+            log.warning("No blobs detected - returning empty occupancy matrix.")
             return np.zeros((self.sw.grid_size, self.sw.grid_size), dtype=int)
 
         centroids = np.array([[b.x, b.y] for b in blobs], dtype=float)
@@ -440,7 +440,7 @@ class AtommoverController:
                 img = self._acquire(image_path)
                 image_path = None   # subsequent rounds use camera / dummy
             except Exception as exc:
-                log.error(f"Round {r}: acquisition failed – {exc}")
+                log.error(f"Round {r}: acquisition failed - {exc}")
                 return False
 
             #  2. Process 
@@ -453,7 +453,7 @@ class AtommoverController:
             #  4. Check success 
             target = self._target_mask
             if np.array_equal(state * target, target):
-                log.info(f"SUCCESS – target filled after {r} round(s).")
+                log.info(f"SUCCESS - target filled after {r} round(s).")
                 return True
 
             if r == self.sw.max_rounds:
@@ -480,7 +480,7 @@ class AtommoverController:
             try:
                 _, move_batches, algo_ok = self.algorithm.get_moves(arr)
             except Exception as exc:
-                log.exception(f"Round {r}: algorithm raised – {exc}")
+                log.exception(f"Round {r}: algorithm raised - {exc}")
                 return False
 
             if not algo_ok:
@@ -538,7 +538,7 @@ def main() -> None:
     import argparse
 
     p = argparse.ArgumentParser(
-        description="AtomMover production controller — image → AOD feedback loop."
+        description="atommovr production controller — image → AOD feedback loop."
     )
     p.add_argument("--image",      default=None,   help="Path to initial fluorescence image")
     p.add_argument("--algorithm",  default="PCFA",
@@ -578,7 +578,7 @@ def main() -> None:
         ),
     )
 
-    with AtommoverController(sw, hw, strategy=args.strategy) as ctrl:
+    with atommovrController(sw, hw, strategy=args.strategy) as ctrl:
         try:
             success = ctrl.run(initial_image=args.image)
             sys.exit(0 if success else 1)

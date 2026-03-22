@@ -70,9 +70,9 @@ strategy = DDSPatternStrategy(config=PatternConfig(
 ### Using with the Controller
 
 ```python
-from atommover_controller import AtommoverController, HardwareConfig, SoftwareConfig
+from atommovr_controller import atommovrController, HardwareConfig, SoftwareConfig
 
-ctrl = AtommoverController(
+ctrl = atommovrController(
     sw_config=SoftwareConfig(...),
     hw_config=HardwareConfig(trigger_timer_s=0.2),
     strategy="pattern",

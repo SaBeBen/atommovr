@@ -1,11 +1,10 @@
-name: atommover_env
+name: atommovr_env
 channels:
   - defaults
   - conda-forge
 dependencies:
   - numpy
   - scikit-learn
-  - numba::numba
   - xarray
   - ipykernel
   - matplotlib
@@ -13,6 +12,9 @@ dependencies:
   - seaborn
   - opencv
   - scipy
+  - setuptools # needed because lazy-build calls PPSU/setupc.py
+  - pip
   - pip:
+      - -e .[dev]
       - imageio==2.36.1
       - pillow==11.1.0

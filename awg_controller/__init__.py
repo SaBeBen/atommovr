@@ -1,7 +1,7 @@
-"""AWG Controller – Spectrum Instrumentation DDS card driver for atom rearrangement.
+"""AWG Controller - Spectrum Instrumentation DDS card driver for atom rearrangement.
 
 This package isolates all AWG (Arbitrary Waveform Generator) and DDS
-(Direct Digital Synthesis) control logic from the main ``atommover``
+(Direct Digital Synthesis) control logic from the main ``atommovr``
 simulation framework.
 
 Subpackages
@@ -16,5 +16,5 @@ tests/
 config/
     Hardware configuration files and templates.
 scripts/
-    ``atommover_controller.py`` – closed-loop rearrangement controller.
+    ``atommovr_controller.py`` - closed-loop rearrangement controller.
 """
