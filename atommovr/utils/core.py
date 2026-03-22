@@ -165,8 +165,13 @@ class ArrayGeometrySpec:
 
 
 def _coerce_rng(rng: np.random.Generator | None) -> np.random.Generator:
-    """Return a numpy Generator, creating a fresh one if None."""
-    return np.random.default_rng() if rng is None else rng
+    """Return a numpy Generator, deriving deterministic seeds from np.random."""
+    if rng is not None:
+        return rng
+
+    # Preserve test reproducibility when callers rely on `np.random.seed(...)`.
+    seed = int(np.random.randint(0, np.iinfo(np.uint32).max, dtype=np.uint32))
+    return np.random.default_rng(seed)
 
 
 def random_loading(
@@ -249,9 +254,10 @@ def generate_random_init_target_configs(
 def generate_random_init_configs(
     n_shots: int,
     load_prob: float,
-    max_sys_size: int,
+    max_sys_size: int | None = None,
     n_species: int = 1,
     rng: np.random.Generator | None = None,
+    shape: list | tuple | None = None,
 ) -> list:
     """
     Generates random initial atom array configurations.
@@ -262,22 +268,38 @@ def generate_random_init_configs(
         The number of configurations (shots) to generate.
     load_prob : float
         The probability of an individual site being occupied by an atom.
-    max_sys_size : int
-        The row and column size of the square target array.
+    max_sys_size : int, optional
+        The row and column size of a square target array. Ignored if `shape` is provided.
+        Either `max_sys_size` or `shape` must be specified.
     n_species : int, optional
         The number of atomic species (1 or 2). Default is 1.
+    rng : numpy.random.Generator, optional
+        Random number generator for reproducibility.
+    shape : list or tuple, optional
+        Rectangular shape as [rows, cols]. If provided, `max_sys_size` is ignored.
+        Either `max_sys_size` or `shape` must be specified.
 
     Returns
     -------
     list of numpy.ndarray
         A list of generated configurations. If `n_species` is 1, arrays are 2D.
-        If `n_species` is 2, arrays are 3D with shape (max_sys_size, max_sys_size, 2).
+        If `n_species` is 2, arrays are 3D with shape (..., ..., 2).
 
     Raises
     ------
     ValueError
-        If `n_species` is not 1 or 2.
+        If `n_species` is not 1 or 2, or if neither `max_sys_size` nor `shape` is provided.
     """
+    # Determine array dimensions
+    if shape is not None:
+        rows, cols = int(shape[0]), int(shape[1])
+    elif max_sys_size is not None:
+        rows, cols = max_sys_size, max_sys_size
+    else:
+        raise ValueError(
+            "Either `max_sys_size` (for square arrays) or `shape` (for rectangular) must be provided."
+        )
+
     rng = _coerce_rng(rng)
 
     init_config_storage = []
@@ -285,20 +307,20 @@ def generate_random_init_configs(
     for _ in range(n_shots):
         if n_species == 1:
             initial_config = random_loading(
-                [max_sys_size, max_sys_size], load_prob, rng=rng
+                [rows, cols], load_prob, rng=rng
             )
 
         elif n_species == 2:
-            initial_config = np.zeros((max_sys_size, max_sys_size, 2), dtype=np.uint8)
+            initial_config = np.zeros((rows, cols, 2), dtype=np.uint8)
 
             dual_species_prob = 2 - 2 * math.sqrt(1 - load_prob)
             p_each = dual_species_prob / 2
 
             initial_config[:, :, 0] = random_loading(
-                [max_sys_size, max_sys_size], p_each, rng=rng
+                [rows, cols], p_each, rng=rng
             )
             initial_config[:, :, 1] = random_loading(
-                [max_sys_size, max_sys_size], p_each, rng=rng
+                [rows, cols], p_each, rng=rng
             )
 
             # Resolve double-occupancy sites by dropping one species uniformly at random.
