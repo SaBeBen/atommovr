@@ -1100,37 +1100,63 @@ class AtomArray:
         if idx.size > 0:
             bad = occ[from_rows[idx], from_cols[idx]] <= 0
             if bad.any():
-                j = idx[np.where(bad)[0][0]]
-                raise Exception(
-                    f"Error in move application: NO atom at source "
-                    f"({moves[j].from_row}, {moves[j].from_col}) for successful move."
-                )
-            np.add.at(occ, (from_rows[idx], from_cols[idx]), -1)
-            np.add.at(occ, (to_rows[idx], to_cols[idx]), +1)
+                # Some moves were unexpectedly marked successful but the source
+                # has no atom at application time. Convert those to NO_ATOM
+                # failures and record them instead of raising an exception.
+                bad_local = np.where(bad)[0]
+                good_mask = ~bad
+                # mark bad moves as failed
+                for pos in bad_local:
+                    global_i = int(idx[pos])
+                    moves[global_i].set_failure_event(FailureEvent.NO_ATOM)
+                    failed_moves.append(global_i)
+                    flags.append(int(moves[global_i].fail_flag))
+                # apply only the good moves
+                good_idx = idx[good_mask]
+            else:
+                good_idx = idx
+
+            if good_idx.size > 0:
+                np.add.at(occ, (from_rows[good_idx], from_cols[good_idx]), -1)
+                np.add.at(occ, (to_rows[good_idx], to_cols[good_idx]), +1)
 
         # Successful ejection: remove source only
         idx = np.where(is_success & is_eject)[0]
         if idx.size > 0:
             bad = occ[from_rows[idx], from_cols[idx]] <= 0
             if bad.any():
-                j = idx[np.where(bad)[0][0]]
-                raise Exception(
-                    f"Error occured in MoveType assignment. There is NO atom at "
-                    f"({moves[j].from_row}, {moves[j].from_col})."
-                )
-            np.add.at(occ, (from_rows[idx], from_cols[idx]), -1)
+                bad_local = np.where(bad)[0]
+                good_mask = ~bad
+                for pos in bad_local:
+                    global_i = int(idx[pos])
+                    moves[global_i].set_failure_event(FailureEvent.NO_ATOM)
+                    failed_moves.append(global_i)
+                    flags.append(int(moves[global_i].fail_flag))
+                good_idx = idx[good_mask]
+            else:
+                good_idx = idx
+
+            if good_idx.size > 0:
+                np.add.at(occ, (from_rows[good_idx], from_cols[good_idx]), -1)
 
         # Loss failures (including collision_*): remove source only
         idx = np.where(is_loss)[0]
         if idx.size > 0:
             bad = occ[from_rows[idx], from_cols[idx]] <= 0
             if bad.any():
-                j = idx[np.where(bad)[0][0]]
-                raise Exception(
-                    f"Error occured in MoveType. There is NO atom at "
-                    f"({moves[j].from_row}, {moves[j].from_col})."
-                )
-            np.add.at(occ, (from_rows[idx], from_cols[idx]), -1)
+                bad_local = np.where(bad)[0]
+                good_mask = ~bad
+                for pos in bad_local:
+                    global_i = int(idx[pos])
+                    moves[global_i].set_failure_event(FailureEvent.NO_ATOM)
+                    failed_moves.append(global_i)
+                    flags.append(int(moves[global_i].fail_flag))
+                good_idx = idx[good_mask]
+            else:
+                good_idx = idx
+
+            if good_idx.size > 0:
+                np.add.at(occ, (from_rows[good_idx], from_cols[good_idx]), -1)
 
         return failed_moves, flags
 
