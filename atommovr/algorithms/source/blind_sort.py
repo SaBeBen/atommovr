@@ -152,29 +152,31 @@ def _sweep_line(state: np.ndarray, target: np.ndarray) -> List[List[Move]]:
     batches: List[List[Move]] = []
 
     while left_cur < c_min or right_cur > c_max or top_cur < r_min or bot_cur > r_max:
-        batch: List[Move] = []
-        # left edge moves right
+        # Build horizontal batch (left/right edge moves) separately
+        h_batch: List[Move] = []
         if left_cur < c_min:
             for r in range(rows):
-                batch.append(Move(r, left_cur, r, left_cur + 1))
+                h_batch.append(Move(r, left_cur, r, left_cur + 1))
             left_cur += 1
-        # right edge moves left
         if right_cur > c_max:
             for r in range(rows):
-                batch.append(Move(r, right_cur, r, right_cur - 1))
+                h_batch.append(Move(r, right_cur, r, right_cur - 1))
             right_cur -= 1
-        # top edge moves down
+        if h_batch:
+            batches.append(h_batch)
+
+        # Build vertical batch (top/bottom edge moves) separately
+        v_batch: List[Move] = []
         if top_cur < r_min:
             for c in range(left_cur, right_cur + 1):
-                batch.append(Move(top_cur, c, top_cur + 1, c))
+                v_batch.append(Move(top_cur, c, top_cur + 1, c))
             top_cur += 1
-        # bottom edge moves up
         if bot_cur > r_max:
             for c in range(left_cur, right_cur + 1):
-                batch.append(Move(bot_cur, c, bot_cur - 1, c))
+                v_batch.append(Move(bot_cur, c, bot_cur - 1, c))
             bot_cur -= 1
-        if batch:
-            batches.append(batch)
+        if v_batch:
+            batches.append(v_batch)
 
     return batches
 
