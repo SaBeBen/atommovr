@@ -379,7 +379,7 @@ class TestMoveDuration:
         move = Move(0, 0, 2, 3)
         dur = converter._move_duration_s([move])
         expected_dist = 3 * converter.params.spacing
-        expected_dur = expected_dist / converter.params.AOD_speed * 1e-6
+        expected_dur = expected_dist / converter.params.AOD_speed
         assert dur == pytest.approx(max(expected_dur, 1e-6))
 
     def test_empty_moves_zero_duration(self, converter: RFConverter):

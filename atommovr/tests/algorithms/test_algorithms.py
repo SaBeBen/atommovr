@@ -232,7 +232,7 @@ def test_single_species_algorithms_natively(case):
 
 	_, move_batches, success = algo.get_moves(arr, **case.get("kwargs", {}))
 
-	# visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan")
+	visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan")
 	# visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']} Move Plan Overlay")
 
 	assert success, f"{case['name']} reported failure"
@@ -260,7 +260,7 @@ def test_single_species_multiple_shots_natively(case):
 		assert _load_until_sufficient(arr), f"Could not load sufficient atoms for target on shot {shot}"
 		_, move_batches, success = algo.get_moves(arr, **case.get("kwargs", {}))
 
-		# visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']}_{shot}_Move_Plan")
+		visualize_move_batches(arr, move_batches, save_path=None, title_suffix=f"{case['name']}_{shot}_Move_Plan")
 		# visualize_batch_moves_on_image(arr, move_batches, save_path=None, title_suffix=f"{case['name']}_{shot}_Move_Plan_Overlay")
 
 		assert success, f"{case['name']} reported failure on shot {shot}"

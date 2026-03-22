@@ -267,8 +267,8 @@ class RFConverter:
             for m in moves
         )
         dist_m = max_cheb * self.params.spacing
-        dur_us  = dist_m / max(self.params.AOD_speed, 1e-15)
-        return max(dur_us * 1e-6, 1e-6)   # floor at 1 µs
+        duration_s = dist_m / max(self.params.AOD_speed, 1e-15)
+        return max(duration_s, 1e-6)   # floor at 1 us
 
     @staticmethod
     def _per_tone_amplitude(n: int) -> float:

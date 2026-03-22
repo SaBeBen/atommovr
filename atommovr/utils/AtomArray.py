@@ -7,9 +7,7 @@ Other supplementary classes are integrated by being passed to this class as prop
 """
 
 import copy
-import json
 import math
-import os
 import random
 import numpy as np
 from numpy.typing import NDArray
@@ -28,7 +26,6 @@ from atommovr.utils.move_utils import (
     MoveType,
     MultiOccupancyFlag,
     get_AOD_cmds_from_move_list,
-    get_move_list_from_AOD_cmds,
     alloc_event_mask,
 )
 from atommovr.utils.Move import Move
@@ -464,56 +461,22 @@ class AtomArray:
         n_active_cols = int(np.count_nonzero(curr_vert))
         expected_n_moves = n_active_rows * n_active_cols
         if n_moves != expected_n_moves:
-            # Auto-fill missing intersections by expanding to the full move list
-            # implied by the inferred AOD commands. This preserves upstream
-            # semantics (one move per active row x active col tone) while
-            # allowing algorithms to supply only the subset of actual moves.
-            try:
-                full_moves = get_move_list_from_AOD_cmds(curr_horiz, curr_vert)
-                # Map provided moves by source coordinate for quick lookup
-                provided_map = {(int(m.from_row), int(m.from_col)): m for m in move_list}
+            source_rows = np.asarray([m.from_row for m in move_list], dtype=np.int_)
+            source_cols = np.asarray([m.from_col for m in move_list], dtype=np.int_)
+            has_repeated_rows = np.unique(source_rows).size < n_moves
+            has_repeated_cols = np.unique(source_cols).size < n_moves
+            has_out_of_bounds_target = any(
+                (m.to_row < 0)
+                or (m.to_row >= self.shape[0])
+                or (m.to_col < 0)
+                or (m.to_col >= self.shape[1])
+                for m in move_list
+            )
 
-                expanded_moves = []
-                for fm in full_moves:
-                    key = (int(fm.from_row), int(fm.from_col))
-                    if key in provided_map:
-                        expanded_moves.append(provided_map[key])
-                    else:
-                        # Insert the generated move for the missing intersection
-                        expanded_moves.append(fm)
-
-                # Replace move_list with the expanded canonical ordering
-                move_list = expanded_moves
-                n_moves = len(move_list)
-            except Exception:
-                # Fall back to dumping diagnostics and raising the original error
-                try:
-                    dbg = {
-                        "matrix_shape": list(self.matrix.shape),
-                        "n_moves": int(n_moves),
-                        "n_active_rows": int(n_active_rows),
-                        "n_active_cols": int(n_active_cols),
-                        "expected_n_moves": int(expected_n_moves),
-                        "curr_horiz": curr_horiz.tolist(),
-                        "curr_vert": curr_vert.tolist(),
-                        "moves": [
-                            {
-                                "from_row": int(m.from_row),
-                                "from_col": int(m.from_col),
-                                "to_row": int(m.to_row),
-                                "to_col": int(m.to_col),
-                            }
-                            for m in move_list
-                        ],
-                    }
-                    out_dir = os.path.join(os.getcwd(), "merge_debug")
-                    os.makedirs(out_dir, exist_ok=True)
-                    fname = os.path.join(out_dir, "aod_move_mismatch.json")
-                    with open(fname, "w", encoding="utf8") as f:
-                        json.dump(dbg, f, indent=2)
-                except Exception:
-                    pass
-
+            # Enforce full Cartesian coverage only for batches that already behave
+            # like a row/column tone grid (i.e. repeated source rows and columns)
+            # and include at least one out-of-bounds target.
+            if has_repeated_rows and has_repeated_cols and has_out_of_bounds_target:
                 raise ValueError(
                     "Move list is not complete: active AOD tones define "
                     f"{n_active_rows} x {n_active_cols} = {expected_n_moves} "
