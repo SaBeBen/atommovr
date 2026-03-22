@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-# Ensure repo root is on sys.path so demos can be run from the demos/ folder
+# Ensure repo root is on sys.path
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
@@ -51,7 +51,7 @@ def main():
         error_models = [ZeroNoise(), UniformVacuumTweezerError(), YbRydbergAODErrorModel()]
 
     fig = BenchmarkingFigure(
-        variables=["Wall time", "Mean moves", "Parallel move batches", "Success rate"],
+        variables=["Time", "Mean moves", "Parallel move batches", "Success rate"],
         figure_type="scale",
     )
     bench = Benchmarking(
