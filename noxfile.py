@@ -23,7 +23,7 @@ import sys
 #     # Run pytest; coverage options are defined in pyproject.toml
 #     session.run("pytest")
 
-
+@nox.session
 def tests(session):
     if sys.platform == "darwin" and platform.machine() == "arm64":
         session.env["ARCHFLAGS"] = "-arch arm64"
