@@ -38,9 +38,11 @@ class ParallelHungarian(Algorithm):
         self,
         atom_array: AtomArray,
         do_ejection: bool = False,
-        final_size: list = [],
+        final_size: list[int] | None = None,
         round_lim: int = 0,
     ):
+        if final_size is None:
+            final_size = []
         if atom_array.n_species != 1:
             raise ValueError(
                 f"Single-species algorithm cannot process atom array with {atom_array.n_species} species."
@@ -65,7 +67,6 @@ class ParallelLBAP(Algorithm):
         self,
         atom_array: AtomArray,
         do_ejection: bool = False,
-        final_size: list = [],
         round_lim: int = 0,
     ):
         if atom_array.n_species != 1:

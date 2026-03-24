@@ -1,24 +1,30 @@
 ##Algorithm for the Balance and Compact Algorithm
+import copy
+import numpy as np
 from collections import deque
 
-from atommovr.utils.core import *
-from atommovr.utils.move_utils import *
-from atommovr.utils.animation import *
-from atommovr.algorithms.source.ejection import *
+from atommovr.utils.Move import Move
+from atommovr.utils.move_utils import move_atoms
+from atommovr.algorithms.source.ejection import ejection
 
 
 def generalized_balance(
-    init_config, target_config, do_ejection: bool = False, final_size: list = []
+    init_config,
+    target_config,
+    do_ejection: bool = False,
+    final_size: list[int] | None = None,
 ):
     generalized_balance_success_flag = False
     matrix = copy.deepcopy(init_config)
     move_list = []
 
     # Counts moves components in the Hungarian algorithm
-    balance_moves_term = 0
-    ejection_moves_term = 0
+    # balance_moves_term = 0 # linting error - unused
+    # ejection_moves_term = 0
 
-    if len(final_size) == 0:
+    if final_size is None:
+        final_size = [0, len(matrix[0]) - 1, 0, len(matrix) - 1]
+    elif len(final_size) == 0:
         final_size = [0, len(matrix[0]) - 1, 0, len(matrix) - 1]
 
     row_min = final_size[0]
@@ -29,18 +35,18 @@ def generalized_balance(
     balance_config, move_list = row_balance(
         matrix, target_config, row_min, row_max, col_min, col_max, move_list, 0
     )
-    balance_moves_term = len(move_list)
+    # balance_moves_term = len(move_list)
     final_config = copy.deepcopy(balance_config)
 
     if do_ejection:
         eject_moves, final_config = ejection(balance_config, target_config, final_size)
         move_list.extend(eject_moves)
-        ejection_moves_term = len(eject_moves)
+        # ejection_moves_term = len(eject_moves)
         # Check if the configuration is the same as the target configuration
         if np.array_equal(final_config, target_config):
             generalized_balance_success_flag = True
     else:
-        ejection_moves_term = 0
+        # ejection_moves_term = 0
         # Check if the configuration (inside range of target) the same as the target configuration
         effective_config = np.multiply(final_config, target_config)
         if np.array_equal(effective_config, target_config):

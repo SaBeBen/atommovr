@@ -192,7 +192,7 @@ def _ref_move_across_rows(
             try:
                 move_set = []
                 for off in range(row_offset + 1)[::-1]:
-                    across_move = 1
+                    # across_move = 1
                     from_row = start_row + (off * dir)
                     to_row = end_row + (off * dir)
                     if i > from_row or i > to_row or j < from_row or j < to_row:
@@ -209,7 +209,7 @@ def _ref_move_across_rows(
                     ):  # check if there are atoms that can be moved, and if so move them
                         above_moves = [
                             movr.Move(from_row, int(fc), to_row, int(tc))
-                            for fc, tc in zip(from_cols, to_cols)
+                            for fc, tc in zip(from_cols, to_cols, strict=True)
                         ]
                         if off == 0:
                             moves_to_run = above_moves[:n_left_to_move]
@@ -252,7 +252,7 @@ def _ref_move_across_rows(
                                                 from_row, int(fcs), to_row, int(tcs)
                                             )
                                             for fcs, tcs in zip(
-                                                from_sp_cols, to_sp_cols
+                                                from_sp_cols, to_sp_cols, strict=True
                                             )
                                         ]
                                         current_state, _ = movr.move_atoms(
@@ -293,7 +293,7 @@ def _ref_move_across_rows(
                                                 from_row, int(fcs), to_row, int(tcs)
                                             )
                                             for fcs, tcs in zip(
-                                                from_sp_cols, to_sp_cols
+                                                from_sp_cols, to_sp_cols, strict=True
                                             )
                                         ]
                                         current_state, _ = movr.move_atoms(

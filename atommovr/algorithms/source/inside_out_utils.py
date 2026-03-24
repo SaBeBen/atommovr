@@ -2,16 +2,17 @@
 This file contains all helper functions for the inside out algorithm
 """
 
-import numpy as np
 import copy
-from scipy.optimize import linear_sum_assignment
+import numpy as np
+from typing import Callable
 from collections import deque
+from dataclasses import dataclass
+from scipy.optimize import linear_sum_assignment
+
 from atommovr.utils.Move import Move
 from atommovr.utils.AtomArray import AtomArray
-from atommovr.utils.move_utils import *
-from typing import Callable
+from atommovr.utils.move_utils import move_atoms
 from atommovr.algorithms.source.Hungarian_works import generate_AOD_cmds
-from dataclasses import dataclass
 
 
 def perimeter_coords(
@@ -217,8 +218,8 @@ def out_bound_ex(x, y, top, left, bottom, right):
     return x < top or x > bottom or y < left or y > right
 
 
-def out_bound_in(x, y, top, left, bottom, right):
-    return x <= top or x >= bottom or y <= left or y >= right
+# def out_bound_in(x, y, top, left, bottom, right):
+#     return x <= top or x >= bottom or y <= left or y >= right
 
 
 def assign_species(
@@ -226,13 +227,13 @@ def assign_species(
 ) -> "tuple[list[tuple[tuple[int, int]]], list[tuple]]":
     # Make move out assignments
     assignments = []
-    all_target = target_layer + target_outer + reservoir
+    # all_target = target_layer + target_outer + reservoir
     all_source = source_layer + source_outer
 
     cost_matrix = generate_cost_matrix_inside_out(all_source, target_layer)
     row_idx, col_idx = linear_sum_assignment(cost_matrix)
 
-    for i, j in zip(row_idx, col_idx):
+    for i, j in zip(row_idx, col_idx, strict=True):
         assignments.append((all_source[i], target_layer[j]))
 
     return assignments, reservoir
@@ -266,7 +267,7 @@ def assign_species_old(
     )
     row_idx, col_idx = linear_sum_assignment(cost_matrix)
     assignments = []
-    for i, j in zip(row_idx, col_idx):
+    for i, j in zip(row_idx, col_idx, strict=True):
         if source_positions[i] in source_layer or target_positions[j] in target_layer:
             assignments.append((source_positions[i], target_positions[j]))
         # remove from reservoir if used
@@ -335,7 +336,9 @@ class BFSResult:
 
 def process_chain_moves_new(bfs_res: BFSResult):
     bfs_res.same_obstacle = (
-        [] if bfs_res.same_obstacle == None else bfs_res.same_obstacle
+        []
+        if bfs_res.same_obstacle is None
+        else bfs_res.same_obstacle  # previously == None
     )
     single_path = []
     segmant_path = []

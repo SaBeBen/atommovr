@@ -11,26 +11,32 @@ class TestGetIndsForCircMatrPlot:
     def test_basic_matrix(self):
         matrix = np.array([[1, 0], [0, 1]])
         filled_x, filled_y, empty_x, empty_y = _get_inds_for_circ_matr_plot(matrix)
-        assert set(zip(filled_x, filled_y)) == {(0, 0), (1, 1)}
-        assert set(zip(empty_x, empty_y)) == {(1, 0), (0, 1)}
+        assert set(zip(filled_x, filled_y, strict=True)) == {(0, 0), (1, 1)}
+        assert set(zip(empty_x, empty_y, strict=True)) == {(1, 0), (0, 1)}
 
     def test_all_filled(self):
         matrix = np.ones((3, 3))
         filled_x, filled_y, empty_x, empty_y = _get_inds_for_circ_matr_plot(matrix)
         assert len(filled_x) == 9
         assert len(empty_x) == 0
+        assert len(filled_y) == 9
+        assert len(empty_y) == 0
 
     def test_all_empty(self):
         matrix = np.zeros((3, 3))
         filled_x, filled_y, empty_x, empty_y = _get_inds_for_circ_matr_plot(matrix)
         assert len(filled_x) == 0
         assert len(empty_x) == 9
+        assert len(filled_y) == 0
+        assert len(empty_y) == 9
 
     def test_3d_matrix(self):
         matrix = np.array([[[1], [0]], [[0], [1]]])
         filled_x, filled_y, empty_x, empty_y = _get_inds_for_circ_matr_plot(matrix)
         assert len(filled_x) == 2
         assert len(empty_x) == 2
+        assert len(filled_y) == 2
+        assert len(empty_y) == 2
 
 
 class TestDualSpeciesGetInds:
@@ -44,6 +50,9 @@ class TestDualSpeciesGetInds:
         assert len(blue_x) == 1
         assert len(yellow_x) == 1
         assert len(white_x) == 2
+        assert len(blue_y) == 1
+        assert len(yellow_y) == 1
+        assert len(white_y) == 2
 
     def test_all_species_0(self):
         matrix = np.zeros((2, 2, 2))

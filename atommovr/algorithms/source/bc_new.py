@@ -253,8 +253,8 @@ def middle_fill_algo_1d(
 def balance_rows(init_config: np.ndarray, target_config: np.ndarray, i: int, j: int):
     if i == j:
         return []
-    l = j - i + 1
-    m = i + (l // 2)
+    n_rows_involved = j - i + 1
+    m = i + (n_rows_involved // 2)
     n_req_top = _int_sum(target_config[i:m, :])
     n_atoms_top = _int_sum(init_config[i:m, :])
     n_req_bot = _int_sum(target_config[m : j + 1, :])
@@ -339,7 +339,7 @@ def _prebalance_above(
                 ):
                     above_moves = [
                         movr.Move(src_row, int(fc), dst_row, int(tc))
-                        for fc, tc in zip(from_cols, to_cols)
+                        for fc, tc in zip(from_cols, to_cols, strict=True)
                     ]
                     current_state = movr.move_atoms_noiseless(
                         current_state, above_moves
@@ -371,7 +371,7 @@ def _prebalance_above(
                                 ):
                                     space_moves = [
                                         movr.Move(src2, int(fc), dst2, int(tc))
-                                        for fc, tc in zip(f2, t2)
+                                        for fc, tc in zip(f2, t2, strict=True)
                                     ]
                                     current_state = movr.move_atoms_noiseless(
                                         current_state, space_moves
@@ -399,7 +399,7 @@ def _prebalance_above(
                                                 stuck_row - direction,
                                                 int(tc),
                                             )
-                                            for fc, tc in zip(f3, t3)
+                                            for fc, tc in zip(f3, t3, strict=True)
                                         ]
                                         current_state = movr.move_atoms_noiseless(
                                             current_state, above_moves
@@ -445,16 +445,16 @@ def prebalance(init_config, target_config):
         t2 = t[:, :, 0]
     else:
         t2 = t
-    rr, cc = np.where(t2 == 1)
+    rr, _ = np.where(t2 == 1)
     if rr.size == 0:
         return [], None, False
     start_row = int(rr.min())
     end_row = int(rr.max())
-    start_col = int(cc.min())
-    end_col = int(cc.max())
+    # start_col = int(cc.min())
+    # end_col = int(cc.max())
 
     n_atoms_row_region = _int_sum(init_config[start_row : end_row + 1, :])
-    n_atoms_col_region = _int_sum(init_config[:, start_col : end_col + 1])
+    # n_atoms_col_region = _int_sum(init_config[:, start_col : end_col + 1])
     n_atoms_global = _int_sum(init_config)
     n_targets = _int_sum(target_config[start_row : end_row + 1, :])
 
@@ -463,7 +463,7 @@ def prebalance(init_config, target_config):
 
     # finding how many atoms we need to fill and generating moves
     n_to_fill_row = n_targets - n_atoms_row_region
-    n_to_fill_col = n_targets - n_atoms_col_region
+    # n_to_fill_col = n_targets - n_atoms_col_region # linting error - unused
 
     moves = []
     if n_to_fill_row <= 0:
@@ -660,7 +660,7 @@ def get_all_moves_btwn_rows_cols(
 
     free = to_row == 0
     if not free.any():
-        empty = np.zeros(0, dtype=np.intp)
+        # empty = np.zeros(0, dtype=np.intp) # linting error - unused
         return out_from, out_to, 0
 
     n_cols = int(free.size)
@@ -723,7 +723,7 @@ def get_all_moves_btwn_rows(
 
     moves = [
         movr.Move(from_row_ind, int(fc), to_row_ind, int(tc))
-        for fc, tc in zip(from_cols, to_cols)
+        for fc, tc in zip(from_cols, to_cols, strict=True)
     ]
     return moves, n_moves
 
@@ -891,7 +891,7 @@ def move_across_rows(
             try:
                 move_set = []
                 for off in range(row_offset + 1)[::-1]:
-                    across_move = 1
+                    # across_move = 1 # linting error - unused
                     from_row = start_row + (off * dir)
                     to_row = end_row + (off * dir)
                     if i > from_row or i > to_row or j < from_row or j < to_row:
@@ -908,7 +908,7 @@ def move_across_rows(
                     ):  # check if there are atoms that can be moved, and if so move them
                         above_moves = [
                             movr.Move(from_row, int(fc), to_row, int(tc))
-                            for fc, tc in zip(from_cols, to_cols)
+                            for fc, tc in zip(from_cols, to_cols, strict=True)
                         ]
                         if off == 0:
                             moves_to_run = above_moves[:n_left_to_move]
@@ -951,7 +951,7 @@ def move_across_rows(
                                                 from_row, int(fcs), to_row, int(tcs)
                                             )
                                             for fcs, tcs in zip(
-                                                from_sp_cols, to_sp_cols
+                                                from_sp_cols, to_sp_cols, strict=True
                                             )
                                         ]
                                         current_state, _ = movr.move_atoms(
@@ -992,7 +992,7 @@ def move_across_rows(
                                                 from_row, int(fcs), to_row, int(tcs)
                                             )
                                             for fcs, tcs in zip(
-                                                from_sp_cols, to_sp_cols
+                                                from_sp_cols, to_sp_cols, strict=True
                                             )
                                         ]
                                         current_state, _ = movr.move_atoms(
@@ -1043,8 +1043,8 @@ def get_all_balance_assignments(start, end):
 
 
 def get_next_balance_assignment(i, j):
-    l = j - i + 1
-    m = i + (l // 2)
+    n_rows_involved = j - i + 1
+    m = i + (n_rows_involved // 2)
     next_list = []
     if i != j and i < j:
         next_list.append((i, m - 1))

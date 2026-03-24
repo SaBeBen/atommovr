@@ -352,7 +352,7 @@ def _find_cross_axis_accel_tones(
         due to cross-axis coupling logic.
     """
     try:
-        n = int(curr_x.size)
+        _ = int(curr_x.size)
     except AttributeError:
         if isinstance(curr_x, list):
             curr_x = _as_cmd_array(curr_x)

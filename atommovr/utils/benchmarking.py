@@ -6,7 +6,7 @@ import xarray as xr
 from typing import Union
 import matplotlib.pyplot as plt
 
-from atommovr.utils.errormodels import ZeroNoise
+from atommovr.utils.errormodels import ZeroNoise, ErrorModel
 from atommovr.utils.core import (
     generate_random_target_configs,
     generate_random_init_configs,
@@ -46,10 +46,10 @@ def evaluate_moves(array: AtomArray, move_list: list):
     N_non_parallel_moves = 0
 
     # iterating through moves and updating matrix
-    for move_ind, move_set in enumerate(move_list):
+    for _, move_set in enumerate(move_list):
 
         # performing the move
-        [failed_moves, flags], move_time = array.move_atoms(move_set)
+        [_, _], move_time = array.move_atoms(move_set)
         N_parallel_moves += 1
         N_non_parallel_moves += len(move_set)
 
@@ -76,7 +76,7 @@ class BenchmarkingFigure:
         The kind of figure you want to make. Options are histogram ('hist'), a plot comparing different algorithms ('scale'), or a plot comparing different target configurations for the same algorithm ('pattern').
     """
 
-    def __init__(self, variables: list = ["Success rate"], figure_type: str = "scale"):
+    def __init__(self, variables: list[str] | None = None, figure_type: str = "scale"):
         """Configure plotting options for benchmarking outputs.
 
         Parameters
@@ -94,6 +94,8 @@ class BenchmarkingFigure:
         KeyError
             If an unsupported variable name is provided.
         """
+        if variables is None:
+            variables = ["Success rate"]
         for variable in variables:
             if variable not in [
                 "Success rate",
@@ -136,7 +138,7 @@ class BenchmarkingFigure:
         """
 
         # Iterate over the y-axis variables
-        fig, ax = plt.subplots(
+        _, ax = plt.subplots(
             len(self.y_axis_variables), 1, figsize=(5, 5 * len(self.y_axis_variables))
         )
         for varind, y_var in enumerate(self.y_axis_variables):
@@ -209,7 +211,7 @@ class BenchmarkingFigure:
         """
         hist_data = []
         algos_name = []
-        fig, ax = plt.subplots(
+        _, ax = plt.subplots(
             len(self.y_axis_variables), 1, figsize=(5, 5 * len(self.y_axis_variables))
         )
         for varind, y_var in enumerate(self.y_axis_variables):
@@ -261,7 +263,7 @@ class BenchmarkingFigure:
             Filename (without extension) used when ``save`` is ``True``.
         """
 
-        fig, ax = plt.subplots(
+        _, ax = plt.subplots(
             len(self.y_axis_variables), 1, figsize=(5, 5 * len(self.y_axis_variables))
         )
         # Iterate over the y-axis variables
@@ -346,13 +348,13 @@ class Benchmarking:
 
     def __init__(
         self,
-        algos: list = [Algorithm()],
-        target_configs: Union[list, np.ndarray] = [Configurations.MIDDLE_FILL],
-        error_models_list: list = [ZeroNoise()],
-        phys_params_list: list = [PhysicalParams()],
-        sys_sizes: list = list(range(10, 16)),
-        rounds_list: list = [1],
-        figure_output: BenchmarkingFigure = BenchmarkingFigure(),
+        algos: list[Algorithm] | None = None,
+        target_configs: Union[list, np.ndarray, None] = None,
+        error_models_list: list[ErrorModel] | None = None,
+        phys_params_list: list[PhysicalParams] | None = None,
+        sys_sizes: list[int] | None = None,
+        rounds_list: list[int] | None = None,
+        figure_output: BenchmarkingFigure | None = None,
         n_shots: int = 100,
         n_species: int = 1,
         check_sufficient_atoms: bool = True,
@@ -390,6 +392,20 @@ class Benchmarking:
         TypeError
             If ``target_configs`` is neither a list nor an ndarray.
         """
+        if algos is None:
+            algos = [Algorithm()]
+        if target_configs is None:
+            target_configs = [Configurations.MIDDLE_FILL]
+        if error_models_list is None:
+            error_models_list = [ZeroNoise()]
+        if phys_params_list is None:
+            phys_params_list = [PhysicalParams()]
+        if sys_sizes is None:
+            sys_sizes = list(range(10, 16))
+        if rounds_list is None:
+            rounds_list = [1]
+        if figure_output is None:
+            figure_output = BenchmarkingFigure()
         # initializing the sweep modules (minus target configs, see below)
         self.algos, self.n_algos = algos, len(algos)
         self.system_size_range, self.n_sizes = sys_sizes, len(sys_sizes)
@@ -525,7 +541,7 @@ class Benchmarking:
             self.n_targets = len(self.target_configs[0])
             if len(self.target_configs) != self.n_sizes:
                 raise IndexError(
-                    f"Number of system sizes {self.n_sizes} and shape of `target_configs` {np.shape(target_configs)} does not match. `target_configs` ust have shape (len(sys_sizes), [number of target configs]). "
+                    f"Number of system sizes {self.n_sizes} and shape of `target_configs` {np.shape(self.target_configs)} does not match. `target_configs` ust have shape (len(sys_sizes), [number of target configs]). "
                 )
         else:
             raise TypeError(
@@ -885,7 +901,7 @@ class Benchmarking:
             Base filename to use when saving figures; defaults depend on figure type.
         """
         if self.figure_output.figure_type == "scale":
-            if savename == None:
+            if savename is None:
                 savename = "scaling"
             self.figure_output.generate_scaling_figure(
                 list(self.system_size_range),
@@ -897,7 +913,7 @@ class Benchmarking:
             )
 
         elif self.figure_output.figure_type == "hist":
-            if savename == None:
+            if savename is None:
                 savename = "histogram"
             self.figure_output.generate_histogram_figure(
                 self.benchmarking_results,
@@ -906,7 +922,7 @@ class Benchmarking:
             )
 
         elif self.figure_output.figure_type == "pattern":
-            if savename == None:
+            if savename is None:
                 savename = "pattern"
             self.figure_output.generate_pattern_figure(
                 list(self.system_size_range),

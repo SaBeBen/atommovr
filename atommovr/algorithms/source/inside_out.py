@@ -1,4 +1,31 @@
-from atommovr.algorithms.source.inside_out_utils import *
+import copy
+import numpy as np
+from typing import Callable
+
+from atommovr.utils.AtomArray import AtomArray
+from atommovr.utils.Move import Move
+from atommovr.algorithms.source.inside_out_utils import (
+    is_site_correct,
+    clean_empty_moves,
+    def_boundary,
+    perimeter_coords,
+    collect_coords,
+    is_rb_source,
+    is_cs_source,
+    chain_push_move,
+    find_empty_in_direction,
+    bfs_find_path_new,
+    generate_AOD_cmds,
+    same_species_ok,
+    process_chain_moves_new,
+    collect_non_conflicting_moves,
+    categ_2_move_exe,
+    push_out_obstacles,
+    diff_species_ok,
+    regroup_parallel_moves,
+    gen_dual_assign_new,
+    generate_decomposed_move_list,
+)
 
 
 def inside_out_algorithm(rbcs_arrays: AtomArray, round_lim: int = 50):
@@ -9,14 +36,16 @@ def inside_out_algorithm(rbcs_arrays: AtomArray, round_lim: int = 50):
     move_list = []
     move_list_layer = []
 
-    if check_atom_enough(rbcs_arrays) == False:
+    if not check_atom_enough(rbcs_arrays):  # == False: linting error
         return rbcs_arrays, [], False
 
     layer_num = 1  # The index control which layer we are rearranging
     iteration = 0
 
     # Start deal with the n-th layer rearrangement
-    while rearrangement_complete(arrays) == False and iteration < round_lim:
+    while (
+        not rearrangement_complete(arrays) and iteration < round_lim
+    ):  # == False linting error
         arrays_save = copy.deepcopy(arrays)
         if layer_complete(layer_num, arrays, is_site_correct(arrays)):
             move_list.extend(move_list_layer)
@@ -34,7 +63,7 @@ def inside_out_algorithm(rbcs_arrays: AtomArray, round_lim: int = 50):
                     arrays, layer_num, get_stuck_flag=False
                 )
 
-            if moves == None:
+            if moves is None:  # == None: linting error
                 return rbcs_arrays, None, False
             move_list_layer.extend(moves)
             iteration += 1
@@ -116,7 +145,7 @@ def inside_out_layer_push(
     arrays, push_out_moves = push_out_misplaced_atoms(arrays, layer_factor)
     move_list.extend(push_out_moves)
 
-    if check_atom_enough(arrays) == False:
+    if not check_atom_enough(arrays):  # == False: linting error
         return arrays, None
 
     # Check if the process get stuck
@@ -167,12 +196,12 @@ def push_out_misplaced_atoms(arrays: AtomArray, layer_factor: int):
     Cs_source_layer = collect_coords(
         arrays, layer_factor, "layer", is_cs_source(arrays)
     )
-    Rb_target_layer = collect_coords(
-        arrays, layer_factor, "layer", is_rb_target(arrays)
-    )
-    Cs_target_layer = collect_coords(
-        arrays, layer_factor, "layer", is_cs_target(arrays)
-    )
+    # Rb_target_layer = collect_coords(
+    #     arrays, layer_factor, "layer", is_rb_target(arrays)
+    # )
+    # Cs_target_layer = collect_coords(
+    #     arrays, layer_factor, "layer", is_cs_target(arrays)
+    # )
 
     # 2. Push out all misplaced atoms
     arrays, push_moves = crude_push_atoms(

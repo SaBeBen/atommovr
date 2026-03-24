@@ -1,17 +1,23 @@
 ##Algorithm for the Balance and Compact Algorithm
-from atommovr.utils.core import *
-from atommovr.utils.move_utils import *
-from atommovr.utils.animation import *
-from atommovr.algorithms.source.ejection import ejection
-from atommovr.algorithms.source.generalized_balance import *
 import numpy as np
+import copy
+
+from atommovr.utils.Move import Move
+from atommovr.utils.move_utils import move_atoms
+from atommovr.algorithms.source.ejection import ejection
+from atommovr.algorithms.source.generalized_balance import (
+    right_move,
+    left_move,
+    flatten_tuple,
+    bfs_move_atom,
+)
 
 
 def balance_and_compact(
     init_config: np.ndarray,
     target_config: np.ndarray,
     do_ejection: bool = False,
-    final_size: list = [],
+    final_size: list[int] | None = None,
 ):
     if len(np.shape(init_config)) > 2 and np.shape(init_config)[2] == 1:
         matrix = np.array(copy.deepcopy(init_config[:, :, 0]))
@@ -34,9 +40,9 @@ def balance_and_compact(
     middle_col = col_min + (col_nums // 2) - 1
 
     # Counts moves components in the balance and compact algorithm
-    balance_moves_term = 0
-    compact_moves_term = 0
-    ejection_moves_term = 0
+    # balance_moves_term = 0
+    # compact_moves_term = 0
+    # ejection_moves_term = 0
 
     pre_balance_config, move_list = pre_balance(
         matrix, target_config, row_min, row_max, col_min, col_max, move_list
@@ -61,7 +67,7 @@ def balance_and_compact(
         move_list,
         0,
     )
-    balance_moves_term = len(move_list)
+    # balance_moves_term = len(move_list)
 
     # 2. Compact part alogrithm
     compact_config, move_list = compact_left(
@@ -70,7 +76,7 @@ def balance_and_compact(
     compact_config, move_list = compact_right(
         compact_config, target_config, middle_col, move_list
     )
-    compact_moves_term = len(move_list) - balance_moves_term
+    # compact_moves_term = len(move_list) - balance_moves_term # linting error - unused
 
     final_config = copy.deepcopy(compact_config)
 
@@ -80,12 +86,12 @@ def balance_and_compact(
             compact_config, target_config, [0, len(matrix) - 1, 0, len(matrix[0]) - 1]
         )
         move_list.extend(eject_moves)
-        ejection_moves_term = len(eject_moves)
+        # ejection_moves_term = len(eject_moves)
         # 3.1 Check if the configuration is the same as the target configuration
         if np.array_equal(final_config, target_config):
             success_flag = True
     else:
-        ejection_moves_term = 0
+        # ejection_moves_term = 0 # linting error - unused
         # 3.2 Check if the configuration (inside range of target) the same as the target configuration
         effective_config = np.multiply(final_config, target_config)
         if np.array_equal(effective_config, target_config):
@@ -501,7 +507,7 @@ def compact_left(init_matrix, target_config, middle_col, move_list, max_cycles=3
 
     # Execute Parallel Sorting until Defect-free or until max number of cycles
     # Execute Parallel Sorting until Defect-free or until max number of cycles
-    while success_flag == False:
+    while not success_flag:  # success_flag == False: # linting error
         if left_rearrangement_cycle == max_cycles:
             return matrix, move_list
 
@@ -539,8 +545,10 @@ def compact_right(init_matrix, target_config, middle_col, move_list, max_cycles=
     right_rearrangement_cycle = 0
     success_flag = False
 
-    while success_flag == False:
-        if right_rearrangement_cycle == max_cycles or success_flag == True:
+    while not success_flag:  # success_flag == False: # linting error
+        if (
+            right_rearrangement_cycle == max_cycles or success_flag
+        ):  # success_flag == True: #linting error
             return matrix, move_list
 
         # Moving atoms leftward, iterating col by col

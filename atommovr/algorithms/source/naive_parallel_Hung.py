@@ -1,7 +1,23 @@
+import copy
+import numpy as np
 from collections import deque
+from typing import Callable
+from scipy.optimize import linear_sum_assignment
+
 from atommovr.utils.Move import Move
 from atommovr.utils.AtomArray import AtomArray
-from atommovr.algorithms.source.inside_out import *
+from atommovr.algorithms.source.inside_out_utils import (
+    BFSResult,
+    collect_non_conflicting_moves,
+    regroup_parallel_moves,
+    same_species_ok,
+    process_chain_moves_new,
+    generate_decomposed_move_list,
+)
+from atommovr.algorithms.source.inside_out import (
+    check_atom_enough,
+    rearrangement_complete,
+)
 from atommovr.algorithms.source.Hungarian_works import generate_cost_matrix
 
 """
@@ -18,11 +34,11 @@ def naive_par_Hung(
     arrays = copy.deepcopy(rbcs_arrays)
     round_count = 0
 
-    if check_atom_enough(rbcs_arrays) == False:
+    if not check_atom_enough(rbcs_arrays):  # == False: linting error
         return rbcs_arrays, [], False
 
     # Rearranging Rb arrays layer
-    while (complete_flag == False) and (round_count < round_lim):
+    while (not complete_flag) and (round_count < round_lim):
         # Here we use deepcopy to ensure that we are not modifying the original arrays
         Rb_arrays = copy.deepcopy(arrays.matrix[:, :, 0])
         Rb_target = copy.deepcopy(arrays.target[:, :, 0])
@@ -173,18 +189,18 @@ def generate_assignments_naive_par(
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
     # Pair up row_ind and col_ind and sort by col_ind
-    paired_indices = sorted(zip(row_ind, col_ind), key=lambda x: x[1])
+    paired_indices = sorted(zip(row_ind, col_ind, strict=True), key=lambda x: x[1])
 
     if paired_indices:
         # Unzip the sorted pairs if paired_indices is not empty
-        sorted_row_ind, sorted_col_ind = zip(*paired_indices)
+        sorted_row_ind, sorted_col_ind = zip(*paired_indices, strict=True)
     else:
         # Assign default values if paired_indices is empty
         sorted_row_ind, sorted_col_ind = [], []
 
     prepared_assignments = [
         (current_positions[i], target_positions[j])
-        for i, j in zip(sorted_row_ind, sorted_col_ind)
+        for i, j in zip(sorted_row_ind, sorted_col_ind, strict=True)
     ]
     prepared_assignments_new = copy.deepcopy(prepared_assignments)
 
