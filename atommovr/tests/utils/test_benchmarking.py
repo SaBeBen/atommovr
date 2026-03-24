@@ -298,8 +298,8 @@ class TestBenchmarkingInit:
 
         assert bench.n_algos == 1
         assert bench.n_shots == 100
-        assert bench.check_sufficient_atoms == True
-        assert bench.istargetlist == True
+        assert bench.check_sufficient_atoms  # == True
+        assert bench.istargetlist  # == True
 
     def test_custom_algorithms(self):
         """Test initialization with custom algorithms."""
@@ -330,14 +330,14 @@ class TestBenchmarkingInit:
     def test_check_sufficient_atoms_false(self):
         """Test initialization with check_sufficient_atoms=False."""
         bench = Benchmarking(check_sufficient_atoms=False)
-        assert bench.check_sufficient_atoms == False
+        assert not bench.check_sufficient_atoms  # == False
 
     def test_target_configs_as_list(self):
         """Test initialization with target configs as list."""
         targets = [Configurations.MIDDLE_FILL, Configurations.CHECKERBOARD]
         bench = Benchmarking(target_configs=targets)
 
-        assert bench.istargetlist == True
+        assert bench.istargetlist  # == True
         assert bench.n_targets == 2
 
     def test_target_configs_as_ndarray(self):
@@ -354,7 +354,7 @@ class TestBenchmarkingInit:
 
         bench = Benchmarking(target_configs=targets, sys_sizes=sys_sizes)
 
-        assert bench.istargetlist == False
+        assert not bench.istargetlist  # == False
         assert bench.n_targets == 2
 
     def test_target_configs_ndarray_wrong_shape_raises(self):

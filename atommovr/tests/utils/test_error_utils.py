@@ -221,7 +221,7 @@ def test_write_primary_events_to_moves_calls_set_failure_event() -> None:
 
     write_primary_events_to_moves(moves, primary)
 
-    for mv, ev in zip(moves, primary):
+    for mv, ev in zip(moves, primary, strict=True):
         mv.set_failure_event.assert_called_once_with(int(ev))
 
 

@@ -3,8 +3,9 @@
 import copy
 import numpy as np
 
-from atommovr.utils.core import *
-from atommovr.utils.move_utils import *
+from atommovr.utils.Move import Move
+from atommovr.utils.move_utils import move_atoms
+from atommovr.utils.core import left_right_atom_in_row, top_bot_atom_in_col
 
 
 def ejection(
@@ -13,7 +14,7 @@ def ejection(
     matrix = copy.deepcopy(init_config)
     move_list = []
 
-    if final_size == None:
+    if final_size is None:
         final_size = np.shape(init_config)
 
     # Identify unwanted atoms
@@ -93,18 +94,15 @@ def hor_ejection(
     matrix, target_config, move_list, row_min, row_max, col_min, col_max, direction
 ):
     # If there are excess atoms, do ejection in the while loop
-    while (
-        np.sum(matrix[row_min : row_max + 1, col_min : col_max + 1])
-        >= np.sum(target_config[row_min : row_max + 1, col_min : col_max + 1])
-        and np.array_equal(
-            matrix[row_min : row_max + 1, col_min : col_max + 1].reshape(
-                row_max + 1 - row_min, col_max + 1 - col_min
-            ),
-            target_config[row_min : row_max + 1, col_min : col_max + 1].reshape(
-                row_max + 1 - row_min, col_max + 1 - col_min
-            ),
-        )
-        == False
+    while np.sum(matrix[row_min : row_max + 1, col_min : col_max + 1]) >= np.sum(
+        target_config[row_min : row_max + 1, col_min : col_max + 1]
+    ) and not np.array_equal(
+        matrix[row_min : row_max + 1, col_min : col_max + 1].reshape(
+            row_max + 1 - row_min, col_max + 1 - col_min
+        ),
+        target_config[row_min : row_max + 1, col_min : col_max + 1].reshape(
+            row_max + 1 - row_min, col_max + 1 - col_min
+        ),
     ):
         atom_dict = {}
         target_replacement_dict = {}
@@ -243,18 +241,15 @@ def hor_ejection(
 def ver_ejection(
     matrix, target_config, move_list, row_min, row_max, col_min, col_max, direction
 ):
-    while (
-        np.sum(matrix[row_min : row_max + 1, col_min : col_max + 1])
-        >= np.sum(target_config[row_min : row_max + 1, col_min : col_max + 1])
-        and np.array_equal(
-            matrix[row_min : row_max + 1, col_min : col_max + 1].reshape(
-                row_max + 1 - row_min, col_max + 1 - col_min
-            ),
-            target_config[row_min : row_max + 1, col_min : col_max + 1].reshape(
-                row_max + 1 - row_min, col_max + 1 - col_min
-            ),
-        )
-        == False
+    while np.sum(matrix[row_min : row_max + 1, col_min : col_max + 1]) >= np.sum(
+        target_config[row_min : row_max + 1, col_min : col_max + 1]
+    ) and not np.array_equal(
+        matrix[row_min : row_max + 1, col_min : col_max + 1].reshape(
+            row_max + 1 - row_min, col_max + 1 - col_min
+        ),
+        target_config[row_min : row_max + 1, col_min : col_max + 1].reshape(
+            row_max + 1 - row_min, col_max + 1 - col_min
+        ),
     ):
         atom_dict = {}
         target_replacement_dict = {}

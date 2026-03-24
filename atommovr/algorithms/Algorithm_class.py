@@ -95,7 +95,7 @@ class Algorithm:
 
         """
         success_flag = False
-        if do_ejection == False:
+        if not do_ejection:  # if do_ejection == False:
             start_row, end_row, start_col, end_col = get_effective_target_grid(
                 target, n_species
             )
@@ -168,7 +168,7 @@ def get_effective_target_grid(target, n_species=1):
             break
     try:
         return start_row, end_row, start_col, end_col
-    except UnboundLocalError:
-        raise Exception(
-            "Could not find atoms. Did you initialize a target configuration with AtomArray.generate_target()?"
-        )
+    except UnboundLocalError as ule:
+        raise ValueError(
+            "No atoms in target configuration. Did you initialize a target configuration with AtomArray.generate_target()?"
+        ) from ule

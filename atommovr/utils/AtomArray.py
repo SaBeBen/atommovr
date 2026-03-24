@@ -12,7 +12,6 @@ import random
 import numpy as np
 from numpy.typing import NDArray
 from typing import Tuple, List
-from collections import Counter
 
 from atommovr.utils.core import (
     PhysicalParams,
@@ -111,16 +110,18 @@ class AtomArray:
         shape: list | None = None,
         n_species: int = 1,
         params: PhysicalParams | None = None,
-        error_model: ErrorModel = ZeroNoise(),
+        error_model: ErrorModel | None = None,
         geom: ArrayGeometry = ArrayGeometry.RECTANGULAR,
     ):
         self.geom = geom
         if params is None:
             params = PhysicalParams()
+        if error_model is None:
+            error_model = ZeroNoise()
         if shape is None:
             shape = [10, 10]
         super().__setattr__("shape", shape)
-        if n_species in [1, 2] and type(n_species) == int:
+        if n_species in [1, 2] and isinstance(n_species, int):
             self.n_species = n_species
         else:
             raise ValueError(
@@ -281,7 +282,7 @@ class AtomArray:
         if self.n_species == 1:
             single_species_image(self.matrix, move_list=move_list, savename=savename)
         elif self.n_species == 2:
-            if type(self) != np.ndarray:
+            if not isinstance(self, np.ndarray):
                 plotted_arrays = self.matrix
             else:
                 plotted_arrays = self
@@ -368,7 +369,7 @@ class AtomArray:
             except IndexError:
                 next_move_list = []
 
-            [failed_moves, flags], move_time = self.move_atoms(
+            [_, _], move_time = self.move_atoms(
                 move_list, prev_move_list, next_move_list
             )
             N_parallel_moves += 1
@@ -893,9 +894,6 @@ class AtomArray:
 
         self.target = np.stack([self.target_Rb, self.target_Cs], axis=2, dtype=np.uint8)
 
-    def _get_duplicate_vals_from_list(self, l: list) -> list:
-        return [k for k, v in Counter(l).items() if v > 1]
-
     def _apply_moves(self, moves: list) -> Tuple[List, List]:
         """
         Dispatch move application to the species-specific implementation.
@@ -1010,7 +1008,9 @@ class AtomArray:
 
         # Parallel semantics: destination is "vacated" if it is a source of any move in this batch
         # (regardless of move outcome, movetype classification is geometry/intended parallel move-set based)
-        source_sites = {(int(r), int(c)) for r, c in zip(from_rows, from_cols)}
+        source_sites = {
+            (int(r), int(c)) for r, c in zip(from_rows, from_cols, strict=True)
+        }
         dst_vacated_by_batch = np.zeros(n, dtype=bool)
         if inb_idx.size > 0:
             dst_vacated_by_batch[inb_idx] = [
@@ -1169,7 +1169,9 @@ class AtomArray:
             )
 
         # Parallel semantics: destination is "vacated" if it is a source of any move in this batch
-        source_sites = {(int(r), int(c)) for r, c in zip(from_rows, from_cols)}
+        source_sites = {
+            (int(r), int(c)) for r, c in zip(from_rows, from_cols, strict=True)
+        }
         dst_vacated_by_batch = np.zeros(n, dtype=bool)
         dst_vacated_by_batch[inb_idx] = np.fromiter(
             ((int(to_rows[i]), int(to_cols[i])) in source_sites for i in inb_idx),

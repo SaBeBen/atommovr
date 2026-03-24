@@ -220,7 +220,7 @@ def test_event_pipeline_seam_smoke_end_to_end_mixed_processes() -> None:
 
     # Verify write-back to moves happened
     assert [m.failure_event for m in moves] == expected_primary.tolist()
-    for m, ev in zip(moves, expected_primary):
+    for m, ev in zip(moves, expected_primary, strict=True):
         assert m.set_failure_event_calls[-1] == int(ev)
 
     # Verify stored masks reflect suppression results (not raw pre-suppression combinations)

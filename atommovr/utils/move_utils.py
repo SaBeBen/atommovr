@@ -228,8 +228,8 @@ def get_AOD_cmds_from_move_list(
 def move_atoms(
     init_matrix: NDArray,
     moves: list[Move],
-    error_model: ErrorModel = ZeroNoise(),
-    params: PhysicalParams = PhysicalParams(),
+    error_model: ErrorModel | None = None,
+    params: PhysicalParams | None = None,
     look_for_flag: bool = False,
     error_modeling: bool = False,
 ) -> tuple[NDArray, list[list]]:
@@ -276,6 +276,10 @@ def move_atoms(
     flags
         List of integer FailureFlag values for the failed moves.
     """
+    if error_model is None:
+        error_model = ZeroNoise()
+    if params is None:
+        params = PhysicalParams()
     matrix_out = copy.deepcopy(init_matrix)
     if np.max(init_matrix) > 1:
         raise Exception("Variable `init_matrix` cannot have values outside of {0,1}. ")
@@ -354,8 +358,8 @@ def move_atoms(
     return matrix_out, [failed_moves, flags]
 
 
-def _get_duplicate_vals_from_list(l: list) -> list:
-    return [k for k, v in Counter(l).items() if v > 1]
+def _get_duplicate_vals_from_list(lis: list) -> list:
+    return [k for k, v in Counter(lis).items() if v > 1]
 
 
 def _find_and_resolve_crossed_moves(
@@ -376,7 +380,7 @@ def _find_and_resolve_crossed_moves(
     # 3. Sorting duplicate entries into distinct sets
     crossed_move_sets = []
     duplicate_move_inds = []
-    for i in range(len(duplicate_vals)):
+    for _ in range(len(duplicate_vals)):
         crossed_move_sets.append([])
     if len(crossed_move_sets) > 0:
         for m_ind, move in enumerate(move_list):
@@ -405,7 +409,7 @@ def _apply_moves(
     init_matrix: NDArray,
     matrix_out: NDArray,
     moves: list,
-    duplicate_move_inds: list = [],
+    duplicate_move_inds: list | None = None,
     look_for_flag: bool = False,
 ) -> tuple[NDArray, list, list]:
     """
@@ -416,6 +420,8 @@ def _apply_moves(
     NB: `init_matrix` is the initial array before crossed moves were resolved,
     and `matrix_out` is the array following resolution of crossed moves.
     """
+    if duplicate_move_inds is None:
+        duplicate_move_inds = []
     failed_moves = []
     flags = []
     # evaluate and run each move
@@ -827,8 +833,8 @@ def move_atoms_noiseless(
 def move_atoms_fast(
     init_matrix: NDArray,
     moves: list[Move],
-    error_model: ErrorModel = ZeroNoise(),
-    params: PhysicalParams = PhysicalParams(),
+    error_model: ErrorModel | None = None,
+    params: PhysicalParams | None = None,
     look_for_flag: bool = False,
     error_modeling: bool = False,
 ) -> tuple[NDArray, list[list]]:
@@ -862,6 +868,10 @@ def move_atoms_fast(
     tuple[NDArray, list[list]]
         Updated occupancy matrix and ``[failed_moves, flags]``.
     """
+    if error_model is None:
+        error_model = ZeroNoise()
+    if params is None:
+        params = PhysicalParams()
     if not isinstance(init_matrix, np.ndarray):
         raise TypeError("init_matrix must be a numpy array.")
     if init_matrix.ndim != 3:

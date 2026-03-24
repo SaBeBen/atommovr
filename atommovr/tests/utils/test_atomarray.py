@@ -3,7 +3,6 @@ import numpy as np
 from numpy.typing import NDArray
 import importlib
 
-AtomArray_mod = importlib.import_module("atommovr.utils.AtomArray")
 from atommovr.utils.AtomArray import AtomArray
 from atommovr.utils.Move import Move
 from atommovr.utils.move_utils import MoveType, MultiOccupancyFlag
@@ -11,6 +10,8 @@ from atommovr.utils.core import Configurations
 from atommovr.utils.failure_policy import FailureEvent, FailureFlag
 from atommovr.tests.support.doubles import TimingSpyErrorModel, BoomErrorModel
 from atommovr.tests.support.helpers import boom
+
+AtomArray_mod = importlib.import_module("atommovr.utils.AtomArray")
 
 
 class TestAtomArrayInitBasic:
