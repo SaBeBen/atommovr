@@ -244,7 +244,7 @@ def dual_species_image(
 
 def make_single_species_gif(
     single_species_array,
-    move_list,
+    move_list: list[list[Move]],
     params: PhysicalParams | None = None,
     savename: str = "matrix_animation",
     plt_spacer: float = 0.25,
@@ -359,8 +359,13 @@ def make_single_species_gif(
 
             # calculating the distance of the move
             distances.append(move.distance)
-
-            if move.movetype == MoveType.EJECT_MOVE:
+            try:
+                is_eject_move = move.movetype == MoveType.EJECT_MOVE
+                is_illegal_move = move.movetype == MoveType.ILLEGAL_MOVE
+            except AttributeError:
+                is_eject_move = False
+                is_illegal_move = False
+            if is_eject_move:
                 # plot a green dot if ejection succeeded
                 if fail_flag == 0:
                     eject_x.append(move.from_col)
@@ -394,7 +399,7 @@ def make_single_species_gif(
             elif fail_flag == 4:
                 crossed_x.append(move.from_col)
                 crossed_y.append(move.from_row)
-            elif move.movetype == MoveType.ILLEGAL_MOVE and fail_flag == 0:
+            elif is_illegal_move and fail_flag == 0:
                 # plot red dots if atoms collided
                 collision_fail_x.append(move.from_col)
                 collision_fail_y.append(move.from_row)
@@ -467,7 +472,7 @@ def make_single_species_gif(
 
 def make_dual_species_gif(
     dual_species_array,
-    move_list: list,
+    move_list: list[list[Move]],
     savename="matrix_animation",
     plt_spacer=0.25,
     duration=0.2,

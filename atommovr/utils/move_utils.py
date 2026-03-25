@@ -567,8 +567,10 @@ def _restore_single_species_matrix(
         Occupancy array with the original dimensionality.
     """
     if was_2d:
-        return matrix_3d[:, :, 0].astype(out_dtype, copy=False)
-    return matrix_3d.astype(out_dtype, copy=False)
+        og_dim_arr = matrix_3d[:, :, 0].astype(out_dtype, copy=False)
+        return og_dim_arr
+    og_dim_arr = matrix_3d.astype(out_dtype, copy=False)
+    return og_dim_arr
 
 
 def detect_destructive_aod_cmd_mask(
@@ -779,7 +781,6 @@ def apply_moves_noiseless(
             out_2d[dst_row, dst_col] += 1
 
     out_2d[out_2d > 1] = 0
-
     return _restore_single_species_matrix(
         out_work,
         was_2d=was_2d,
@@ -819,7 +820,6 @@ def move_atoms_noiseless(
         init_matrix,
         move_list,
     )
-
     return apply_moves_noiseless(
         init_matrix,
         move_list,

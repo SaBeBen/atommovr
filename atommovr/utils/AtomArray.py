@@ -25,6 +25,7 @@ from atommovr.utils.move_utils import (
     MoveType,
     MultiOccupancyFlag,
     get_AOD_cmds_from_move_list,
+    get_move_list_from_AOD_cmds,
     alloc_event_mask,
 )
 from atommovr.utils.Move import Move
@@ -454,11 +455,18 @@ class AtomArray:
         n_active_cols = int(np.count_nonzero(curr_vert))
         expected_n_moves = n_active_rows * n_active_cols
         if n_moves != expected_n_moves:
-            raise ValueError(
-                "Move list is not complete: active AOD tones define "
-                f"{n_active_rows} x {n_active_cols} = {expected_n_moves} "
-                f"tweezer intersections, but got {n_moves} moves."
+            # quick and dirty patch
+            h_cmds, v_cmds, success = get_AOD_cmds_from_move_list(
+                self.matrix.copy(), move_list
             )
+            move_list = get_move_list_from_AOD_cmds(h_cmds, v_cmds)
+            n_moves = len(move_list)
+            if not success:
+                raise ValueError(
+                    "Move list is not complete: active AOD tones define "
+                    f"{n_active_rows} x {n_active_cols} = {expected_n_moves} "
+                    f"tweezer intersections, but got {n_moves} moves."
+                )
 
         if len(next_move_list) > 0:
             next_horiz, next_vert, next_success = get_AOD_cmds_from_move_list(

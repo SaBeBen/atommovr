@@ -626,35 +626,6 @@ def generate_decomposed_move_set(grid, path):
     return grid, decomposed_move_set
 
 
-# def _move_atoms_hungarian(
-#     matrix: np.ndarray,
-#     moves: list[Move],
-# ) -> tuple[np.ndarray, list[list]]:
-#     """
-#     Apply a move batch through the Hungarian-local compatibility layer.
-
-#     Why this exists
-#     ---------------
-#     The Hungarian algorithm code historically operates on 2D occupancy matrices,
-#     while the optimized move utility expects 3D single-species matrices. This
-#     wrapper keeps the algorithm code patchable in tests and lets production code
-#     use the optimized move implementation.
-
-#     Parameters
-#     ----------
-#     matrix : np.ndarray
-#         Occupancy matrix, either 2D ``(rows, cols)`` or 3D ``(rows, cols, 1)``.
-#     moves : list[Move]
-#         Move batch to apply.
-
-#     Returns
-#     -------
-#     tuple[np.ndarray, list[list]]
-#         Updated matrix and legacy move metadata.
-#     """
-#     return _move_atoms_compat_fast(matrix, moves)
-
-
 def regroup_parallel_moves_fast(
     matrix: np.ndarray,
     move_seqq: list[Move],
@@ -1211,38 +1182,6 @@ def generate_target_config(
 
 
 ## helpers/wrappers
-
-# def _move_atoms_compat_fast(
-#     matrix: np.ndarray,
-#     moves: list[Move],
-# ):
-#     """
-#     Apply a move batch using the fast move utility while preserving the legacy
-#     2D matrix convention used by the Hungarian algorithm code.
-
-#     Parameters
-#     ----------
-#     matrix : np.ndarray
-#         Occupancy matrix, either 2D ``(rows, cols)`` or 3D ``(rows, cols, 1)``.
-#     moves : list[Move]
-#         Move batch to apply.
-
-#     Returns
-#     -------
-#     tuple[np.ndarray, list]
-#         Updated matrix and move metadata, with dimensionality matching the input.
-#     """
-#     if matrix.ndim == 2:
-#         promoted = matrix[:, :, None]
-#         promoted_out, meta = move_atoms_fast(promoted, moves)
-#         return promoted_out[:, :, 0], meta
-
-#     if matrix.ndim == 3:
-#         return move_atoms_fast(matrix, moves)
-
-#     raise ValueError(
-#         f"matrix must be 2D or 3D single-species occupancy, got ndim={matrix.ndim}."
-#     )
 
 
 def _as_2d_occupancy(arr: np.ndarray, name: str) -> np.ndarray:
