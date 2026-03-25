@@ -9,15 +9,15 @@ by [Nikhil Kiran Harle*](https://github.com/khnikhil/khnikhil), [Bo-Yu Chen*](ht
 ## Key features and `where to find them`
 ![overview](/figs/fig1.svg)
 
-:books: Open-source library of rearrangement algorithms:   `atommover.algorithms/`
+:books: Open-source library of rearrangement algorithms:   `atommovr.algorithms/`
 
-:movie_camera: Visualization of rearrangement process: `atommover.utils.animation.py`
+:movie_camera: Visualization of rearrangement process: `atommovr.utils.animation.py`
 
-:computer: Experimentally-relevant error modeling: `atommover.utils.ErrorModel.py`
+:computer: Experimentally-relevant error modeling: `atommovr.utils.ErrorModel.py`
 
-:chart_with_upwards_trend: Flexible benchmarking suite for running experiments: `atommover.utils.benchmarking.py`
+:chart_with_upwards_trend: Flexible benchmarking suite for running experiments: `atommovr.utils.benchmarking.py`
 
-:toolbox: Core utils for moving atoms and simulating stochastic loading: `atommover.utils.core.py` and `atommover.utils.move_utils.py`
+:toolbox: Core utils for moving atoms and simulating stochastic loading: `atommovr.utils.core.py` and `atommovr.utils.move_utils.py`
 
 
 # Use
@@ -27,7 +27,7 @@ Want to learn how to use this code? Curious about what it means to be an atom mo
 
 Want to reproduce the figures from our paper? Check out [`paper_figures.ipynb`](paper_figures.ipynb).
 
-Want to add an algorithm to the library, or make your own? Check out our template in [`atommover.algorithms.Algorithm.py`](/atommover/algorithms/Algorithm.py).
+Want to add an algorithm to the library, or make your own? Check out our template in [`atommovr.algorithms.Algorithm.py`](/atommovr/algorithms/Algorithm.py).
 
 Want to add some features and/or make this code nicer? Check out [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
