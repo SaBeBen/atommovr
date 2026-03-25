@@ -1183,6 +1183,7 @@ def generate_target_config(
 
 ## helpers/wrappers
 
+
 def _as_2d_occupancy(arr: np.ndarray, name: str) -> np.ndarray:
     """
     Normalize an occupancy array to a 2D single-species view.

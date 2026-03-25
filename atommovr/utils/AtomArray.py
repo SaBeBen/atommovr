@@ -456,7 +456,9 @@ class AtomArray:
         expected_n_moves = n_active_rows * n_active_cols
         if n_moves != expected_n_moves:
             # quick and dirty patch
-            h_cmds, v_cmds, success = get_AOD_cmds_from_move_list(self.matrix.copy(), move_list)
+            h_cmds, v_cmds, success = get_AOD_cmds_from_move_list(
+                self.matrix.copy(), move_list
+            )
             move_list = get_move_list_from_AOD_cmds(h_cmds, v_cmds)
             n_moves = len(move_list)
             if not success:
