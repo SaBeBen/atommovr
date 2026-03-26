@@ -163,32 +163,32 @@ def collect_coords(
 
 def is_rb_source(arrays: AtomArray) -> Callable[[int, int], bool]:
     def _check(r, c, out_bound: bool = False):
-        return arrays.matrix[r, c, 0] == 1 and (
+        return bool(arrays.matrix[r, c, 0] == 1 and (
             arrays.target[r, c, 0] == 0 or out_bound
-        )
+        ))
 
     return _check
 
 
 def is_rb_target(arrays: AtomArray) -> Callable[[int, int], bool]:
     def _check(r, c, out_bound: bool = False):
-        return arrays.target[r, c, 0] == 1 and np.sum(arrays.matrix[r, c, :]) == 0
+        return bool(arrays.target[r, c, 0] == 1 and np.sum(arrays.matrix[r, c, :]) == 0)
 
     return _check
 
 
 def is_cs_source(arrays: AtomArray) -> Callable[[int, int], bool]:
     def _check(r, c, out_bound: bool = False):
-        return arrays.matrix[r, c, 1] == 1 and (
+        return bool(arrays.matrix[r, c, 1] == 1 and (
             arrays.target[r, c, 1] == 0 or out_bound
-        )
+        ))
 
     return _check
 
 
 def is_cs_target(arrays: AtomArray) -> Callable[[int, int], bool]:
     def _check(r, c, out_bound: bool = False):
-        return arrays.target[r, c, 1] == 1 and np.sum(arrays.matrix[r, c, :]) == 0
+        return bool(arrays.target[r, c, 1] == 1 and np.sum(arrays.matrix[r, c, :]) == 0)
 
     return _check
 
@@ -197,7 +197,7 @@ def is_reservoir(arrays: AtomArray) -> Callable[[int, int], bool]:
     """a reservoir is an empty cell in both matrix and target outside bound."""
 
     def _check(r, c, out_bound: bool = False):
-        return (
+        return bool(
             np.sum(arrays.matrix[r, c, :]) == 0 and np.sum(arrays.target[r, c, :]) == 0
         )
 
@@ -206,7 +206,7 @@ def is_reservoir(arrays: AtomArray) -> Callable[[int, int], bool]:
 
 def is_site_correct(arrays: AtomArray) -> Callable[[int, int], bool]:
     def _check(r, c):
-        return (
+        return bool(
             arrays.matrix[r, c, 0] == arrays.target[r, c, 0]
             and arrays.matrix[r, c, 1] == arrays.target[r, c, 1]
         )

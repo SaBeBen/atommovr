@@ -122,7 +122,7 @@ def layer_complete(
 
     # If layer_factor == 0, it's just the center cell
     if top == bottom and left == right:
-        return (
+        return bool(
             Rb_arrays[top, left] == Rb_target[top, left]
             and Cs_arrays[top, left] == Cs_target[top, left]
         )
@@ -185,7 +185,7 @@ def rearrangement_complete(arrays: AtomArray) -> bool:
     Cs_complete = np.array_equal(
         np.multiply(arrays.matrix[:, :, 1], arrays.target_Cs), arrays.target_Cs
     )
-    return Rb_complete and Cs_complete
+    return bool(Rb_complete and Cs_complete)
 
 
 def push_out_misplaced_atoms(arrays: AtomArray, layer_factor: int):

@@ -6,6 +6,7 @@ from atommovr.utils.move_utils import (
     Move,
     find_destructive_support_mask_from_moves,
     move_atoms_noiseless,
+    get_AOD_cmds_from_move_list,
 )
 
 
@@ -220,6 +221,66 @@ class TestREGROUP_PARALLEL_MOVES:
                 )
 
                 assert np.array_equal(grouped_final, sequential_final)
+
+    def test_regroup_adds_ghost_moves_for_full_tone_product(self) -> None:
+        """
+        Parallel regrouping should emit ghost moves so every active AOD tone
+        combination is represented in the move list within each group.
+        """
+        matrix = np.zeros((3, 4), dtype=np.uint8)
+        matrix[0, 0] = 1
+        matrix[0, 2] = 1
+        matrix[1, 1] = 1
+
+        moves = [
+            Move(0, 0, 0, 1),  # horizontal +1
+            Move(1, 1, 2, 1),  # vertical +1
+            Move(0, 2, 0, 3),  # horizontal +1
+        ]
+
+        groups = hw.regroup_parallel_moves_fast(matrix.copy(), list(moves))
+
+        # The greedy algorithm may produce multiple groups depending on move compatibility
+        assert len(groups) > 0, "Should produce at least one group"
+
+        # Verify each group has canonicalization applied - no group should be empty
+        for group in groups:
+            assert len(group) > 0, "Each group should have moves"
+
+        # Collect all moves across all groups
+        all_regrouped = []
+        for group in groups:
+            all_regrouped.extend(group)
+
+        # Get AOD commands from original moves to determine expected tone product
+        horiz_cmds, vert_cmds, ok = get_AOD_cmds_from_move_list(matrix, moves)
+        assert ok
+
+        # Within each group, verify canonicalization added ghost moves appropriately
+        for group in groups:
+            group_horiz, group_vert, _ = get_AOD_cmds_from_move_list(matrix, group)
+            
+            # If group has both horizontal and vertical moves, check for tone product fills
+            if group_horiz.any() and group_vert.any():
+                h_active = np.count_nonzero(group_horiz)
+                v_active = np.count_nonzero(group_vert)
+                # Each group with both horizontal and vertical should have h_active * v_active moves
+                expected_in_group = h_active * v_active
+                assert len(group) == expected_in_group, (
+                    f"Group with {h_active} horiz and {v_active} vert tones should have "
+                    f"{expected_in_group} moves (full tone product), got {len(group)}"
+                )
+
+        # Verify all original moves are preserved across all groups
+        original_serialized = {
+            (move.from_row, move.from_col, move.to_row, move.to_col) for move in moves
+        }
+        all_regrouped_serialized = {
+            (move.from_row, move.from_col, move.to_row, move.to_col) for move in all_regrouped
+        }
+        assert all_regrouped_serialized.issuperset(original_serialized), (
+            "All original moves should be preserved in regrouped batches"
+        )
 
     # def test_matches_original_on_noninterfering_moves(self) -> None:
     #     """
