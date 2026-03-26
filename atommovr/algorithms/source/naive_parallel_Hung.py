@@ -34,6 +34,8 @@ def naive_par_Hung(
     arrays = copy.deepcopy(rbcs_arrays)
     round_count = 0
 
+    print(np.sum(arrays.matrix[:, :, 0]) >= np.sum(arrays.target_Rb))
+    print(np.sum(arrays.matrix[:, :, 1]) >= np.sum(arrays.target_Cs))
     if not check_atom_enough(rbcs_arrays):  # == False: linting error
         return rbcs_arrays, [], False
 
@@ -140,21 +142,27 @@ def find_smallest_l(matrix, target_config):
     n = len(matrix)
     center = n / 2
     delta = n % 2
-
-    # Find the smallest l such that the area contains enough atoms
+    
+    total_atoms = int(np.sum(matrix))
+    total_targets = int(np.sum(target_config))
+    
+    # Early exit: impossible to satisfy
+    if total_atoms < total_targets:
+        raise ValueError(
+            f"Insufficient atoms ({total_atoms}) to satisfy targets ({total_targets})"
+        )
+    
     smallest_l = 1
-
-    while True:
+    max_l = n  # safety limit
+    
+    while smallest_l <= max_l:
         left_bound = int(center - smallest_l + delta)
         right_bound = int(center + smallest_l)
-        if np.sum(matrix[left_bound:right_bound, left_bound:right_bound]) > np.sum(
-            target_config
-        ):
-            break
+        if np.sum(matrix[left_bound:right_bound, left_bound:right_bound]) >= total_targets:
+            return smallest_l
         smallest_l += 1
-
-    # return smallest_l*2 + delta
-    return smallest_l
+    
+    raise RuntimeError("Could not find sufficient area for atoms")
 
 
 def generate_assignments_naive_par(
