@@ -9,6 +9,7 @@ Outputs
 -------
 - figs/benchmark_pipeline/large_array_param_search.csv : per-parameter summary
 """
+
 from __future__ import annotations
 
 import itertools
@@ -92,7 +93,12 @@ def _generate_samples(
         img_u8 = (img * 255).astype(np.uint8)
         img_bgr = cv2.cvtColor(img_u8, cv2.COLOR_GRAY2BGR)
         samples.append(
-            Sample(image=img_bgr, binary=binary, angle_deg=true_angle, image_shape=img_bgr.shape[:2])
+            Sample(
+                image=img_bgr,
+                binary=binary,
+                angle_deg=true_angle,
+                image_shape=img_bgr.shape[:2],
+            )
         )
     return samples
 
@@ -218,7 +224,9 @@ def run_large_array_optimization():
     feasible_only = df[df["feasibility_rate"] >= 0.99]
     if feasible_only.empty:
         print("No parameter set achieved >=99% feasibility. Showing best overall:")
-        print(df.sort_values(["feasibility_rate", "mean_recall"], ascending=False).head(5))
+        print(
+            df.sort_values(["feasibility_rate", "mean_recall"], ascending=False).head(5)
+        )
     else:
         print("Top feasible parameter sets (>=99% feasibility):")
         cols = [
@@ -232,9 +240,7 @@ def run_large_array_optimization():
             "mean_recall",
             "mean_precision",
         ]
-        print(
-            feasible_only.sort_values(["avg_time_ms"]).loc[:, cols].head(5)
-        )
+        print(feasible_only.sort_values(["avg_time_ms"]).loc[:, cols].head(5))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-
 """Blob-detector parameter sweep aligned with ``test_grid_extraction``.
 
 This script mirrors the data-generation and evaluation strategy from
@@ -6,6 +5,7 @@ This script mirrors the data-generation and evaluation strategy from
 the large 1200x1200 scenes with ~45x45 grids that routinely appear in the
 pipeline.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -99,7 +99,9 @@ def _evaluate_params(
             blob_params=blob_params,
         )
         try:
-            binary = detector.extract_estimate_rotate_and_assign(sample.image_path, visualize=False)
+            binary = detector.extract_estimate_rotate_and_assign(
+                sample.image_path, visualize=False
+            )
         except Exception as exc:  # pragma: no cover - guardrail for bad params
             logger.debug("Extraction failed for %s: %s", sample.image_path, exc)
             recalls.append(0.0)
@@ -128,7 +130,9 @@ def run_benchmark():
     image_shape = (1200, 1200)
     seeds = range(45, 50)
     grid_sizes = range(45, 50)
-    samples = _prepare_samples(seeds, grid_sizes, image_shape, Path("figs/blob_param_opt"))
+    samples = _prepare_samples(
+        seeds, grid_sizes, image_shape, Path("figs/blob_param_opt")
+    )
 
     param_grid = {
         "minThreshold": [70, 80, 100],
@@ -181,7 +185,9 @@ def run_benchmark():
                     "mean_recall",
                     "mean_precision",
                 ]
-            ].head(5)
+            ].head(
+                5
+            )
         )
     else:
         logger.info("Top feasible configurations (>=99%% feasibility):")

@@ -552,7 +552,9 @@ def generate_AOD_cmds(matrix, move_seq):
 
     move_list = get_move_list_from_AOD_cmds(horiz_AOD_cmds, vert_AOD_cmds)
     matrix_from_AOD = move_atoms_noiseless(copy.deepcopy(matrix), move_list)
-    matrix_from_seq = move_atoms_noiseless(copy.deepcopy(matrix), copy.deepcopy(move_seq))
+    matrix_from_seq = move_atoms_noiseless(
+        copy.deepcopy(matrix), copy.deepcopy(move_seq)
+    )
 
     if not np.array_equal(matrix_from_AOD, matrix_from_seq):
         parallel_success_flag = False

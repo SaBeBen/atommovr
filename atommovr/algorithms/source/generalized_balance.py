@@ -3,10 +3,9 @@ import copy
 import numpy as np
 from collections import deque
 
-from atommovr.utils.core import *
-from atommovr.utils.move_utils import *
-from atommovr.utils.imaging.animation import *
-from atommovr.algorithms.source.ejection import *
+from atommovr.utils.move_utils import Move, move_atoms
+
+from atommovr.algorithms.source.ejection import ejection
 
 
 def generalized_balance(

@@ -57,9 +57,7 @@ def _row_rearrangement(
             continue
 
         priorities = sorted(
-            (req[0], col)
-            for col, req in enumerate(column_requirements)
-            if req
+            (req[0], col) for col, req in enumerate(column_requirements) if req
         )
         if not priorities:
             break
@@ -80,16 +78,16 @@ def _row_rearrangement(
 
         # Use monotonic matching to assign sources to targets
         pairs = _match_monotonic(current_cols, desired_cols)
-        
+
         row_moves: List[Move] = []
         used_sources = set()
-        
+
         for src_col, tgt_col in pairs:
             used_sources.add(src_col)
             if src_col == tgt_col:
                 continue
             row_moves.append(Move(row, src_col, row, tgt_col))
-            
+
         # Update state
         # Clear all sources
         for s in current_cols:
@@ -113,37 +111,37 @@ def _match_monotonic(sources: List[int], targets: List[int]) -> List[Tuple[int, 
     """Find a monotonic matching between a subset of sources and targets that minimizes displacement."""
     n = len(sources)
     m = len(targets)
-    
+
     # dp[i][j] = min cost to match first j targets using a subset of first i sources
     # Initialize with infinity
-    dp = np.full((n + 1, m + 1), float('inf'))
-    
+    dp = np.full((n + 1, m + 1), float("inf"))
+
     # Base case: 0 targets matched with 0 sources cost 0
     for i in range(n + 1):
         dp[i][0] = 0.0
-        
+
     # Fill DP
     for j in range(1, m + 1):
         for i in range(j, n + 1):
-            cost = abs(sources[i-1] - targets[j-1])
-            match_cost = dp[i-1][j-1] + cost
-            skip_cost = dp[i-1][j]
+            cost = abs(sources[i - 1] - targets[j - 1])
+            match_cost = dp[i - 1][j - 1] + cost
+            skip_cost = dp[i - 1][j]
             dp[i][j] = min(match_cost, skip_cost)
-            
+
     # Backtrack
     matches = []
     i, j = n, m
     while j > 0:
-        cost = abs(sources[i-1] - targets[j-1])
+        cost = abs(sources[i - 1] - targets[j - 1])
         # Check if we came from match or skip
         # Use a small epsilon for float comparison if needed, but here costs are integers (or close enough)
-        if dp[i][j] == dp[i-1][j-1] + cost:
-            matches.append((sources[i-1], targets[j-1]))
+        if dp[i][j] == dp[i - 1][j - 1] + cost:
+            matches.append((sources[i - 1], targets[j - 1]))
             i -= 1
             j -= 1
         else:
             i -= 1
-            
+
     return matches[::-1]
 
 
@@ -164,21 +162,23 @@ def _compress_columns(
         sorted_targets = sorted(target_rows)
 
         if len(src_rows) < len(sorted_targets):
-            print(f"Not enough atoms to fill column {col}: have {len(src_rows)}, need {len(sorted_targets)}")
+            print(
+                f"Not enough atoms to fill column {col}: have {len(src_rows)}, need {len(sorted_targets)}"
+            )
             return batches, False
 
         # Find optimal monotonic matching
         pairs = _match_monotonic(src_rows, sorted_targets)
-        
+
         col_moves: List[Move] = []
         used_sources = set()
-        
+
         for src_row, tgt_row in pairs:
             used_sources.add(src_row)
             if src_row == tgt_row:
                 continue
             col_moves.append(Move(src_row, col, tgt_row, col))
-            
+
         # Update state
         # Clear all sources
         for s in src_rows:
@@ -211,7 +211,10 @@ def tetris_algorithm(
 
     target_sites = target_mask.astype(bool)
 
-    column_targets = [list(np.where(target_mask[:, col] == 1)[0]) for col in range(target_mask.shape[1])]
+    column_targets = [
+        list(np.where(target_mask[:, col] == 1)[0])
+        for col in range(target_mask.shape[1])
+    ]
     column_requirements = [deque(rows) for rows in column_targets]
     row_batches, constructed = _row_rearrangement(state, column_requirements)
 

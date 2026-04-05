@@ -1,3 +1,5 @@
+import copy
+
 # Code to visualize the atom array and generate gifs of the rearrangement process.
 
 import numpy as np

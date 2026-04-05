@@ -143,7 +143,9 @@ class ArrayGeometry(IntEnum):
     TRIANGULAR = 2  # NSY
     BRAVAIS = 3  # NSY
     DECORATED_BRAVAIS = 4  # NSY
-    RECTANGLE_TALL = 5 # rectangle taller than it is wide, useful for rectangular target configs
+    RECTANGLE_TALL = (
+        5  # rectangle taller than it is wide, useful for rectangular target configs
+    )
 
 
 class ArrayGeometrySpec:
@@ -152,12 +154,14 @@ class ArrayGeometrySpec:
     - kind: an ArrayGeometry member.
     - params: optional dict of parameters (algorithm-specific).
     """
+
     kind: ArrayGeometry
     params: Optional[dict] = None
-    
+
     def __init__(self, kind: ArrayGeometry, params: Optional[dict] = None) -> None:
         self.kind = kind
         self.params = params
+
 
 #############
 # Functions #
@@ -306,9 +310,7 @@ def generate_random_init_configs(
 
     for _ in range(n_shots):
         if n_species == 1:
-            initial_config = random_loading(
-                [rows, cols], load_prob, rng=rng
-            )
+            initial_config = random_loading([rows, cols], load_prob, rng=rng)
 
         elif n_species == 2:
             initial_config = np.zeros((rows, cols, 2), dtype=np.uint8)
@@ -316,12 +318,8 @@ def generate_random_init_configs(
             dual_species_prob = 2 - 2 * math.sqrt(1 - load_prob)
             p_each = dual_species_prob / 2
 
-            initial_config[:, :, 0] = random_loading(
-                [rows, cols], p_each, rng=rng
-            )
-            initial_config[:, :, 1] = random_loading(
-                [rows, cols], p_each, rng=rng
-            )
+            initial_config[:, :, 0] = random_loading([rows, cols], p_each, rng=rng)
+            initial_config[:, :, 1] = random_loading([rows, cols], p_each, rng=rng)
 
             # Resolve double-occupancy sites by dropping one species uniformly at random.
             both = (initial_config[:, :, 0] == 1) & (initial_config[:, :, 1] == 1)
@@ -606,8 +604,13 @@ def atom_loss(
     if lifetime <= 0:
         raise ValueError(f"`lifetime` must be > 0; got {lifetime}.")
 
-    p_survive = float(np.exp(-move_time / lifetime)) 
-    p_survive *= (1 - pickup_fail_rate) * (1 - putdown_fail_rate) * (1 - move_distance_penalty) * (1 - aod_jitter_probability)
+    p_survive = float(np.exp(-move_time / lifetime))
+    p_survive *= (
+        (1 - pickup_fail_rate)
+        * (1 - putdown_fail_rate)
+        * (1 - move_distance_penalty)
+        * (1 - aod_jitter_probability)
+    )
     rng = _coerce_rng(rng)
 
     # Build a 2D survival mask
@@ -797,7 +800,9 @@ def generate_middle_fifty(length: int, filling_threshold: float = 0.5) -> list[i
     return [max_L, max_L]
 
 
-def array_shape_for_geometry(geometry_spec, target_size: int, loading_prob: float = 0.6) -> tuple[int, int]:
+def array_shape_for_geometry(
+    geometry_spec, target_size: int, loading_prob: float = 0.6
+) -> tuple[int, int]:
     """Return (rows, cols) for a loading array given `geometry_spec`.
 
     Accepted `geometry_spec` types:
@@ -824,9 +829,16 @@ def array_shape_for_geometry(geometry_spec, target_size: int, loading_prob: floa
         return rows, cols
 
     # If None or SQUARE: square fallback scaled by loading_prob
-    if geometry_spec is None or (isinstance(geometry_spec, ArrayGeometrySpec) and geometry_spec.kind == ArrayGeometry.SQUARE):
+    if geometry_spec is None or (
+        isinstance(geometry_spec, ArrayGeometrySpec)
+        and geometry_spec.kind == ArrayGeometry.SQUARE
+    ):
         side = int(math.ceil(math.sqrt(t)))
-        scale = int(math.ceil(1.0 / math.sqrt(float(loading_prob)))) if loading_prob and loading_prob > 0 else 1
+        scale = (
+            int(math.ceil(1.0 / math.sqrt(float(loading_prob))))
+            if loading_prob and loading_prob > 0
+            else 1
+        )
         side = side * scale
         # Ensure some donor margin around the target so rearrangement algorithms
         # can source atoms from outside the target region. Make array at least
@@ -848,9 +860,15 @@ def array_shape_for_geometry(geometry_spec, target_size: int, loading_prob: floa
             return rows, cols
         # Fallback: unknown kinds -> square fallback
         side = int(math.ceil(math.sqrt(t)))
-        scale = int(math.ceil(1.0 / math.sqrt(float(loading_prob)))) if loading_prob and loading_prob > 0 else 1
+        scale = (
+            int(math.ceil(1.0 / math.sqrt(float(loading_prob))))
+            if loading_prob and loading_prob > 0
+            else 1
+        )
         side = side * scale + 2
         side = max(side, t)
         return side, side
 
-    raise ValueError("Unsupported `geometry_spec` type; expected ArrayGeometrySpec, (rows,cols), or None.")
+    raise ValueError(
+        "Unsupported `geometry_spec` type; expected ArrayGeometrySpec, (rows,cols), or None."
+    )

@@ -115,14 +115,14 @@ class Algorithm:
 
         if n_species == 1:
             if np.array_equal(
-                state[start_row : end_row, start_col : end_col],
-                target[start_row : end_row, start_col : end_col],
+                state[start_row:end_row, start_col:end_col],
+                target[start_row:end_row, start_col:end_col],
             ):
                 success_flag = True
         elif n_species == 2:
             if np.array_equal(
-                state[start_row : end_row, start_col : end_col, :],
-                target[start_row : end_row, start_col : end_col, :],
+                state[start_row:end_row, start_col:end_col, :],
+                target[start_row:end_row, start_col:end_col, :],
             ):
                 success_flag = True
 

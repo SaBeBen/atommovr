@@ -38,7 +38,7 @@ def _clamp(val: int, lo: int, hi: int) -> int:
     return max(lo, min(val, hi))
 
 
-#  Strategy 1: CompressAll 
+#  Strategy 1: CompressAll
 
 
 def _compress_all(state: np.ndarray, target: np.ndarray) -> List[List[Move]]:
@@ -132,7 +132,7 @@ def _shell_inward(state: np.ndarray, target: np.ndarray) -> List[List[Move]]:
     return batches
 
 
-#  Strategy 3: SweepLine 
+#  Strategy 3: SweepLine
 
 
 def _sweep_line(state: np.ndarray, target: np.ndarray) -> List[List[Move]]:
@@ -181,7 +181,7 @@ def _sweep_line(state: np.ndarray, target: np.ndarray) -> List[List[Move]]:
     return batches
 
 
-#  Dispatcher 
+#  Dispatcher
 
 STRATEGY_FUNCTIONS = {
     "compress": _compress_all,
@@ -208,8 +208,10 @@ def blind_sort(
     final_state, move_batches, success_flag
     """
     if strategy not in STRATEGY_FUNCTIONS:
-        raise ValueError(f"Unknown blind strategy '{strategy}'. "
-                         f"Choose from {list(STRATEGY_FUNCTIONS)}")
+        raise ValueError(
+            f"Unknown blind strategy '{strategy}'. "
+            f"Choose from {list(STRATEGY_FUNCTIONS)}"
+        )
 
     batches = STRATEGY_FUNCTIONS[strategy](state, target)
 
@@ -219,7 +221,10 @@ def blind_sort(
         clears, sets = [], []
         for mv in batch:
             if 0 <= mv.to_row < sim.shape[0] and 0 <= mv.to_col < sim.shape[1]:
-                if sim[mv.from_row, mv.from_col] == 1 and sim[mv.to_row, mv.to_col] == 0:
+                if (
+                    sim[mv.from_row, mv.from_col] == 1
+                    and sim[mv.to_row, mv.to_col] == 0
+                ):
                     clears.append((mv.from_row, mv.from_col))
                     sets.append((mv.to_row, mv.to_col))
         for r, c in clears:

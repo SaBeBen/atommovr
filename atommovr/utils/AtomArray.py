@@ -25,7 +25,6 @@ from atommovr.utils.move_utils import (
     MoveType,
     MultiOccupancyFlag,
     get_AOD_cmds_from_move_list,
-    get_move_list_from_AOD_cmds,
     alloc_event_mask,
 )
 from atommovr.utils.Move import Move

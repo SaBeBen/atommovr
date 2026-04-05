@@ -5,6 +5,7 @@ All functions operate on centroid coordinates stored as (row, column) or
 angles follow OpenCV's convention: counter-clockwise rotation about the
 image centre.
 """
+
 from __future__ import annotations
 
 from typing import Iterable, Tuple

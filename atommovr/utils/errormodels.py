@@ -233,20 +233,22 @@ class YbRydbergAODErrorModel(ErrorModel):
     - Chen et al., Phys. Rev. A 105, 052438 (2022)
     """
 
-    def __init__(self,
-                pickup_fail_rate: float = 0.005,
-                putdown_fail_rate: float = 0.005,
-                accel_time: float = 0,
-                decel_time: float = 0,
-                accel_fail_rate: float = 0,
-                decel_fail_rate: float = 0,
-                seed: int | None = None,
-                move_distance_penalty: float = 0.001,
-                aod_jitter_probability: float = 0.0, 
-                lifetime: float = 20.0,
-                interaction_repulsion: bool = True,
-                pickup_time: float = 1e-4, 
-                putdown_time: float = 1e-4):
+    def __init__(
+        self,
+        pickup_fail_rate: float = 0.005,
+        putdown_fail_rate: float = 0.005,
+        accel_time: float = 0,
+        decel_time: float = 0,
+        accel_fail_rate: float = 0,
+        decel_fail_rate: float = 0,
+        seed: int | None = None,
+        move_distance_penalty: float = 0.001,
+        aod_jitter_probability: float = 0.0,
+        lifetime: float = 20.0,
+        interaction_repulsion: bool = True,
+        pickup_time: float = 1e-4,
+        putdown_time: float = 1e-4,
+    ):
         """
         Parameters:
         - pickup_fail_rate: Base probability of failing to pick up an atom (stays in place).
@@ -278,7 +280,7 @@ class YbRydbergAODErrorModel(ErrorModel):
 
     def __repr__(self) -> str:
         return f"{self.name}(tau={self.lifetime}s)"
-    
+
     def get_atom_loss(
         self, state: np.ndarray, evolution_time: float, n_species: int = 1
     ) -> tuple[np.ndarray, bool]:
@@ -305,11 +307,25 @@ class YbRydbergAODErrorModel(ErrorModel):
         evolution_time = evolution_time
         if n_species == 1:
             new_state, loss_flag = atom_loss(
-                state, evolution_time, self.lifetime, self.rng, self.pickup_fail_rate, self.putdown_fail_rate, self.move_distance_penalty, self.aod_jitter_probability
+                state,
+                evolution_time,
+                self.lifetime,
+                self.rng,
+                self.pickup_fail_rate,
+                self.putdown_fail_rate,
+                self.move_distance_penalty,
+                self.aod_jitter_probability,
             )
         elif n_species == 2:
             new_state, loss_flag = atom_loss_dual(
-                state, evolution_time, self.lifetime, self.rng, self.pickup_fail_rate, self.putdown_fail_rate, self.move_distance_penalty, self.aod_jitter_probability
+                state,
+                evolution_time,
+                self.lifetime,
+                self.rng,
+                self.pickup_fail_rate,
+                self.putdown_fail_rate,
+                self.move_distance_penalty,
+                self.aod_jitter_probability,
             )
         else:
             raise ValueError(
@@ -330,7 +346,11 @@ class YbRydbergAODErrorModel(ErrorModel):
             p_pickup = min(max(p_pickup, 0.0), 1.0)
 
             # Probability of putdown failure (static + jitter + heating from move)
-            p_putdown = self.putdown_fail_rate + self.aod_jitter_probability + (self.move_distance_penalty * move.distance)
+            p_putdown = (
+                self.putdown_fail_rate
+                + self.aod_jitter_probability
+                + (self.move_distance_penalty * move.distance)
+            )
             p_putdown = min(max(p_putdown, 0.0), 1.0)
 
             weights = [1.0 - p_pickup - p_putdown, p_pickup, p_putdown]
@@ -338,10 +358,10 @@ class YbRydbergAODErrorModel(ErrorModel):
                 # Fallback if probs sum > 1
                 total = p_pickup + p_putdown
                 if total > 0:
-                    weights = [0.0, p_pickup/total, p_putdown/total]
+                    weights = [0.0, p_pickup / total, p_putdown / total]
                 else:
                     weights = [1.0, 0.0, 0.0]
-            
+
             failure_flag = random.choices([0, 1, 2], weights=weights, k=1)[0]
             move.failure_flag = failure_flag
 

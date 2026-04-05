@@ -156,7 +156,9 @@ def generate_gaussian_image(
     X, Y = np.meshgrid(x, y)
     img = np.zeros((canvas_h, canvas_w), dtype=float)
 
-    for (y_canvas, x_canvas), sigma, brightness in zip(rotated_points, sigmas, brightness_factors):
+    for (y_canvas, x_canvas), sigma, brightness in zip(
+        rotated_points, sigmas, brightness_factors
+    ):
         img += float(brightness) * gaussian_2d(
             X, Y, float(x_canvas), float(y_canvas), float(sigma)
         )
@@ -230,5 +232,7 @@ def generate_rot_img(
 
     plt.imsave(f"{directory}/{suffix}_image.png", gaussian_img, cmap="Blues")
     plt.imsave(f"{directory}/{suffix}_rot_image.png", rot_image, cmap="Blues")
-    print(f"Saved images to {directory}/{suffix}_image.png and {directory}/{suffix}_rot_image.png")
+    print(
+        f"Saved images to {directory}/{suffix}_image.png and {directory}/{suffix}_rot_image.png"
+    )
     return points, true_binary

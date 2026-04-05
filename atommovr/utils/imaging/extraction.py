@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional
 import os
 import numpy as np
 import cv2
@@ -17,7 +17,9 @@ def _wrap_angle_deg(angle_deg: float) -> float:
     return ((angle_deg + 90.0) % 180.0) - 90.0
 
 
-def _pca_axis_angle(centroids: np.ndarray) -> Tuple[float, Optional[np.ndarray], Optional[np.ndarray]]:
+def _pca_axis_angle(
+    centroids: np.ndarray,
+) -> Tuple[float, Optional[np.ndarray], Optional[np.ndarray]]:
     """Return PCA-based angle (degrees), axis, and singular values."""
     centroids = np.asarray(centroids)
     if len(centroids) < 2:
@@ -122,7 +124,9 @@ def estimate_grid_rotation_pca(
     return angle_deg
 
 
-def estimate_grid_rotation_vectorize(centroids: np.ndarray, grid_shape: Tuple[int, int], plot: bool = False) -> float:
+def estimate_grid_rotation_vectorize(
+    centroids: np.ndarray, grid_shape: Tuple[int, int], plot: bool = False
+) -> float:
     centroids = np.asarray(centroids)
     if len(centroids) < 2:
         return 0.0
@@ -145,7 +149,9 @@ def estimate_grid_rotation_vectorize(centroids: np.ndarray, grid_shape: Tuple[in
                 vert_vecs.append(col[r + 1] - col[r])
     horiz_vecs = np.array(horiz_vecs) if len(horiz_vecs) else np.zeros((0, 2))
     h_mean = np.nanmean(horiz_vecs, axis=0) if horiz_vecs.size else np.array([1.0, 0.0])
-    main_axis = h_mean / np.linalg.norm(h_mean) if np.linalg.norm(h_mean) != 0 else h_mean
+    main_axis = (
+        h_mean / np.linalg.norm(h_mean) if np.linalg.norm(h_mean) != 0 else h_mean
+    )
     angle = np.arctan2(main_axis[1], main_axis[0])
     angle_deg = np.degrees(angle)
     angle_deg = (angle_deg) % 180 - 90
@@ -255,20 +261,41 @@ def estimate_grid_rotation_diff_pca(centroids: np.ndarray, plot: bool = False) -
             os.makedirs("figs/estimation_tech/", exist_ok=True)
             sns.set_theme(style="whitegrid")
             fig, ax = plt.subplots(figsize=(6, 6))
-            ax.scatter(centroids[:, 1], centroids[:, 0], alpha=0.6, s=20, color="#2b8cbe")
-            subsample = np.random.choice(len(diffs), size=min(200, len(diffs)), replace=False)
+            ax.scatter(
+                centroids[:, 1], centroids[:, 0], alpha=0.6, s=20, color="#2b8cbe"
+            )
+            subsample = np.random.choice(
+                len(diffs), size=min(200, len(diffs)), replace=False
+            )
             origin_x, origin_y = 0, 0
             for d in diffs[subsample]:
-                ax.arrow(origin_x, origin_y, d[1], d[0], color="gray", alpha=0.08, head_width=0.5, length_includes_head=True)
+                ax.arrow(
+                    origin_x,
+                    origin_y,
+                    d[1],
+                    d[0],
+                    color="gray",
+                    alpha=0.08,
+                    head_width=0.5,
+                    length_includes_head=True,
+                )
             scale = max(np.ptp(centroids, axis=0)) * 0.6 if centroids.size else 50
-            ax.plot([0, scale * main_axis[1]], [0, scale * main_axis[0]], "r-", lw=2, label=f"Main axis ({angle_deg:.2f}°)")
+            ax.plot(
+                [0, scale * main_axis[1]],
+                [0, scale * main_axis[0]],
+                "r-",
+                lw=2,
+                label=f"Main axis ({angle_deg:.2f}°)",
+            )
             ax.set_xlabel("Δx")
             ax.set_ylabel("Δy")
             ax.set_title("PCA on sampled pairwise differences")
             ax.set_aspect("equal")
             ax.legend(loc="best", fontsize="small")
             plt.tight_layout()
-            plt.savefig("figs/estimation_tech/pca_direction_diffs.svg", bbox_inches="tight")
+            plt.savefig(
+                "figs/estimation_tech/pca_direction_diffs.svg", bbox_inches="tight"
+            )
             plt.close()
         except Exception:
             pass
@@ -295,11 +322,38 @@ def estimate_grid_rotation_diffs(centroids: np.ndarray, plot: bool = False) -> f
         os.makedirs("figs/estimation_tech/", exist_ok=True)
         sns.set_theme(style="whitegrid")
         fig, ax = plt.subplots(figsize=(6, 6))
-        sc = ax.scatter(diffs[:, 1], diffs[:, 0], alpha=0.25, c=kmeans.labels_, cmap="coolwarm", s=20, label="Diffs")
+        sc = ax.scatter(
+            diffs[:, 1],
+            diffs[:, 0],
+            alpha=0.25,
+            c=kmeans.labels_,
+            cmap="coolwarm",
+            s=20,
+            label="Diffs",
+        )
         for idx, center in enumerate(kmeans.cluster_centers_):
-            ax.arrow(0, 0, center[1], center[0], color="black", width=0.005, head_width=0.05, length_includes_head=True)
+            ax.arrow(
+                0,
+                0,
+                center[1],
+                center[0],
+                color="black",
+                width=0.005,
+                head_width=0.05,
+                length_includes_head=True,
+            )
             ax.scatter(center[1], center[0], c="black", marker="x", s=80)
-        ax.arrow(0, 0, main_dir[1], main_dir[0], color="red", width=0.01, head_width=0.08, length_includes_head=True, label="Main direction")
+        ax.arrow(
+            0,
+            0,
+            main_dir[1],
+            main_dir[0],
+            color="red",
+            width=0.01,
+            head_width=0.08,
+            length_includes_head=True,
+            label="Main direction",
+        )
         ax.axhline(0, color="gray", lw=0.5)
         ax.axvline(0, color="gray", lw=0.5)
         ax.set_aspect("equal")
@@ -313,7 +367,9 @@ def estimate_grid_rotation_diffs(centroids: np.ndarray, plot: bool = False) -> f
     return angle_deg
 
 
-def estimate_grid_rotation_pair_diff(centroids: np.ndarray, plot: bool = False) -> float:
+def estimate_grid_rotation_pair_diff(
+    centroids: np.ndarray, plot: bool = False
+) -> float:
     centroids = np.asarray(centroids, dtype=float)
     if centroids.size == 0:
         return 0.0
@@ -358,14 +414,16 @@ def estimate_grid_rotation_fit_rect(centroids: np.ndarray, plot: bool = False) -
     centroids = np.asarray(centroids)
     if len(centroids) < 3:
         return 0.0
-    
+
     def convex_hull(centroids: np.ndarray) -> np.ndarray:
         pts = np.unique(centroids, axis=0)
         pts = pts[np.lexsort((pts[:, 1], pts[:, 0]))]
         if len(pts) <= 2:
             return pts
+
         def cross(o, a, b):
             return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
         lower = []
         for p in pts:
             while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
@@ -378,30 +436,30 @@ def estimate_grid_rotation_fit_rect(centroids: np.ndarray, plot: bool = False) -
             upper.append(tuple(p))
         hull = np.array(lower[:-1] + upper[:-1])
         return hull
-    
+
     def rotate(centroids: np.ndarray, angle: float) -> np.ndarray:
         c = np.cos(angle)
         s = np.sin(angle)
         R = np.array([[c, -s], [s, c]])
         return centroids @ R.T
-    
+
     def get_min_abs_angle(rect: np.ndarray) -> float:
         # Get the first edge
         p0 = rect[0]
         p1 = rect[1]
         edge = p1 - p0
-        
+
         # Calculate angle in degrees
         # centroids are (y, x), so edge is (dy, dx)
         # arctan2(dy, dx) gives angle relative to X-axis (horizontal)
         angle = np.degrees(np.arctan2(edge[0], edge[1]))
-        
+
         # Map to [-45, 45] to find minimum absolute rotation from an axis
         # This handles the square grid ambiguity by picking the smallest rotation
         min_angle = (angle + 45) % 90 - 45
-        
+
         return -min_angle
-    
+
     def min_area_rect(centroids: np.ndarray):
         hull = convex_hull(centroids)
         n = len(hull)
@@ -416,14 +474,16 @@ def estimate_grid_rotation_fit_rect(centroids: np.ndarray, plot: bool = False) -
             rot = rotate(hull, angle)
             min_h, min_w = rot.min(axis=0)
             max_h, max_w = rot.max(axis=0)
-            rect_rot = np.array([[min_h, min_w], [max_h, min_w], [max_h, max_w], [min_h, max_w]])
+            rect_rot = np.array(
+                [[min_h, min_w], [max_h, min_w], [max_h, max_w], [min_h, max_w]]
+            )
             rect_world = rotate(rect_rot, -angle)
             area = (max_h - min_h) * (max_w - min_w)
             if area < best["area"]:
                 angle_deg = get_min_abs_angle(rect_world)
                 best = {"area": area, "angle": angle_deg, "rect": rect_world}
         return best
-    
+
     best = min_area_rect(centroids)
     if best is None:
         return 0.0
@@ -432,12 +492,16 @@ def estimate_grid_rotation_fit_rect(centroids: np.ndarray, plot: bool = False) -
         sns.set_theme(style="whitegrid")
         fig, ax = plt.subplots(figsize=(6, 6))
         ax.plot(centroids[:, 1], centroids[:, 0], "o", color="#2b8cbe")
-        rect_patch = Polygon(best["rect"][:, [1, 0]], closed=True, fill=False, color="green", lw=2)
+        rect_patch = Polygon(
+            best["rect"][:, [1, 0]], closed=True, fill=False, color="green", lw=2
+        )
         ax.add_patch(rect_patch)
         ax.set_aspect("equal")
         plt.tight_layout()
         os.makedirs("figs/estimation_tech/", exist_ok=True)
-        plt.savefig("figs/estimation_tech/min_area_rect_steps.svg", dpi=120, bbox_inches="tight")
+        plt.savefig(
+            "figs/estimation_tech/min_area_rect_steps.svg", dpi=120, bbox_inches="tight"
+        )
         plt.close()
     return best["angle"]
 
@@ -455,7 +519,8 @@ def estimate_grid_rotation_fourier_img(img: np.ndarray, plot: bool = False) -> f
     F[cy - 10 : cy + 11, cx - 10 : cx + 11] = 0
     Y, X = np.indices(F.shape)
     angles = np.arctan2(Y - cy, X - cx)
-    mags = F.ravel(); angs = angles.ravel()
+    mags = F.ravel()
+    angs = angles.ravel()
     bins = np.linspace(-np.pi / 2, np.pi / 2, 720)
     hist, _ = np.histogram(angs, bins=bins, weights=mags)
     angle_idx = np.argmax(hist)
@@ -466,18 +531,26 @@ def estimate_grid_rotation_fourier_img(img: np.ndarray, plot: bool = False) -> f
         os.makedirs("figs/estimation_tech/", exist_ok=True)
         sns.set_theme(style="whitegrid")
         fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-        axs[0].imshow(img, cmap="Blues"); axs[0].axis("off")
+        axs[0].imshow(img, cmap="Blues")
+        axs[0].axis("off")
         axs[0].set_title("Input image")
-        axs[1].imshow(F, cmap="hot"); axs[1].axis("off")
+        axs[1].imshow(F, cmap="hot")
+        axs[1].axis("off")
         axs[1].set_title("FFT spectrum (log)")
         axs[2].plot(np.degrees(bins[:-1]), hist, color="#fdae61")
         axs[2].axvline(angle_deg, color="r", linestyle="--", label=f"{angle_deg:.2f}°")
         axs[2].legend(loc="best", fontsize="small")
-        plt.tight_layout(); plt.savefig("figs/estimation_tech/fft_image_rotation.svg", dpi=200, bbox_inches="tight"); plt.close()
+        plt.tight_layout()
+        plt.savefig(
+            "figs/estimation_tech/fft_image_rotation.svg", dpi=200, bbox_inches="tight"
+        )
+        plt.close()
     return angle_deg
 
 
-def estimate_grid_rotation_fourier(centroids: np.ndarray, image_shape: Tuple[int, int], plot: bool = False) -> float:
+def estimate_grid_rotation_fourier(
+    centroids: np.ndarray, image_shape: Tuple[int, int], plot: bool = False
+) -> float:
     mask = np.zeros(image_shape, dtype=np.float32)
     for y, x in np.asarray(centroids).astype(int):
         if 0 <= y < image_shape[0] and 0 <= x < image_shape[1]:
@@ -487,7 +560,8 @@ def estimate_grid_rotation_fourier(centroids: np.ndarray, image_shape: Tuple[int
     F[cy - 5 : cy + 6, cx - 5 : cx + 6] = 0
     Y, X = np.indices(F.shape)
     angles = -np.arctan2(Y - cy, X - cx)
-    mags = F.ravel(); angs = angles.ravel()
+    mags = F.ravel()
+    angs = angles.ravel()
     bins = np.linspace(-np.pi / 2, np.pi / 2, 720)
     hist, _ = np.histogram(angs, bins=bins, weights=mags)
     angle_idx = np.argmax(hist)
@@ -498,18 +572,28 @@ def estimate_grid_rotation_fourier(centroids: np.ndarray, image_shape: Tuple[int
         os.makedirs("figs/estimation_tech/", exist_ok=True)
         sns.set_theme(style="whitegrid")
         fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-        axs[0].imshow(mask, cmap="Blues"); axs[0].axis("off")
+        axs[0].imshow(mask, cmap="Blues")
+        axs[0].axis("off")
         axs[0].set_title("Centroid Mask")
-        axs[1].imshow(F, cmap="hot"); axs[1].axis("off")
+        axs[1].imshow(F, cmap="hot")
+        axs[1].axis("off")
         axs[1].set_title("FFT Spectrum")
         axs[2].plot(np.degrees(bins[:-1]), hist, color="#fdae61")
         axs[2].axvline(angle_deg, color="b", linestyle="-.", label=f"{angle_deg:.2f}°")
         axs[2].legend(loc="best", fontsize="small")
-        plt.tight_layout(); plt.savefig("figs/estimation_tech/fft_centroid_rotation.svg", dpi=200, bbox_inches="tight"); plt.close()
+        plt.tight_layout()
+        plt.savefig(
+            "figs/estimation_tech/fft_centroid_rotation.svg",
+            dpi=200,
+            bbox_inches="tight",
+        )
+        plt.close()
     return angle_deg
 
 
-def inverse_rotate_centroids(centroids: np.ndarray, image_shape: Tuple[int, int], angle_deg: float) -> np.ndarray:
+def inverse_rotate_centroids(
+    centroids: np.ndarray, image_shape: Tuple[int, int], angle_deg: float
+) -> np.ndarray:
     """Undo a counter-clockwise rotation of ``angle_deg`` degrees."""
     centroids = np.asarray(centroids, dtype=float)
     if centroids.size == 0:
@@ -533,7 +617,15 @@ class Extractor:
     # Muenchen / Ryd-Yb tweezer array group). Any modifications to the
     # adapted code are covered by the repository MIT license (see /LICENSE).
     # ------------------------------------------------------------------
-    def __init__(self, shape, spots=3, threshold=0.1, scale=(1.0, 1.0), affine_matrix=None, logger=None):
+    def __init__(
+        self,
+        shape,
+        spots=3,
+        threshold=0.1,
+        scale=(1.0, 1.0),
+        affine_matrix=None,
+        logger=None,
+    ):
         self.shape = shape
         self.spots = spots
         self.threshold = threshold
@@ -543,7 +635,7 @@ class Extractor:
 
     def extract(self, image):
         raise NotImplementedError
-    
+
     @staticmethod
     def centroids_to_binary_grid(centroids, grid_shape):
         centroids = np.array(centroids)
@@ -567,7 +659,7 @@ class Extractor:
         for r, c in zip(row_idx, col_idx):
             binary_grid[r, c] = 1
         return binary_grid
-    
+
     def extract_estimate_rotate_and_assign(
         self,
         image: np.ndarray | str,
@@ -646,12 +738,15 @@ class Extractor:
                 img = np.array(Image.open(image_path))
             else:
                 img = image
-            print(f"Centroids shape: {np.array(centroids).shape}, centroids count: {len(centroids)}")
-            self.overlay_centroids(img, centroids=centroids, save_path="figs/centroids_on_image.png")
+            print(
+                f"Centroids shape: {np.array(centroids).shape}, centroids count: {len(centroids)}"
+            )
+            self.overlay_centroids(
+                img, centroids=centroids, save_path="figs/centroids_on_image.png"
+            )
         if return_details:
             return binary, angle_deg, n_centroids
         return binary
-
 
     @staticmethod
     def overlay_centroids(
@@ -667,7 +762,7 @@ class Extractor:
         - centroids: Nx2 numpy array of (y, x) coordinates of centroids.
         - save_path: Optional path to save the overlaid image. If None, displays the image.
         """
-         # if centroids is not None and n_detected > 0:
+        # if centroids is not None and n_detected > 0:
         fig, ax = plt.subplots()
         fig.patch.set_alpha(0.0)
         centroids_np = np.asarray(centroids)
@@ -686,7 +781,9 @@ class Extractor:
 
         if save_path:
             os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
-            fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0, transparent=True)
+            fig.savefig(
+                save_path, dpi=300, bbox_inches="tight", pad_inches=0, transparent=True
+            )
             plt.close(fig)
         else:
             plt.show()
@@ -694,7 +791,16 @@ class Extractor:
 
 
 class BlobDetection(Extractor):
-    def __init__(self, shape, spots=None, threshold=0.1, scale=(1.0, 1.0), affine_matrix=None, logger=None, blob_params=None):
+    def __init__(
+        self,
+        shape,
+        spots=None,
+        threshold=0.1,
+        scale=(1.0, 1.0),
+        affine_matrix=None,
+        logger=None,
+        blob_params=None,
+    ):
         super().__init__(shape, spots, threshold, scale, affine_matrix, logger=logger)
         if blob_params is None:
             self.blob_params = cv2.SimpleBlobDetector_Params()
@@ -718,7 +824,7 @@ class BlobDetection(Extractor):
     @staticmethod
     def _make_8bit(img):
         return cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-    
+
     def extract(self, image: np.ndarray | str) -> Tuple[np.ndarray, Tuple[int, int]]:
         # Accept file path, numpy array, or PIL image
         if isinstance(image, str):
@@ -742,7 +848,9 @@ class BlobDetection(Extractor):
 
         # Try OpenCV's circle grid detection first (ordered grid)
         # try:
-        ret, centroids = cv2.findCirclesGrid(img_8bit, patternSize=(W, H), blobDetector=self.detector)
+        ret, centroids = cv2.findCirclesGrid(
+            img_8bit, patternSize=(W, H), blobDetector=self.detector
+        )
         # except Exception:
         #     ret = False
 
@@ -757,7 +865,9 @@ class BlobDetection(Extractor):
         keypoints = self.detector.detect(img_8bit)
         if len(keypoints) == 0:
             # return empty centroids rather than raising - upstream code can handle
-            self.logger.warning("No blobs found by detector - returning empty centroids")
+            self.logger.warning(
+                "No blobs found by detector - returning empty centroids"
+            )
             return np.empty((0, 2), dtype=np.float32), img_gray.shape
 
         centroids = self.subpixel_gaussian_centroid(img_gray, keypoints=keypoints)
@@ -772,21 +882,21 @@ class BlobDetection(Extractor):
         xi = np.rint(pts[:, 0]).astype(int)
         yi = np.rint(pts[:, 1]).astype(int)
 
-        img_padded = np.pad(img, pad_width=win_size, mode='constant', constant_values=0)
+        img_padded = np.pad(img, pad_width=win_size, mode="constant", constant_values=0)
         xi_pad = xi + win_size
         yi_pad = yi + win_size
 
         d = np.arange(-win_size, win_size + 1)
-        dy, dx = np.meshgrid(d, d, indexing='ij')
-        
+        dy, dx = np.meshgrid(d, d, indexing="ij")
+
         patches = img_padded[
-            yi_pad[:, None, None] + dy[None, :, :], 
-            xi_pad[:, None, None] + dx[None, :, :]
+            yi_pad[:, None, None] + dy[None, :, :],
+            xi_pad[:, None, None] + dx[None, :, :],
         ].astype(np.float32)
 
         total = np.sum(patches, axis=(1, 2))
         valid = total > 1e-6
-        
+
         sum_y = np.sum(patches * dy[None, :, :], axis=(1, 2))
         sum_x = np.sum(patches * dx[None, :, :], axis=(1, 2))
 
@@ -800,14 +910,13 @@ class BlobDetection(Extractor):
 
 def _get_default_logger():
     import logging
+
     logger = logging.getLogger("atommovr.utils.imaging")
     if not logger.handlers:
         logger.setLevel(logging.INFO)
         ch = logging.StreamHandler()
         ch.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         ch.setFormatter(formatter)
         logger.addHandler(ch)
     return logger
-
-

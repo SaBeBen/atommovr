@@ -84,7 +84,12 @@ def visualize_move_batches(
         intended: List[tuple[tuple[int, int], tuple[int, int]]] = []
         for mv in batch:
             if isinstance(mv, Move):
-                intended.append(((int(mv.from_row), int(mv.from_col)), (int(mv.to_row), int(mv.to_col))))
+                intended.append(
+                    (
+                        (int(mv.from_row), int(mv.from_col)),
+                        (int(mv.to_row), int(mv.to_col)),
+                    )
+                )
 
         prev_state = snapshots[-1].copy()
         failure_markers = _init_failure_markers()
@@ -96,17 +101,29 @@ def visualize_move_batches(
                 flag = flag_map.get(mv_idx, 0)
                 movetype = getattr(mv, "movetype", None)
                 if flag == 1:
-                    failure_markers["pickup"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["pickup"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif flag == 2:
-                    failure_markers["putdown"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["putdown"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif flag == 3:
-                    failure_markers["noatom"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["noatom"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif flag == 4:
-                    failure_markers["crossed"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["crossed"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif movetype == MoveType.ILLEGAL_MOVE:
-                    failure_markers["collision"].append((int(mv.to_row), int(mv.to_col)))
+                    failure_markers["collision"].append(
+                        (int(mv.to_row), int(mv.to_col))
+                    )
                 elif movetype == MoveType.EJECT_MOVE:
-                    failure_markers["eject"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["eject"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
         else:
             # Fallback: naive update without collision handling
             next_state = prev_state.copy()
@@ -158,7 +175,7 @@ def visualize_move_batches(
             moves = movements_per_step[idx - 1]
             for (r0, c0), (r1, c1) in moves:
                 # Clamp arrow head if destination is out-of-bounds (ejection)
-                in_bounds = (0 <= r1 < R and 0 <= c1 < C)
+                in_bounds = 0 <= r1 < R and 0 <= c1 < C
                 rr = r1 if in_bounds else min(max(r1, 0), R - 1)
                 cc = c1 if in_bounds else min(max(c1, 0), C - 1)
                 style = "->" if in_bounds else "->"
@@ -179,27 +196,81 @@ def visualize_move_batches(
             if failure_markers["pickup"]:
                 xs = [c for _, c in failure_markers["pickup"]]
                 ys = [r for r, _ in failure_markers["pickup"]]
-                ax.scatter(xs, ys, marker="x", color="gold", s=40, linewidths=1.8, zorder=12, label="pickup fail")
+                ax.scatter(
+                    xs,
+                    ys,
+                    marker="x",
+                    color="gold",
+                    s=40,
+                    linewidths=1.8,
+                    zorder=12,
+                    label="pickup fail",
+                )
             if failure_markers["putdown"]:
                 xs = [c for _, c in failure_markers["putdown"]]
                 ys = [r for r, _ in failure_markers["putdown"]]
-                ax.scatter(xs, ys, marker="x", color="magenta", s=40, linewidths=1.8, zorder=12, label="putdown fail")
+                ax.scatter(
+                    xs,
+                    ys,
+                    marker="x",
+                    color="magenta",
+                    s=40,
+                    linewidths=1.8,
+                    zorder=12,
+                    label="putdown fail",
+                )
             if failure_markers["noatom"]:
                 xs = [c for _, c in failure_markers["noatom"]]
                 ys = [r for r, _ in failure_markers["noatom"]]
-                ax.scatter(xs, ys, marker="x", color="gray", s=36, linewidths=1.6, zorder=12, label="no atom")
+                ax.scatter(
+                    xs,
+                    ys,
+                    marker="x",
+                    color="gray",
+                    s=36,
+                    linewidths=1.6,
+                    zorder=12,
+                    label="no atom",
+                )
             if failure_markers["crossed"]:
                 xs = [c for _, c in failure_markers["crossed"]]
                 ys = [r for r, _ in failure_markers["crossed"]]
-                ax.scatter(xs, ys, marker="x", color="red", s=44, linewidths=2.0, zorder=13, label="crossed")
+                ax.scatter(
+                    xs,
+                    ys,
+                    marker="x",
+                    color="red",
+                    s=44,
+                    linewidths=2.0,
+                    zorder=13,
+                    label="crossed",
+                )
             if failure_markers["collision"]:
                 xs = [c for _, c in failure_markers["collision"]]
                 ys = [r for r, _ in failure_markers["collision"]]
-                ax.scatter(xs, ys, marker="x", color="black", s=44, linewidths=2.0, zorder=13, label="collision")
+                ax.scatter(
+                    xs,
+                    ys,
+                    marker="x",
+                    color="black",
+                    s=44,
+                    linewidths=2.0,
+                    zorder=13,
+                    label="collision",
+                )
             if failure_markers["eject"]:
                 xs = [c for _, c in failure_markers["eject"]]
                 ys = [r for r, _ in failure_markers["eject"]]
-                ax.scatter(xs, ys, marker="x", color="lime", s=40, linewidths=1.8, zorder=12, label="eject")
+                ax.scatter(
+                    xs,
+                    ys,
+                    marker="x",
+                    color="lime",
+                    s=40,
+                    linewidths=1.8,
+                    zorder=12,
+                    label="eject",
+                )
 
     for j in range(n_plots, len(axes)):
         axes[j].axis("off")
@@ -287,17 +358,29 @@ def visualize_batch_moves_on_image(
                 flag = flag_map.get(mv_idx, 0)
                 movetype = getattr(mv, "movetype", None)
                 if flag == 1:
-                    failure_markers["pickup"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["pickup"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif flag == 2:
-                    failure_markers["putdown"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["putdown"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif flag == 3:
-                    failure_markers["noatom"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["noatom"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif flag == 4:
-                    failure_markers["crossed"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["crossed"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
                 elif movetype == MoveType.ILLEGAL_MOVE:
-                    failure_markers["collision"].append((int(mv.to_row), int(mv.to_col)))
+                    failure_markers["collision"].append(
+                        (int(mv.to_row), int(mv.to_col))
+                    )
                 elif movetype == MoveType.EJECT_MOVE:
-                    failure_markers["eject"].append((int(mv.from_row), int(mv.from_col)))
+                    failure_markers["eject"].append(
+                        (int(mv.from_row), int(mv.from_col))
+                    )
         else:
             next_state = prev_state.copy()
             for (fr, fc), (tr, tc) in intended:
@@ -325,8 +408,8 @@ def visualize_batch_moves_on_image(
         centers = np.zeros((rows, cols, 2), dtype=float)
         for r in range(rows):
             for c in range(cols):
-                centers[r, c, 0] = start_row + r * row_step #+ row_step // 10
-                centers[r, c, 1] = start_col + c * col_step #+ col_step // 10
+                centers[r, c, 0] = start_row + r * row_step  # + row_step // 10
+                centers[r, c, 1] = start_col + c * col_step  # + col_step // 10
         return centers, float(row_step), float(col_step)
 
     image_shape = getattr(atom_array, "image_shape", None)
@@ -451,6 +534,7 @@ def visualize_batch_moves_on_image(
                 )
 
         failure_markers = failures_per_step[idx - 1]
+
         def _plot_failures(coords: List[tuple[int, int]], color: str):
             if not coords:
                 return
@@ -462,7 +546,9 @@ def visualize_batch_moves_on_image(
                     ys.append(y)
                     xs.append(x)
             if xs:
-                ax.scatter(xs, ys, marker="x", color=color, s=80, linewidths=2.2, zorder=20)
+                ax.scatter(
+                    xs, ys, marker="x", color=color, s=80, linewidths=2.2, zorder=20
+                )
 
         _plot_failures(failure_markers["pickup"], "gold")
         _plot_failures(failure_markers["putdown"], "magenta")
@@ -479,4 +565,3 @@ def visualize_batch_moves_on_image(
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
-

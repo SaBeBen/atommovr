@@ -23,7 +23,6 @@ from atommovr.utils.imaging.generation import (
 from atommovr.utils.imaging.geometry import rotate_points_ccw
 
 
-import numpy as np
 import matplotlib.pyplot as plt
 import logging
 import cv2
@@ -68,6 +67,7 @@ def test_round_trip_small_grid(tmp_path):
     img_u8 = (255 * (img - img.min()) / (np.ptp(img) + 1e-8)).astype(np.uint8)
     p = tmp_path / "synthetic.png"
     import imageio
+
     imageio.imwrite(p, img_u8)
 
     det = BlobDetection(shape=grid.shape)
@@ -130,7 +130,11 @@ def test_grid_extraction(logger: logging.Logger) -> None:
     for seed, grid_size in zip(test_seeds, grid_sizes):
         np.random.seed(seed)
         points, true_binary = generate_rot_img(
-            image_shape, grid_size, true_angle=0, suffix="test", directory="figs/imaging_test"
+            image_shape,
+            grid_size,
+            true_angle=0,
+            suffix="test",
+            directory="figs/imaging_test",
         )
 
         # Set up blob detector params
@@ -222,7 +226,11 @@ def test_estimation_and_extraction(logger: logging.Logger) -> None:
 
     for true_angle in true_angles:
         points, _ = generate_rot_img(
-            image_shape, calib_grid_size, true_angle, suffix="calib", directory="figs/imaging_test"
+            image_shape,
+            calib_grid_size,
+            true_angle,
+            suffix="calib",
+            directory="figs/imaging_test",
         )
 
         # clashes with parameter grid
@@ -230,9 +238,14 @@ def test_estimation_and_extraction(logger: logging.Logger) -> None:
 
         # Use BlobDetection to extract centroids from calibration image
         extractor_blob = BlobDetection(
-            shape=(calib_grid_size, calib_grid_size), scale=(1, 1), logger=logger, blob_params=blob_params
+            shape=(calib_grid_size, calib_grid_size),
+            scale=(1, 1),
+            logger=logger,
+            blob_params=blob_params,
         )
-        calib_centroids, _ = extractor_blob.extract("figs/imaging_test/calib_rot_image.png")
+        calib_centroids, _ = extractor_blob.extract(
+            "figs/imaging_test/calib_rot_image.png"
+        )
 
         # circle centroids in red on calibration image
         # Read the image with matplotlib, convert to uint8 BGR for OpenCV drawing
@@ -255,12 +268,14 @@ def test_estimation_and_extraction(logger: logging.Logger) -> None:
             img_bgr = cv2.cvtColor(img_disp, cv2.COLOR_RGB2BGR)
 
         # Draw unfilled red circles (thickness 2) at centroid locations (x=col, y=row)
-        for (y_c, x_c) in calib_centroids:
+        for y_c, x_c in calib_centroids:
             center = (int(round(x_c)), int(round(y_c)))
             cv2.circle(img_bgr, center, radius=10, color=(0, 0, 255), thickness=2)
 
         # Save using OpenCV which preserves resolution; convert back to RGB for matplotlib-friendly files if desired
-        os.makedirs(os.path.dirname("figs/imaging_test/centroids_on_calib.png"), exist_ok=True)
+        os.makedirs(
+            os.path.dirname("figs/imaging_test/centroids_on_calib.png"), exist_ok=True
+        )
         cv2.imwrite("figs/imaging_test/centroids_on_calib.png", img_bgr)
 
         # Estimate rotation angle
@@ -316,7 +331,11 @@ def test_estimation_and_extraction(logger: logging.Logger) -> None:
             for seed, grid_size in zip(test_seeds, grid_sizes):
                 np.random.seed(seed)
                 points, true_binary = generate_rot_img(
-                    image_shape, grid_size, true_angle, suffix="test", directory="figs/imaging_test"
+                    image_shape,
+                    grid_size,
+                    true_angle,
+                    suffix="test",
+                    directory="figs/imaging_test",
                 )
 
                 # Read it back using matplotlib
@@ -413,9 +432,7 @@ def test_fourier_estimation(
 def test_PCA_estimation(
     logger: logging.Logger, angles: Optional[List[float]] = None, plot: bool = False
 ) -> None:
-    estimation_method_test(
-        logger, estimate_grid_rotation_pca, angles=angles, plot=plot
-    )
+    estimation_method_test(logger, estimate_grid_rotation_pca, angles=angles, plot=plot)
 
 
 def test_PCA_diff_estimation(
@@ -450,7 +467,11 @@ def estimation_method_test(
         for true_angle in true_angles:
             np.random.seed(seed)
             points, _ = generate_rot_img(
-                image_shape, grid_size, true_angle=true_angle, suffix="test", directory=path
+                image_shape,
+                grid_size,
+                true_angle=true_angle,
+                suffix="test",
+                directory=path,
             )
 
             img = plt.imread(os.path.join(path, "test_image.png"))
@@ -468,7 +489,9 @@ def estimation_method_test(
                 blob_params=blob_params,
             )
 
-            centroids, _ = extractor_blob.extract(os.path.join(path, "test_rot_image.png"))
+            centroids, _ = extractor_blob.extract(
+                os.path.join(path, "test_rot_image.png")
+            )
 
             # --- Time the estimation ---
             start_time = time.perf_counter()
@@ -561,9 +584,13 @@ def test_estimation_feasibility(
     for angle in angles:
         np.random.seed(42)
         points, _ = generate_rot_img(
-            image_shape, grid_size, true_angle=angle, suffix=f"feas_{int(angle)}", directory="figs/imaging_test/feasability"
+            image_shape,
+            grid_size,
+            true_angle=angle,
+            suffix=f"feas_{int(angle)}",
+            directory="figs/imaging_test/feasability",
         )
-    
+
         os.makedirs("figs/imaging_test/feasability", exist_ok=True)
 
         # initial extraction on rotated image
@@ -576,51 +603,77 @@ def test_estimation_feasibility(
 
         blob_params = setup_blob_params(None)
         extractor_blob = BlobDetection(
-            shape=(grid_size, grid_size), spots=len(points), scale=(1, 1), logger=logger, blob_params=blob_params
+            shape=(grid_size, grid_size),
+            spots=len(points),
+            scale=(1, 1),
+            logger=logger,
+            blob_params=blob_params,
         )
         centroids, _ = extractor_blob.extract(rot_img_path)
 
         for method in methods:
             name = (
-                method.__name__.replace("estimate_grid_rotation_", "").replace("_", "-").upper()
+                method.__name__.replace("estimate_grid_rotation_", "")
+                .replace("_", "-")
+                .upper()
             )
             try:
                 if method == estimate_grid_rotation_vectorize:
-                    est_angle = method(centroids=centroids, grid_shape=(grid_size, grid_size), plot=False)
+                    est_angle = method(
+                        centroids=centroids,
+                        grid_shape=(grid_size, grid_size),
+                        plot=False,
+                    )
                 elif method == estimate_grid_rotation_fourier_img:
                     est_angle = method(img=img_gray, plot=False)
                 elif method == estimate_grid_rotation_fourier:
-                    est_angle = method(centroids=centroids, image_shape=image_shape, plot=False)
+                    est_angle = method(
+                        centroids=centroids, image_shape=image_shape, plot=False
+                    )
                 else:
                     est_angle = method(centroids=centroids, plot=False)
                 est_success = True
             except Exception as e:
                 logger.debug(f"Estimation {name} failed during feasibility: {e}")
-                est_angle = float('nan')
+                est_angle = float("nan")
                 est_success = False
 
             feasible = False
-            recall = float('nan')
+            recall = float("nan")
 
             if est_success and not np.isnan(est_angle) and len(centroids) > 0:
                 try:
                     centroids_corrected = inverse_rotate_centroids(
-                        centroids=np.asarray(centroids), image_shape=img.shape, angle_deg=est_angle
+                        centroids=np.asarray(centroids),
+                        image_shape=img.shape,
+                        angle_deg=est_angle,
                     )
                     # Attempt to assign to grid
                     assigned = fit_grid_and_assign(
-                        centroids_corrected, (grid_size, grid_size), image_shape=img.shape[:2]
+                        centroids_corrected,
+                        (grid_size, grid_size),
+                        image_shape=img.shape[:2],
                     )
                     true_binary = np.zeros((grid_size, grid_size), dtype=int)
                     for pt in points:
                         # Map point to grid index
-                        row = int(round((pt[0] - (image_shape[0] // grid_size)) / (image_shape[0] // (grid_size + 1))))
-                        col = int(round((pt[1] - (image_shape[1] // grid_size)) / (image_shape[1] // (grid_size + 1))))
+                        row = int(
+                            round(
+                                (pt[0] - (image_shape[0] // grid_size))
+                                / (image_shape[0] // (grid_size + 1))
+                            )
+                        )
+                        col = int(
+                            round(
+                                (pt[1] - (image_shape[1] // grid_size))
+                                / (image_shape[1] // (grid_size + 1))
+                            )
+                        )
                         if 0 <= row < grid_size and 0 <= col < grid_size:
                             true_binary[row, col] = 1
                     tp = np.sum((assigned == 1) & (true_binary == 1))
                     fn = np.sum((assigned == 0) & (true_binary == 1))
-                    recall = tp / (tp + fn) if (tp + fn) > 0 else float('nan')
+                    recall = tp / (tp + fn) if (tp + fn) > 0 else float("nan")
                     feasible = recall >= 0.99  # at least 99% recall to be feasible
 
                     feasible = true_binary == assigned
@@ -644,7 +697,7 @@ def test_estimation_feasibility(
     df = pd.DataFrame(records)
     df.to_csv(output_csv, index=False)
     logger.info(f"Wrote feasibility results to {output_csv}")
-    
+
 
 def make_plots(
     df: Optional[pd.DataFrame] = None,
@@ -837,7 +890,9 @@ def _sample_sparse_grid_points(
     for i in range(grid_shape[0]):
         for j in range(grid_shape[1]):
             if rng.random() < load_probability:
-                points.append((start_row + i * row_spacing, start_col + j * col_spacing))
+                points.append(
+                    (start_row + i * row_spacing, start_col + j * col_spacing)
+                )
                 binary[i, j] = 1
     return np.asarray(points, dtype=float), binary, row_spacing, col_spacing
 
@@ -902,7 +957,11 @@ def visualize_result_techniques(
     grid_size = 9
     np.random.seed(42)
     points, _ = generate_rot_img(
-        image_shape, grid_size, true_angle=true_angle, suffix="test", directory="figs/imaging_test"
+        image_shape,
+        grid_size,
+        true_angle=true_angle,
+        suffix="test",
+        directory="figs/imaging_test",
     )
     rot_img = plt.imread("figs/imaging_test/test_rot_image.png")
 
@@ -981,29 +1040,46 @@ def benchmark_rotation_error_feasibility(
         for true_angle in angles:
             for seed in seeds:
                 rng = np.random.default_rng(seed)
-                base_points, true_binary, row_spacing, col_spacing = _sample_sparse_grid_points(
-                    grid_size, image_shape, load_probability=load_probability, rng=rng
+                base_points, true_binary, row_spacing, col_spacing = (
+                    _sample_sparse_grid_points(
+                        grid_size,
+                        image_shape,
+                        load_probability=load_probability,
+                        rng=rng,
+                    )
                 )
                 loaded_sites = int(true_binary.sum())
                 if loaded_sites < max(4, grid_size // 2):
                     continue
 
-                rotated = _rotate_points_about_center(base_points, true_angle, image_shape)
+                rotated = _rotate_points_about_center(
+                    base_points, true_angle, image_shape
+                )
                 if jitter_std > 0:
                     rotated = rotated + rng.normal(0.0, jitter_std, size=rotated.shape)
 
-                gt_aligned = inverse_rotate_centroids(rotated, image_shape=image_shape, angle_deg=true_angle)
+                gt_aligned = inverse_rotate_centroids(
+                    rotated, image_shape=image_shape, angle_deg=true_angle
+                )
                 if len(gt_aligned) == 0:
                     continue
 
                 baseline_binary = fit_grid_and_assign(
                     gt_aligned, (grid_size, grid_size), image_shape=image_shape
                 )
-                baseline_stats = _compute_assignment_metrics(baseline_binary, true_binary)
+                baseline_stats = _compute_assignment_metrics(
+                    baseline_binary, true_binary
+                )
 
-                center = np.array([image_shape[0] / 2.0, image_shape[1] / 2.0], dtype=float)
+                center = np.array(
+                    [image_shape[0] / 2.0, image_shape[1] / 2.0], dtype=float
+                )
                 radii = np.linalg.norm(gt_aligned - center, axis=1)
-                avg_spacing = float(row_spacing + col_spacing) / 2.0 if (row_spacing + col_spacing) else np.nan
+                avg_spacing = (
+                    float(row_spacing + col_spacing) / 2.0
+                    if (row_spacing + col_spacing)
+                    else np.nan
+                )
 
                 for method_name, estimator in methods.items():
                     try:
@@ -1080,8 +1156,12 @@ def benchmark_rotation_error_feasibility(
                     mean_disp = float(np.mean(disp)) if disp.size else 0.0
                     max_disp = float(np.max(disp)) if disp.size else 0.0
                     p95_disp = float(np.percentile(disp, 95)) if disp.size else 0.0
-                    relative_mean_disp = mean_disp / avg_spacing if avg_spacing else np.nan
-                    relative_max_disp = max_disp / avg_spacing if avg_spacing else np.nan
+                    relative_mean_disp = (
+                        mean_disp / avg_spacing if avg_spacing else np.nan
+                    )
+                    relative_max_disp = (
+                        max_disp / avg_spacing if avg_spacing else np.nan
+                    )
 
                     record.update(
                         {
@@ -1094,8 +1174,12 @@ def benchmark_rotation_error_feasibility(
                             "Relative Mean Disp (spacing units)": relative_mean_disp,
                             "Relative Max Disp (spacing units)": relative_max_disp,
                             "Theoretical Edge Disp (px)": theoretical_edge_disp,
-                            "Mean Radius (px)": float(radii.mean()) if radii.size else 0.0,
-                            "Edge Radius (px)": float(radii.max()) if radii.size else 0.0,
+                            "Mean Radius (px)": (
+                                float(radii.mean()) if radii.size else 0.0
+                            ),
+                            "Edge Radius (px)": (
+                                float(radii.max()) if radii.size else 0.0
+                            ),
                             "Assignment Recall": stats["recall"],
                             "Assignment Precision": stats["precision"],
                             "Assignment Exact Match": stats["exact_match"],
@@ -1109,7 +1193,9 @@ def benchmark_rotation_error_feasibility(
                     records.append(record)
 
     if not records:
-        logger.warning("Rotation error benchmark produced no records; nothing to write.")
+        logger.warning(
+            "Rotation error benchmark produced no records; nothing to write."
+        )
         return
 
     df = pd.DataFrame.from_records(records)
@@ -1185,13 +1271,19 @@ def benchmark_time_estimation_techniques(
     for angle_idx, angle in enumerate(angles):
         for run in range(n_repeats):
             iter_idx += 1
-            logger.info(f"Benchmark iter {iter_idx}/{total_iterations}: angle={angle}, run={run}")
-            
+            logger.info(
+                f"Benchmark iter {iter_idx}/{total_iterations}: angle={angle}, run={run}"
+            )
+
             suffix = f"bench_{run}_{int(angle)}"
             seed = 1000 + angle_idx * n_repeats + run
             np.random.seed(seed)
             points, true_binary = generate_rot_img(
-                image_shape, grid_size, true_angle=angle, suffix=suffix, directory=benchmark_folder_rot,
+                image_shape,
+                grid_size,
+                true_angle=angle,
+                suffix=suffix,
+                directory=benchmark_folder_rot,
             )
             ideal_points = np.asarray(points, dtype=float).reshape(-1, 2)
 
@@ -1201,7 +1293,11 @@ def benchmark_time_estimation_techniques(
             # One initial extraction on the rotated image (timed once per run)
             blob_params = setup_blob_params(None)
             extractor_blob = BlobDetection(
-                shape=(grid_size, grid_size), spots=len(points), scale=(1, 1), logger=logger, blob_params=blob_params
+                shape=(grid_size, grid_size),
+                spots=len(points),
+                scale=(1, 1),
+                logger=logger,
+                blob_params=blob_params,
             )
 
             t0 = time.perf_counter()
@@ -1213,18 +1309,24 @@ def benchmark_time_estimation_techniques(
             # estimated angle, and post-rotation extraction.
             for method in estimation_methods:
                 method_name = method.__name__.replace("estimate_grid_rotation_", "")
-                # --- estimation timing ---                
-                est_angle = float('nan')
+                # --- estimation timing ---
+                est_angle = float("nan")
                 est_success = False
                 est_t0 = time.perf_counter()
                 try:
                     if method == estimate_grid_rotation_vectorize:
-                        est_angle = method(centroids=centroids, grid_shape=(grid_size, grid_size), plot=False)
+                        est_angle = method(
+                            centroids=centroids,
+                            grid_shape=(grid_size, grid_size),
+                            plot=False,
+                        )
                     elif method == estimate_grid_rotation_fourier_img:
                         img_gray = img[..., 0] if img.ndim == 3 else img
                         est_angle = method(img=img_gray, plot=False)
                     elif method == estimate_grid_rotation_fourier:
-                        est_angle = method(centroids=centroids, image_shape=image_shape, plot=False)
+                        est_angle = method(
+                            centroids=centroids, image_shape=image_shape, plot=False
+                        )
                     else:
                         est_angle = method(centroids=centroids, plot=False)
                     est_success = True
@@ -1248,12 +1350,12 @@ def benchmark_time_estimation_techniques(
                 # expensive extractor, just inverse-rotate the detected
                 # centroids back to the original coordinate frame. This is
                 # much faster and avoids I/O. Record the transform timing.
-                rot_time = float('nan')
+                rot_time = float("nan")
                 post_ext_success = False
-                centroid_transform_error = float('nan')
-                mean_offset_y = float('nan')
-                mean_offset_x = float('nan')
-                rms_offset = float('nan')
+                centroid_transform_error = float("nan")
+                mean_offset_y = float("nan")
+                mean_offset_x = float("nan")
+                rms_offset = float("nan")
                 if est_success and not np.isnan(est_angle) and len(centroids) > 0:
                     try:
                         rt0 = time.perf_counter()
@@ -1271,7 +1373,8 @@ def benchmark_time_estimation_techniques(
                         matched_true = np.empty((0, 2))
                         if centroids_corrected.size and ideal_points.size:
                             cost_matrix = np.linalg.norm(
-                                centroids_corrected[:, None, :] - ideal_points[None, :, :],
+                                centroids_corrected[:, None, :]
+                                - ideal_points[None, :, :],
                                 axis=2,
                             )
                             if cost_matrix.size:
@@ -1284,9 +1387,13 @@ def benchmark_time_estimation_techniques(
                                         np.mean(np.linalg.norm(residuals, axis=1))
                                     )
                                     mean_offset = np.nanmean(residuals, axis=0)
-                                    mean_offset_y, mean_offset_x = float(mean_offset[0]), float(mean_offset[1])
+                                    mean_offset_y, mean_offset_x = float(
+                                        mean_offset[0]
+                                    ), float(mean_offset[1])
                                     rms_offset = float(
-                                        np.sqrt(np.nanmean(np.sum(residuals ** 2, axis=1)))
+                                        np.sqrt(
+                                            np.nanmean(np.sum(residuals**2, axis=1))
+                                        )
                                     )
 
                         # Save a small mapping visualization (corrected centroids vs ideal grid)
@@ -1308,24 +1415,36 @@ def benchmark_time_estimation_techniques(
                                     s=20,
                                     label="Corrected centroids",
                                 )
-                            for (y0, x0), (y1, x1) in zip(matched_centroids, matched_true):
+                            for (y0, x0), (y1, x1) in zip(
+                                matched_centroids, matched_true
+                            ):
                                 plt.plot([x0, x1], [y0, y1], c="gray", lw=0.5)
 
                             plt.gca().invert_yaxis()
                             # plt.title(f"Mapping: {method_name} run={run} angle={angle}")
                             plt.legend(loc="upper right")
                             plt.tight_layout()
-                            map_path = os.path.join(benchmark_folder_map, f"mapping_{method_name}_{suffix}.svg")
+                            map_path = os.path.join(
+                                benchmark_folder_map,
+                                f"mapping_{method_name}_{suffix}.svg",
+                            )
                             plt.savefig(map_path, format="svg", dpi=200)
                             plt.close()
                         except Exception:
                             pass
 
                         post_ext_success = np.array_equal(
-                            true_binary, fit_grid_and_assign(centroids_corrected, (grid_size, grid_size), img.shape[:2])[0]
+                            true_binary,
+                            fit_grid_and_assign(
+                                centroids_corrected,
+                                (grid_size, grid_size),
+                                img.shape[:2],
+                            )[0],
                         )
                     except Exception as e:
-                        logger.warning(f"Centroid inverse-rotation failed for {method_name}: {e}")
+                        logger.warning(
+                            f"Centroid inverse-rotation failed for {method_name}: {e}"
+                        )
 
                 pipeline_records.append(
                     {
@@ -1356,14 +1475,24 @@ def benchmark_time_estimation_techniques(
 
     # Produce a concise estimation timing plot (mean +/- sd)
     try:
-        grouping = est_df.groupby("Method")["Estimation Time (s)"].agg(["mean", "std"]).reset_index()
+        grouping = (
+            est_df.groupby("Method")["Estimation Time (s)"]
+            .agg(["mean", "std"])
+            .reset_index()
+        )
         sns.set_theme(style="whitegrid")
         plt.figure(figsize=(10, 6))
-        ax = sns.barplot(data=est_df, x="Method", y="Estimation Time (s)", errorbar='sd', palette="Blues")
+        ax = sns.barplot(
+            data=est_df,
+            x="Method",
+            y="Estimation Time (s)",
+            errorbar="sd",
+            palette="Blues",
+        )
         # ax.set_title("Estimation method timing (mean ± sd) — log scale")
         # add finer y grid lines for the log scale
-        ax.yaxis.grid(True, which='both', linestyle='--', linewidth=0.5)
-        ax.set_yscale('log')
+        ax.yaxis.grid(True, which="both", linestyle="--", linewidth=0.5)
+        ax.set_yscale("log")
         plt.ylabel("Estimation Time (s) [log scale]")
         plt.xticks(rotation=45, ha="right")
         plt.tight_layout()
@@ -1376,8 +1505,12 @@ def benchmark_time_estimation_techniques(
 
     # Summarize pipeline step timings (mean/std) for the user
     summary = pipe_df.groupby("Method")[
-        ["Initial Extraction Time (s)", "Centroid Transform Time (s)", "Centroid Transform Error (px)"]
-    ].agg(["mean", "std"]) 
+        [
+            "Initial Extraction Time (s)",
+            "Centroid Transform Time (s)",
+            "Centroid Transform Error (px)",
+        ]
+    ].agg(["mean", "std"])
     summary_csv = os.path.join(output_dir, "pipeline_steps_summary.csv")
     try:
         summary.to_csv(summary_csv)
@@ -1417,11 +1550,15 @@ def benchmark_time_full_extraction_pipeline(
         for run in range(n_repeats):
             suffix = f"bench_{run}_{int(angle)}"
             _, true_binary = generate_rot_img(
-            image_shape, grid_size, true_angle=angle, suffix=suffix, directory=rot_folder
+                image_shape,
+                grid_size,
+                true_angle=angle,
+                suffix=suffix,
+                directory=rot_folder,
             )
             img_path = os.path.join(rot_folder, f"{suffix}_rot_image.png")
             logger.info(f"Processing angle={angle}, run={run}, image={img_path}")
-            
+
             # time reading the image
             t0 = time.perf_counter()
             img = plt.imread(img_path)
@@ -1432,10 +1569,10 @@ def benchmark_time_full_extraction_pipeline(
             blob_params = setup_blob_params(None)
             # approx. spots = 0.6 * grid_size ** 2
             extractor_blob = BlobDetection(
-                shape=(grid_size, grid_size), 
+                shape=(grid_size, grid_size),
                 scale=(1, 1),
-                logger=logger, 
-                blob_params=blob_params
+                logger=logger,
+                blob_params=blob_params,
             )
 
             t0 = time.perf_counter()
@@ -1446,12 +1583,12 @@ def benchmark_time_full_extraction_pipeline(
             for mode in modes:
                 # skip direct mode for large angles
                 if mode == "direct" and abs(angle) > 10:
-                    continue                
+                    continue
 
-                est_angle = float('nan')
-                est_time = float('nan')
-                transform_time = float('nan')
-                assign_time = float('nan')
+                est_angle = float("nan")
+                est_time = float("nan")
+                transform_time = float("nan")
+                assign_time = float("nan")
                 success = False
 
                 full_start = time.perf_counter()
@@ -1460,7 +1597,11 @@ def benchmark_time_full_extraction_pipeline(
                     # directly try to fit grid from centroids (no rotation)
                     try:
                         assign_t0 = time.perf_counter()
-                        binary_matrix = fit_grid_and_assign(np.asarray(centroids), (grid_size, grid_size), image_shape=img.shape[:2])
+                        binary_matrix = fit_grid_and_assign(
+                            np.asarray(centroids),
+                            (grid_size, grid_size),
+                            image_shape=img.shape[:2],
+                        )
                         assign_t1 = time.perf_counter()
                         assign_time = assign_t1 - assign_t0
                     except Exception as e:
@@ -1471,22 +1612,31 @@ def benchmark_time_full_extraction_pipeline(
                         est_angle = estimate_grid_rotation_pca(centroids, plot=False)
                     elif mode == "fit_rect":
                         est_t0 = time.perf_counter()
-                        est_angle = estimate_grid_rotation_fit_rect(centroids, plot=False)
+                        est_angle = estimate_grid_rotation_fit_rect(
+                            centroids, plot=False
+                        )
                     est_t1 = time.perf_counter()
                     est_time = est_t1 - est_t0
 
                     tr_t0 = time.perf_counter()
-                    centroids_corrected = inverse_rotate_centroids(np.asarray(centroids), image_shape=img.shape, angle_deg=est_angle)
+                    centroids_corrected = inverse_rotate_centroids(
+                        np.asarray(centroids),
+                        image_shape=img.shape,
+                        angle_deg=est_angle,
+                    )
                     tr_t1 = time.perf_counter()
                     transform_time = tr_t1 - tr_t0
 
                     assign_t0 = time.perf_counter()
-                    binary_matrix = fit_grid_and_assign(centroids_corrected, (grid_size, grid_size), image_shape=img.shape[:2])
+                    binary_matrix = fit_grid_and_assign(
+                        centroids_corrected,
+                        (grid_size, grid_size),
+                        image_shape=img.shape[:2],
+                    )
                     assign_t1 = time.perf_counter()
                     assign_time = assign_t1 - assign_t0
 
-        
-                # Visualization/debugging: plot binary_matrix vs true_binary 
+                # Visualization/debugging: plot binary_matrix vs true_binary
                 plt.figure(figsize=(8, 4))
                 plt.subplot(1, 2, 1)
                 plt.title("Assigned Binary")
@@ -1499,12 +1649,16 @@ def benchmark_time_full_extraction_pipeline(
                 plt.axis("off")
 
                 plt.tight_layout()
-                plt.savefig(f"figs/benchmark_pipeline/rot_images/bench_{angle}_comparison.png")
+                plt.savefig(
+                    f"figs/benchmark_pipeline/rot_images/bench_{angle}_comparison.png"
+                )
 
                 # check correctness
 
                 success = np.array_equal(binary_matrix, true_binary)
-                logger.info(f"Pipeline correct: {success} (mode={mode}, angle={angle}, run={run})")
+                logger.info(
+                    f"Pipeline correct: {success} (mode={mode}, angle={angle}, run={run})"
+                )
                 if not success and False:
                     incorrect_coords = np.argwhere(binary_matrix != true_binary)
                     logger.debug(f"Incorrect blob coordinates: {incorrect_coords}")
@@ -1539,13 +1693,21 @@ def benchmark_time_full_extraction_pipeline(
     # Calculate and log mean/std for each mode
     if not df.empty:
         summary = df.groupby("Mode")[
-            ["Extraction Time (s)", "Estimation Time (s)", "Transform Time (s)", "Assign Time (s)", "Full Pipeline Time (s)"]
+            [
+                "Extraction Time (s)",
+                "Estimation Time (s)",
+                "Transform Time (s)",
+                "Assign Time (s)",
+                "Full Pipeline Time (s)",
+            ]
         ].agg(["mean", "std"])
-        
+
         logger.info("\n--- Full Extraction Pipeline Timing Summary ---")
         logger.info(summary.to_string())
-        
-        summary_csv = os.path.join(os.path.dirname(output_csv), "full_extraction_summary.csv")
+
+        summary_csv = os.path.join(
+            os.path.dirname(output_csv), "full_extraction_summary.csv"
+        )
         summary.to_csv(summary_csv)
         logger.info(f"Wrote summary to {summary_csv}")
 
@@ -1563,17 +1725,21 @@ def test_final_extraction_pipeline(logger):
     np.random.seed(42)
 
     _, true_binary = generate_rot_img(
-        image_shape, grid_size, true_angle=angle, suffix=suffix, directory="figs/test_final"
+        image_shape,
+        grid_size,
+        true_angle=angle,
+        suffix=suffix,
+        directory="figs/test_final",
     )
     rot_img_path = os.path.join("figs/test_final", f"{suffix}_rot_image.png")
     img = plt.imread(rot_img_path)
 
     blob_params = setup_blob_params(None)
     extractor_blob = BlobDetection(
-        shape=(grid_size, grid_size), 
+        shape=(grid_size, grid_size),
         scale=(1, 1),
-        logger=logger, 
-        blob_params=blob_params
+        logger=logger,
+        blob_params=blob_params,
     )
 
     centroids, _ = extractor_blob.extract(rot_img_path)
@@ -1584,32 +1750,81 @@ def test_final_extraction_pipeline(logger):
     logger.info(f"Estimated angles: Fit Rect={est_angle_fit_rect:.2f}")
 
     # Inverse-rotate centroids using PCA estimate
-    centroids_corrected = inverse_rotate_centroids(np.asarray(centroids), image_shape=img.shape, angle_deg=est_angle_fit_rect)
-    binary_centroids = fit_grid_and_assign(np.asarray(centroids_corrected), (grid_size, grid_size), image_shape=img.shape[:2])
+    centroids_corrected = inverse_rotate_centroids(
+        np.asarray(centroids), image_shape=img.shape, angle_deg=est_angle_fit_rect
+    )
+    binary_centroids = fit_grid_and_assign(
+        np.asarray(centroids_corrected),
+        (grid_size, grid_size),
+        image_shape=img.shape[:2],
+    )
 
-    assert np.array_equal(binary_centroids, true_binary), "Final binary from centroids does not match true binary."
-    logger.info("Final extraction pipeline test passed: binary from centroids matches true binary.")
-
+    assert np.array_equal(
+        binary_centroids, true_binary
+    ), "Final binary from centroids does not match true binary."
+    logger.info(
+        "Final extraction pipeline test passed: binary from centroids matches true binary."
+    )
 
 
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Benchmark and test grid rotation estimation methods.")
-    parser.add_argument("--benchmark", action="store_true", help="Run the benchmark of estimation methods.")
-    parser.add_argument("--feasibility", action="store_true", help="Run feasibility tests of estimation methods.")
-    parser.add_argument("--time_pipeline", action="store_true", help="Benchmark the full extraction pipeline timing.")
-    parser.add_argument("--time_full_extraction", action="store_true", help="Benchmark full extraction pipeline with different modes.")
-    parser.add_argument("--visualize", action="store_true", help="Visualize results of estimation techniques on a test image.")
-    parser.add_argument("--test_final", action="store_true", help="Test the final extraction pipeline on a single image.")
+    parser = argparse.ArgumentParser(
+        description="Benchmark and test grid rotation estimation methods."
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run the benchmark of estimation methods.",
+    )
+    parser.add_argument(
+        "--feasibility",
+        action="store_true",
+        help="Run feasibility tests of estimation methods.",
+    )
+    parser.add_argument(
+        "--time_pipeline",
+        action="store_true",
+        help="Benchmark the full extraction pipeline timing.",
+    )
+    parser.add_argument(
+        "--time_full_extraction",
+        action="store_true",
+        help="Benchmark full extraction pipeline with different modes.",
+    )
+    parser.add_argument(
+        "--visualize",
+        action="store_true",
+        help="Visualize results of estimation techniques on a test image.",
+    )
+    parser.add_argument(
+        "--test_final",
+        action="store_true",
+        help="Test the final extraction pipeline on a single image.",
+    )
     parser.add_argument(
         "--rotation_error_benchmark",
         action="store_true",
         help="Benchmark PCA vs. rectangle fitting impact on grid assignment feasibility.",
     )
-    parser.add_argument("--make_plots", action="store_true", help="Generate plots from benchmark results.")
-    parser.add_argument("--feasibility_csv", type=str, default="data/benchmark_pipeline/feasibility_results.csv", help="Output CSV file for feasibility results.")
-    parser.add_argument("--benchmark_dir", type=str, default="data/benchmark_pipeline", help="Directory for benchmark pipeline outputs.")
+    parser.add_argument(
+        "--make_plots",
+        action="store_true",
+        help="Generate plots from benchmark results.",
+    )
+    parser.add_argument(
+        "--feasibility_csv",
+        type=str,
+        default="data/benchmark_pipeline/feasibility_results.csv",
+        help="Output CSV file for feasibility results.",
+    )
+    parser.add_argument(
+        "--benchmark_dir",
+        type=str,
+        default="data/benchmark_pipeline",
+        help="Directory for benchmark pipeline outputs.",
+    )
     parser.add_argument(
         "--rotation_error_csv",
         type=str,
@@ -1618,7 +1833,9 @@ def main():
     )
     args = parser.parse_args()
 
-    logging.basicConfig(filename='test_imaging.log', encoding='utf-8', level=logging.INFO)
+    logging.basicConfig(
+        filename="test_imaging.log", encoding="utf-8", level=logging.INFO
+    )
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
@@ -1637,14 +1854,17 @@ def main():
             estimate_grid_rotation_vectorize,
             estimate_grid_rotation_fit_rect,
             estimate_grid_rotation_fourier_img,
-            estimate_grid_rotation_fourier
+            estimate_grid_rotation_fourier,
         ]
 
         for algo in algorithms:
             estimation_method_test(logger, method=algo, path=args.benchmark_dir)
 
         if args.make_plots:
-            make_plots(source_csv=args.benchmark_dir + "/benchmark_estimation.csv", save_dir=args.benchmark_dir)
+            make_plots(
+                source_csv=args.benchmark_dir + "/benchmark_estimation.csv",
+                save_dir=args.benchmark_dir,
+            )
 
     if args.feasibility:
         test_estimation_feasibility(logger, output_csv=args.feasibility_csv)
@@ -1653,7 +1873,10 @@ def main():
         benchmark_time_estimation_techniques(logger, output_dir=args.benchmark_dir)
 
     if args.time_full_extraction:
-        benchmark_time_full_extraction_pipeline(logger, output_csv=os.path.join(args.benchmark_dir, "full_extraction_times.csv"))
+        benchmark_time_full_extraction_pipeline(
+            logger,
+            output_csv=os.path.join(args.benchmark_dir, "full_extraction_times.csv"),
+        )
 
     if args.rotation_error_benchmark:
         benchmark_rotation_error_feasibility(logger, output_csv=args.rotation_error_csv)
@@ -1673,6 +1896,7 @@ def main():
 
     if args.test_final:
         test_final_extraction_pipeline(logger)
+
 
 if __name__ == "__main__":
     main()

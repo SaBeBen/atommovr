@@ -507,7 +507,9 @@ def _apply_moves(
                 matrix_out[from_r][from_c] -= 1
         elif movetype == MoveType.LEGAL_MOVE or movetype == MoveType.ILLEGAL_MOVE:
             to_r, to_c = (
-                (move.to_row, move.to_col) if not swapped else (move.to_col, move.to_row)
+                (move.to_row, move.to_col)
+                if not swapped
+                else (move.to_col, move.to_row)
             )
             if matrix_out[from_r][from_c] > 0:
                 matrix_out[from_r][from_c] -= 1
