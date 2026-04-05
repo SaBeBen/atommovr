@@ -48,7 +48,7 @@ ignore = ["E501"]              # Ignore line length (formatter handles it)
 exclude = ["tests/*", "docs/*"] # Optional: skip certain folders if desired
 
 # Specific configuration for flake8-bugbear rules
-[tool.ruff.flake8-bugbear]
+[tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
   "numpy.zeros",
   "numpy.ones",

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import copy
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Literal
 
 import atommovr.utils as movr
 from atommovr.algorithms.source.ejection import ejection
@@ -253,8 +255,8 @@ def middle_fill_algo_1d(
 def balance_rows(init_config: np.ndarray, target_config: np.ndarray, i: int, j: int):
     if i == j:
         return []
-    l = j - i + 1
-    m = i + (l // 2)
+    n_rows_involved = j - i + 1
+    m = i + (n_rows_involved // 2)
     n_req_top = _int_sum(target_config[i:m, :])
     n_atoms_top = _int_sum(init_config[i:m, :])
     n_req_bot = _int_sum(target_config[m : j + 1, :])
@@ -266,23 +268,40 @@ def balance_rows(init_config: np.ndarray, target_config: np.ndarray, i: int, j: 
             f"Insufficient number of atoms: deficit in rows {i}-{m-1} is {diff_top} and deficit in rows {m}-{j} is {diff_bot}."
         )
 
-    current_state = copy.deepcopy(init_config)
+    current_state = init_config.copy()
     moves = []
-    n_to_move = int(np.floor(np.abs(diff_bot - diff_top) / 2))
-    if diff_bot == diff_top or (diff_bot > 0 and diff_top > 0):
-        pass
-    elif diff_top < diff_bot:
+    if diff_top < 0 and diff_bot > 0:
+        n_to_move = min(-diff_top, diff_bot)
         current_state, round_moves = move_across_rows(
             current_state, n_to_move, i, j, m, -1
         )
         if len(round_moves) > 0:
             moves.extend(round_moves)
-    elif diff_bot < diff_top:
+    elif diff_bot < 0 and diff_top > 0:
+        n_to_move = min(-diff_bot, diff_top)
         current_state, round_moves = move_across_rows(
             current_state, n_to_move, i, j, m, 1
         )
         if len(round_moves) > 0:
             moves.extend(round_moves)
+    else:
+        n_to_move = 0
+        pass
+    # for debugging
+    top_atoms = _int_sum(current_state[i:m, :])
+    top_req = _int_sum(target_config[i:m, :])
+    bot_atoms = _int_sum(current_state[m : j + 1, :])
+    bot_req = _int_sum(target_config[m : j + 1, :])
+    try:
+        assert top_atoms >= top_req
+        assert bot_atoms >= bot_req
+    except AssertionError as err:
+        raise RuntimeError(
+            "move_across_rows failed to complete transfer:"
+            f"Before: {n_atoms_top} on top, {n_atoms_bot} on bot, {n_to_move} to move."
+            f"After: {top_atoms} on top, {bot_atoms} on bot."
+            f"Needed: {top_req} on top, {bot_req} on bot."
+        ) from err
     return moves
 
 
@@ -339,7 +358,7 @@ def _prebalance_above(
                 ):
                     above_moves = [
                         movr.Move(src_row, int(fc), dst_row, int(tc))
-                        for fc, tc in zip(from_cols, to_cols)
+                        for fc, tc in zip(from_cols, to_cols, strict=True)
                     ]
                     current_state = movr.move_atoms_noiseless(
                         current_state, above_moves
@@ -371,7 +390,7 @@ def _prebalance_above(
                                 ):
                                     space_moves = [
                                         movr.Move(src2, int(fc), dst2, int(tc))
-                                        for fc, tc in zip(f2, t2)
+                                        for fc, tc in zip(f2, t2, strict=True)
                                     ]
                                     current_state = movr.move_atoms_noiseless(
                                         current_state, space_moves
@@ -399,7 +418,7 @@ def _prebalance_above(
                                                 stuck_row - direction,
                                                 int(tc),
                                             )
-                                            for fc, tc in zip(f3, t3)
+                                            for fc, tc in zip(f3, t3, strict=True)
                                         ]
                                         current_state = movr.move_atoms_noiseless(
                                             current_state, above_moves
@@ -445,16 +464,16 @@ def prebalance(init_config, target_config):
         t2 = t[:, :, 0]
     else:
         t2 = t
-    rr, cc = np.where(t2 == 1)
+    rr, _ = np.where(t2 == 1)
     if rr.size == 0:
         return [], None, False
     start_row = int(rr.min())
     end_row = int(rr.max())
-    start_col = int(cc.min())
-    end_col = int(cc.max())
+    # start_col = int(cc.min())
+    # end_col = int(cc.max())
 
     n_atoms_row_region = _int_sum(init_config[start_row : end_row + 1, :])
-    n_atoms_col_region = _int_sum(init_config[:, start_col : end_col + 1])
+    # n_atoms_col_region = _int_sum(init_config[:, start_col : end_col + 1])
     n_atoms_global = _int_sum(init_config)
     n_targets = _int_sum(target_config[start_row : end_row + 1, :])
 
@@ -463,7 +482,7 @@ def prebalance(init_config, target_config):
 
     # finding how many atoms we need to fill and generating moves
     n_to_fill_row = n_targets - n_atoms_row_region
-    n_to_fill_col = n_targets - n_atoms_col_region
+    # n_to_fill_col = n_targets - n_atoms_col_region # linting error - unused
 
     moves = []
     if n_to_fill_row <= 0:
@@ -660,7 +679,7 @@ def get_all_moves_btwn_rows_cols(
 
     free = to_row == 0
     if not free.any():
-        empty = np.zeros(0, dtype=np.intp)
+        # empty = np.zeros(0, dtype=np.intp) # linting error - unused
         return out_from, out_to, 0
 
     n_cols = int(free.size)
@@ -723,7 +742,7 @@ def get_all_moves_btwn_rows(
 
     moves = [
         movr.Move(from_row_ind, int(fc), to_row_ind, int(tc))
-        for fc, tc in zip(from_cols, to_cols)
+        for fc, tc in zip(from_cols, to_cols, strict=True)
     ]
     return moves, n_moves
 
@@ -839,7 +858,281 @@ def get_all_moves_btwn_cols_old(init_config, from_col_ind, to_col_ind):
     return moves, n_atoms_movable
 
 
+def _apply_row_move(
+    work_state: np.ndarray,
+    from_row: int,
+    to_row: int,
+    cap: int | None = None,
+) -> tuple[np.ndarray, list[movr.Move]]:
+    """
+    Execute movable atoms between two rows, optionally capped.
+
+    This is the low-level primitive used for both support moves and transfer moves.
+    """
+    from_cols: np.ndarray
+    to_cols: np.ndarray
+    n_movable: int
+    from_cols, to_cols, n_movable = _get_all_moves_btwn_rows_cols_checked(
+        work_state,
+        from_row,
+        to_row,
+    )
+
+    if n_movable == 0:
+        return work_state, []
+
+    n_run: int = n_movable if cap is None else min(int(cap), int(n_movable))
+    if n_run <= 0:
+        return work_state, []
+
+    moves: list[movr.Move] = [
+        movr.Move(from_row, int(fc), to_row, int(tc))
+        for fc, tc in zip(from_cols[:n_run], to_cols[:n_run], strict=True)
+    ]
+    new_state: np.ndarray = movr.move_atoms_noiseless(work_state, moves)
+    return new_state, moves
+
+
+def _try_direct_transfer(
+    work_state: np.ndarray, remaining: int, boundary_src, boundary_dst
+) -> tuple[np.ndarray, list[movr.Move]]:
+    """Try to move atoms directly across the cut."""
+    return _apply_row_move(
+        work_state,
+        boundary_src,
+        boundary_dst,
+        cap=remaining,
+    )
+
+
+def _try_clear_destination_side(
+    work_state: np.ndarray, roi_rows
+) -> tuple[np.ndarray, list[movr.Move]]:
+    """
+    Try one support move inside the destination ROI.
+
+    We move atoms one step farther from the cut to create room near the cut.
+    """
+    roi_list: list[int] = list(roi_rows)
+    for k in range(len(roi_list) - 1):
+        from_row: int = roi_list[k]
+        to_row: int = roi_list[k + 1]
+        new_state, moves = _apply_row_move(work_state, from_row, to_row)
+        if moves:
+            return new_state, moves
+    return work_state, []
+
+
+def _try_pull_from_source_side(
+    work_state: np.ndarray, source_rows
+) -> tuple[np.ndarray, list[movr.Move]]:
+    """
+    Try one support move inside the source region.
+
+    We move atoms one step closer to the cut to replenish the source boundary row.
+    """
+    src_list: list[int] = list(source_rows)
+    for k in range(1, len(src_list)):
+        from_row: int = src_list[k]
+        to_row: int = src_list[k - 1]
+        new_state, moves = _apply_row_move(work_state, from_row, to_row)
+        if moves:
+            return new_state, moves
+    return work_state, []
+
+
 def move_across_rows(
+    current_state: np.ndarray,
+    n_to_move: int,
+    i: int,
+    j: int,
+    m: int,
+    dir: Literal[-1, 1] = -1,
+) -> tuple[np.ndarray, list[list[movr.Move]]]:
+    """
+    Move exactly ``n_to_move`` atoms across the cut between rows ``m - 1`` and ``m``.
+
+    This helper is used by recursive row-balancing. Its job is narrower than a full
+    rearrangement routine: it must realize a prescribed *net transfer* across a fixed
+    partition, while preserving atom number and keeping an explicit move log.
+
+    The key distinction is between:
+
+    1. **transfer moves**
+       Moves that actually cross the partition and therefore reduce the remaining
+       transfer budget.
+
+    2. **support moves**
+       Moves wholly within the source side or wholly within the destination side that
+       create room or bring atoms closer to the cut. These are allowed, but they do
+       not count toward satisfying ``n_to_move``.
+
+    The routine repeatedly tries to:
+    - move atoms directly across the cut,
+    - if blocked, clear space one step deeper into the destination ROI,
+    - if starved, pull atoms one step closer from deeper in the source region.
+
+    If a full pass produces no state change, the requested transfer is not being
+    realized by the current routing logic, and the function raises instead of
+    silently returning a partial result.
+
+    Parameters
+    ----------
+    current_state : np.ndarray
+        Binary occupancy array with shape ``(n_rows, n_cols, 1)`` or compatible.
+    n_to_move : int
+        Exact number of atoms to transfer across the cut.
+    i : int
+        Lowest row index in the active interval.
+    j : int
+        Highest row index in the active interval.
+    m : int
+        Partition index. The cut is between rows ``m - 1`` and ``m``.
+    dir : {-1, 1}, default=-1
+        Transfer direction. ``-1`` means move atoms from bottom half to top half.
+        ``1`` means move atoms from top half to bottom half.
+
+    Returns
+    -------
+    tuple[np.ndarray, list[list[movr.Move]]]
+        Updated state and a list of executed moves.
+
+    Raises
+    ------
+    ValueError
+        If ``dir`` is not ``-1`` or ``1``.
+    RuntimeError
+        If the helper stalls before completing the requested transfer.
+    Exception
+        If the source side does not contain enough atoms to satisfy the request.
+    """
+    if dir not in (-1, 1):
+        raise ValueError('Parameter "dir" must be -1 or 1.')
+
+    if n_to_move < 0:
+        raise ValueError("n_to_move must be nonnegative.")
+    if n_to_move == 0:
+        return current_state.copy(), []
+
+    state: np.ndarray = current_state.copy()
+    all_moves: list[list[movr.Move]] = []
+    n_left_to_move: int = int(n_to_move)
+
+    if dir == -1:
+        # bottom -> top
+        boundary_src: int = m
+        boundary_dst: int = m - 1
+        roi_rows: range = range(m - 1, i - 1, -1)  # destination side, from cut inward
+        source_rows: range = range(m, j + 1)  # source side, from cut inward
+        low_ind_source: int = m
+        high_ind_source: int = j + 1
+        top_slice = (slice(i, m), slice(None))
+        bot_slice = (slice(m, j + 1), slice(None))
+    else:
+        # top -> bottom
+        boundary_src = m - 1
+        boundary_dst = m
+        roi_rows = range(m, j + 1)  # destination side, from cut inward
+        source_rows = range(m - 1, i - 1, -1)  # source side, from cut inward
+        low_ind_source = i
+        high_ind_source = m
+        top_slice = (slice(i, m), slice(None))
+        bot_slice = (slice(m, j + 1), slice(None))
+
+    n_atoms_in_source: int = _int_sum(state[low_ind_source:high_ind_source])
+    if n_atoms_in_source < n_to_move:
+        raise Exception(
+            f"Insufficient atoms. Only {n_atoms_in_source} in the source region; "
+            f"requested transfer is {n_to_move}."
+        )
+
+    top_before: int = _int_sum(state[top_slice])
+    bot_before: int = _int_sum(state[bot_slice])
+
+    max_outer_iters: int = max(100, 4 * (j - i + 1) * state.shape[1])
+
+    for _ in range(max_outer_iters):
+        if n_left_to_move == 0:
+            break
+
+        state_before_pass: np.ndarray = state.copy()
+        left_before_pass: int = n_left_to_move
+
+        # Step 1: transfer as much as possible directly across the cut.
+        state, transfer_moves = _try_direct_transfer(
+            state, n_left_to_move, boundary_src=boundary_src, boundary_dst=boundary_dst
+        )
+        if transfer_moves:
+            all_moves.append(transfer_moves)
+            n_left_to_move -= len(transfer_moves)
+            continue
+
+        # Step 2: if blocked, try to create space near the destination boundary.
+        state, clear_moves = _try_clear_destination_side(state, roi_rows=roi_rows)
+        if clear_moves:
+            all_moves.append(clear_moves)
+
+            state, transfer_moves = _try_direct_transfer(
+                state,
+                n_left_to_move,
+                boundary_src=boundary_src,
+                boundary_dst=boundary_dst,
+            )
+            if transfer_moves:
+                all_moves.append(transfer_moves)
+                n_left_to_move -= len(transfer_moves)
+                continue
+
+        # Step 3: if still starved, try to pull atoms closer from the source side.
+        state, pull_moves = _try_pull_from_source_side(state, source_rows)
+        if pull_moves:
+            all_moves.append(pull_moves)
+
+            state, transfer_moves = _try_direct_transfer(
+                state,
+                n_left_to_move,
+                boundary_src=boundary_src,
+                boundary_dst=boundary_dst,
+            )
+            if transfer_moves:
+                all_moves.append(transfer_moves)
+                n_left_to_move -= len(transfer_moves)
+                continue
+
+        # Step 4: no real progress means the routing logic is jammed.
+        state_changed: bool = not np.array_equal(state, state_before_pass)
+        transfer_progress: bool = n_left_to_move < left_before_pass
+        if not state_changed and not transfer_progress:
+            break
+
+    top_after: int = _int_sum(state[top_slice])
+    bot_after: int = _int_sum(state[bot_slice])
+
+    if dir == -1:
+        moved: int = top_after - top_before
+        expected_bot_delta: int = -n_to_move
+        actual_bot_delta: int = bot_after - bot_before
+        if moved != n_to_move or actual_bot_delta != expected_bot_delta:
+            raise RuntimeError(
+                "move_across_rows failed to complete requested bottom->top transfer. "
+                f"Requested {n_to_move}, achieved {moved}. "
+                f"Bottom delta was {actual_bot_delta}."
+            )
+    else:
+        moved = bot_after - bot_before
+        expected_top_delta: int = -n_to_move
+        actual_top_delta: int = top_after - top_before
+        if moved != n_to_move or actual_top_delta != expected_top_delta:
+            raise RuntimeError(
+                "move_across_rows failed to complete requested top->bottom transfer. "
+                f"Requested {n_to_move}, achieved {moved}. "
+                f"Top delta was {actual_top_delta}."
+            )
+
+    return state, all_moves
+
+
+def move_across_rows_old(
     current_state: np.ndarray, n_to_move: int, i: int, j: int, m: int, dir=-1
 ):
     """
@@ -891,7 +1184,7 @@ def move_across_rows(
             try:
                 move_set = []
                 for off in range(row_offset + 1)[::-1]:
-                    across_move = 1
+                    # across_move = 1 # linting error - unused
                     from_row = start_row + (off * dir)
                     to_row = end_row + (off * dir)
                     if i > from_row or i > to_row or j < from_row or j < to_row:
@@ -908,13 +1201,15 @@ def move_across_rows(
                     ):  # check if there are atoms that can be moved, and if so move them
                         above_moves = [
                             movr.Move(from_row, int(fc), to_row, int(tc))
-                            for fc, tc in zip(from_cols, to_cols)
+                            for fc, tc in zip(from_cols, to_cols, strict=True)
                         ]
                         if off == 0:
                             moves_to_run = above_moves[:n_left_to_move]
                         else:
                             moves_to_run = above_moves
-                        current_state, _ = movr.move_atoms(current_state, moves_to_run)
+                        current_state = movr.move_atoms_noiseless(
+                            current_state, moves_to_run
+                        )  # move_atoms
                         n_left_to_move -= len(moves_to_run)
                         move_set.append(moves_to_run)
                     else:  # if atoms CANNOT be moved
@@ -951,11 +1246,13 @@ def move_across_rows(
                                                 from_row, int(fcs), to_row, int(tcs)
                                             )
                                             for fcs, tcs in zip(
-                                                from_sp_cols, to_sp_cols
+                                                from_sp_cols, to_sp_cols, strict=True
                                             )
                                         ]
-                                        current_state, _ = movr.move_atoms(
-                                            current_state, space_moves
+                                        current_state = (
+                                            movr.move_atoms_noiseless(  # move_atoms
+                                                current_state, space_moves
+                                            )
                                         )
                                         clear_space_in_roi_moves.append(space_moves)
                                         n_movable = n_sp_movable
@@ -992,11 +1289,13 @@ def move_across_rows(
                                                 from_row, int(fcs), to_row, int(tcs)
                                             )
                                             for fcs, tcs in zip(
-                                                from_sp_cols, to_sp_cols
+                                                from_sp_cols, to_sp_cols, strict=True
                                             )
                                         ]
-                                        current_state, _ = movr.move_atoms(
-                                            current_state, space_moves
+                                        current_state = (
+                                            movr.move_atoms_noiseless(  # move_atoms
+                                                current_state, space_moves
+                                            )
                                         )
                                         pull_atoms_from_reservoir_moves.append(
                                             space_moves
@@ -1043,8 +1342,8 @@ def get_all_balance_assignments(start, end):
 
 
 def get_next_balance_assignment(i, j):
-    l = j - i + 1
-    m = i + (l // 2)
+    n_rows_involved = j - i + 1
+    m = i + (n_rows_involved // 2)
     next_list = []
     if i != j and i < j:
         next_list.append((i, m - 1))

@@ -3,7 +3,6 @@ import numpy as np
 from numpy.typing import NDArray
 import importlib
 
-AtomArray_mod = importlib.import_module("atommovr.utils.AtomArray")
 from atommovr.utils.AtomArray import AtomArray
 from atommovr.utils.Move import Move
 from atommovr.utils.move_utils import MoveType, MultiOccupancyFlag
@@ -11,6 +10,8 @@ from atommovr.utils.core import Configurations
 from atommovr.utils.failure_policy import FailureEvent, FailureFlag
 from atommovr.tests.support.doubles import TimingSpyErrorModel, BoomErrorModel
 from atommovr.tests.support.helpers import boom
+
+AtomArray_mod = importlib.import_module("atommovr.utils.AtomArray")
 
 
 class TestAtomArrayInitBasic:
@@ -336,35 +337,36 @@ class TestMoveAtomsContracts:
         with pytest.raises(ValueError, match="negative occupancy"):
             aa.move_atoms([move])
 
-    def test_move_atoms_incomplete_parallel_grid_raises(
-        self, monkeypatch, one_atom_array_3x3
-    ) -> None:
-        """
-        `move_atoms` should reject an incomplete rectilinear AOD grid.
+    # NOTE: disabled this error; instead made move_atoms fill in the incomplete rectilinear AOD grid.
+    # def test_move_atoms_incomplete_parallel_grid_raises(
+    #     self, monkeypatch, one_atom_array_3x3
+    # ) -> None:
+    #     """
+    #     `move_atoms` should reject an incomplete rectilinear AOD grid.
 
-        If the active horizontal/vertical tones define a 2x2 grid of tweezer intersections,
-        then the move list must contain all 4 row/col pairings so downstream error modeling
-        sees the full parallel command set, including stationary tweezers.
-        """
-        aa = one_atom_array_3x3
+    #     If the active horizontal/vertical tones define a 2x2 grid of tweezer intersections,
+    #     then the move list must contain all 4 row/col pairings so downstream error modeling
+    #     sees the full parallel command set, including stationary tweezers.
+    #     """
+    #     aa = one_atom_array_3x3
 
-        incomplete_moves = [
-            Move(1, 0, 1, 1),
-            Move(2, 1, 3, 1),
-            Move(2, 0, 3, 1),
-        ]
+    #     incomplete_moves = [
+    #         Move(1, 0, 1, 1),
+    #         Move(2, 1, 3, 1),
+    #         Move(2, 0, 3, 1),
+    #     ]
 
-        curr_horiz = np.array([2, 1, 0], dtype=np.int8)
-        curr_vert = np.array([0, 1, 2], dtype=np.int8)
+    #     curr_horiz = np.array([2, 1, 0], dtype=np.int8)
+    #     curr_vert = np.array([0, 1, 2], dtype=np.int8)
 
-        monkeypatch.setattr(
-            AtomArray_mod,
-            "get_AOD_cmds_from_move_list",
-            lambda matrix, move_list: (curr_horiz, curr_vert, True),
-        )
+    #     monkeypatch.setattr(
+    #         AtomArray_mod,
+    #         "get_AOD_cmds_from_move_list",
+    #         lambda matrix, move_list: (curr_horiz, curr_vert, True),
+    #     )
 
-        with pytest.raises(Exception, match="Move list is not complete"):
-            aa.move_atoms(incomplete_moves)
+    #     with pytest.raises(ValueError, match="Move list is not complete"):
+    #         aa.move_atoms(incomplete_moves)
 
 
 class TestMoveAtomsSeams:

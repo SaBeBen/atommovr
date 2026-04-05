@@ -228,8 +228,8 @@ def get_AOD_cmds_from_move_list(
 def move_atoms(
     init_matrix: NDArray,
     moves: list[Move],
-    error_model: ErrorModel = ZeroNoise(),
-    params: PhysicalParams = PhysicalParams(),
+    error_model: ErrorModel | None = None,
+    params: PhysicalParams | None = None,
     look_for_flag: bool = False,
     error_modeling: bool = False,
 ) -> tuple[NDArray, list[list]]:
@@ -273,9 +273,35 @@ def move_atoms(
     failed_moves
         List of indices of moves that failed.
     flags
-        Corresponding failure flags for failed moves.
-
+        List of integer FailureFlag values for the failed moves.
     """
+    if error_model is None:
+        error_model = ZeroNoise()
+    if params is None:
+        params = PhysicalParams()
+    matrix_out = copy.deepcopy(init_matrix)
+    if np.max(init_matrix) > 1:
+        raise Exception("Variable `init_matrix` cannot have values outside of {0,1}. ")
+
+    # make sure `moves` is a list and not just a singular `Move` object
+    try:
+        moves[0]
+    except TypeError:
+        moves = [moves]
+
+    if error_modeling:
+        # evaluating moves from error model
+        moves = error_model.get_move_errors(init_matrix, moves)
+
+    if not isinstance(init_matrix, np.ndarray):
+        raise TypeError("init_matrix must be a numpy array.")
+    # if init_matrix.ndim != 3:
+    #     raise ValueError(f"init_matrix must be 3D (rows, cols), got ndim={init_matrix.ndim}.")
+    if not np.issubdtype(init_matrix.dtype, np.integer):
+        raise TypeError(
+            f"init_matrix must have an integer dtype, got {init_matrix.dtype}."
+        )
+
     orig_dtype = init_matrix.dtype
     needs_recast: bool = bool(np.issubdtype(orig_dtype, np.unsignedinteger))
 
@@ -331,8 +357,8 @@ def move_atoms(
     return matrix_out, [failed_moves, flags]
 
 
-def _get_duplicate_vals_from_list(l: list) -> list:
-    return [k for k, v in Counter(l).items() if v > 1]
+def _get_duplicate_vals_from_list(lis: list) -> list:
+    return [k for k, v in Counter(lis).items() if v > 1]
 
 
 def _find_and_resolve_crossed_moves(
@@ -353,7 +379,7 @@ def _find_and_resolve_crossed_moves(
     # 3. Sorting duplicate entries into distinct sets
     crossed_move_sets = []
     duplicate_move_inds = []
-    for i in range(len(duplicate_vals)):
+    for _ in range(len(duplicate_vals)):
         crossed_move_sets.append([])
     if len(crossed_move_sets) > 0:
         for m_ind, move in enumerate(move_list):
@@ -382,7 +408,7 @@ def _apply_moves(
     init_matrix: NDArray,
     matrix_out: NDArray,
     moves: list,
-    duplicate_move_inds: list = [],
+    duplicate_move_inds: list | None = None,
     look_for_flag: bool = False,
 ) -> tuple[NDArray, list, list]:
     """
@@ -393,6 +419,8 @@ def _apply_moves(
     NB: `init_matrix` is the initial array before crossed moves were resolved,
     and `matrix_out` is the array following resolution of crossed moves.
     """
+    if duplicate_move_inds is None:
+        duplicate_move_inds = []
     failed_moves = []
     flags = []
 
@@ -554,8 +582,10 @@ def _restore_single_species_matrix(
         Occupancy array with the original dimensionality.
     """
     if was_2d:
-        return matrix_3d[:, :, 0].astype(out_dtype, copy=False)
-    return matrix_3d.astype(out_dtype, copy=False)
+        og_dim_arr = matrix_3d[:, :, 0].astype(out_dtype, copy=False)
+        return og_dim_arr
+    og_dim_arr = matrix_3d.astype(out_dtype, copy=False)
+    return og_dim_arr
 
 
 def detect_destructive_aod_cmd_mask(
@@ -766,7 +796,6 @@ def apply_moves_noiseless(
             out_2d[dst_row, dst_col] += 1
 
     out_2d[out_2d > 1] = 0
-
     return _restore_single_species_matrix(
         out_work,
         was_2d=was_2d,
@@ -806,7 +835,6 @@ def move_atoms_noiseless(
         init_matrix,
         move_list,
     )
-
     return apply_moves_noiseless(
         init_matrix,
         move_list,
@@ -820,8 +848,8 @@ def move_atoms_noiseless(
 def move_atoms_fast(
     init_matrix: NDArray,
     moves: list[Move],
-    error_model: ErrorModel = ZeroNoise(),
-    params: PhysicalParams = PhysicalParams(),
+    error_model: ErrorModel | None = None,
+    params: PhysicalParams | None = None,
     look_for_flag: bool = False,
     error_modeling: bool = False,
 ) -> tuple[NDArray, list[list]]:
@@ -855,6 +883,10 @@ def move_atoms_fast(
     tuple[NDArray, list[list]]
         Updated occupancy matrix and ``[failed_moves, flags]``.
     """
+    if error_model is None:
+        error_model = ZeroNoise()
+    if params is None:
+        params = PhysicalParams()
     if not isinstance(init_matrix, np.ndarray):
         raise TypeError("init_matrix must be a numpy array.")
     if init_matrix.ndim != 3:

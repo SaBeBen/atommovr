@@ -1,14 +1,28 @@
 # Code to visualize the atom array and generate gifs of the rearrangement process.
 
+import numpy as np
 import imageio.v2 as imageio
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.axes import Axes
 
+from atommovr.utils.core import PhysicalParams
 from atommovr.utils.Move import Move
-from atommovr.utils.core import *
 from atommovr.utils.move_utils import MoveType
-from atommovr.utils.customize import *
+from atommovr.utils.customize import (
+    SPECIES1COL,
+    SPECIES1NAME,
+    SPECIES2COL,
+    SPECIES2NAME,
+    EDGECOL,
+    NOATOMCOL,
+    ARROWCOL,
+    COLLISIONFAILCOL,
+    PUTDOWNFAILCOL,
+    PICKUPFAILCOL,
+    EJECTCOL,
+    CROSSEDFAILCOL,
+)
 
 ######################################
 # Single frame visualization/imaging #
@@ -55,7 +69,7 @@ def single_species_image(
         This function displays the plot and optionally saves it to disk.
     """
 
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     if move_list is None:
         move_list = []
 
@@ -152,7 +166,7 @@ def dual_species_image(
     if move_list is None:
         move_list = []
 
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
 
     (
         blue_inds_x,
@@ -188,19 +202,19 @@ def dual_species_image(
 
     ax.scatter(white_inds_x, white_inds_y, s=dotsize, c=NOATOMCOL, edgecolor=EDGECOL)
 
-    eject_x = []
-    eject_y = []
-    pickup_fail_x = []
-    pickup_fail_y = []
-    putdown_fail_x = []
-    putdown_fail_y = []
-    collision_fail_x = []
-    collision_fail_y = []
-    crossed_x = []
-    crossed_y = []
+    # eject_x = []
+    # eject_y = []
+    # pickup_fail_x = []
+    # pickup_fail_y = []
+    # putdown_fail_x = []
+    # putdown_fail_y = []
+    # collision_fail_x = []
+    # collision_fail_y = []
+    # crossed_x = []
+    # crossed_y = []
     # plotting arrows to indicate moves
     if len(move_list) > 0:
-        for move_ind, move in enumerate(move_list):
+        for _, move in enumerate(move_list):
             ax.arrow(
                 move.from_col + np.sign(move.dx) * plt_spacer,
                 len(matrix[0]) - (move.from_row + np.sign(move.dy) * plt_spacer),
@@ -230,8 +244,8 @@ def dual_species_image(
 
 def make_single_species_gif(
     single_species_array,
-    move_list,
-    params: PhysicalParams = PhysicalParams(),
+    move_list: list[list[Move]],
+    params: PhysicalParams | None = None,
     savename: str = "matrix_animation",
     plt_spacer: float = 0.25,
     duration: float = 200,
@@ -267,6 +281,8 @@ def make_single_species_gif(
     Intermediate frame images are written to ``figs/frames`` before being
     combined into the final GIF.
     """
+    if params is None:
+        params = PhysicalParams()
 
     # making reference time
     t_total = 0
@@ -283,7 +299,7 @@ def make_single_species_gif(
     )
 
     # plotting the initial configuration
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     blue_inds_x, blue_inds_y, white_inds_x, white_inds_y = _get_inds_for_circ_matr_plot(
         single_species_array.matrix
     )
@@ -310,7 +326,7 @@ def make_single_species_gif(
         [failed_moves, flags], move_time = single_species_array.move_atoms(move_set)
 
         # plotting the frame
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
         blue_inds_x, blue_inds_y, white_inds_x, white_inds_y = (
             _get_inds_for_circ_matr_plot(single_species_array.matrix)
         )
@@ -343,8 +359,13 @@ def make_single_species_gif(
 
             # calculating the distance of the move
             distances.append(move.distance)
-
-            if move.movetype == MoveType.EJECT_MOVE:
+            try:
+                is_eject_move = move.movetype == MoveType.EJECT_MOVE
+                is_illegal_move = move.movetype == MoveType.ILLEGAL_MOVE
+            except AttributeError:
+                is_eject_move = False
+                is_illegal_move = False
+            if is_eject_move:
                 # plot a green dot if ejection succeeded
                 if fail_flag == 0:
                     eject_x.append(move.from_col)
@@ -378,7 +399,7 @@ def make_single_species_gif(
             elif fail_flag == 4:
                 crossed_x.append(move.from_col)
                 crossed_y.append(move.from_row)
-            elif move.movetype == MoveType.ILLEGAL_MOVE and fail_flag == 0:
+            elif is_illegal_move and fail_flag == 0:
                 # plot red dots if atoms collided
                 collision_fail_x.append(move.from_col)
                 collision_fail_y.append(move.from_row)
@@ -451,7 +472,7 @@ def make_single_species_gif(
 
 def make_dual_species_gif(
     dual_species_array,
-    move_list: list,
+    move_list: list[list[Move]],
     savename="matrix_animation",
     plt_spacer=0.25,
     duration=0.2,
@@ -500,7 +521,7 @@ def make_dual_species_gif(
         ]
     )
     # plotting the initial configuration
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     (
         blue_inds_x,
         blue_inds_y,
@@ -532,7 +553,7 @@ def make_dual_species_gif(
         # performing the move
         [failed_moves, flags], move_time = dual_species_array.move_atoms(move_set)
         # plotting the frame
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
         (
             blue_inds_x,
             blue_inds_y,
@@ -552,7 +573,7 @@ def make_dual_species_gif(
             white_inds_x, white_inds_y, s=dotsize, c=NOATOMCOL, edgecolor=EDGECOL
         )
 
-        distances = []
+        # distances = []
         eject_x = []
         eject_y = []
         pickup_fail_x = []

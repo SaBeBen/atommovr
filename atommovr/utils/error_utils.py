@@ -163,7 +163,7 @@ def write_primary_events_to_moves(
     -------
     None
     """
-    for mv, ev in zip(moves, primary_events):
+    for mv, ev in zip(moves, primary_events, strict=True):
         mv.set_failure_event(int(ev))
 
 
@@ -194,7 +194,7 @@ def finalize_events_to_moves(
     write_primary_events_to_moves(moves, primary)
 
     if store_mask_on_move:
-        for mv, mask in zip(moves, event_mask):
+        for mv, mask in zip(moves, event_mask, strict=True):
             mv.fail_mask = int(mask)
 
     return primary

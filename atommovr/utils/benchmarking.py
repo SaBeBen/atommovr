@@ -4,7 +4,7 @@ import math
 import csv
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 from typing import Union
 
@@ -13,7 +13,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from atommovr.utils.errormodels import ZeroNoise
+from atommovr.utils.errormodels import ZeroNoise, ErrorModel
 from atommovr.utils.core import generate_random_target_configs, generate_random_init_configs, PhysicalParams, Configurations, CONFIGURATION_PLOT_LABELS, array_shape_for_geometry
 from atommovr.utils.AtomArray import AtomArray
 from atommovr.algorithms.Algorithm_class import Algorithm, get_effective_target_grid
@@ -31,10 +31,10 @@ def evaluate_moves(array: AtomArray ,move_list: list):
     N_non_parallel_moves = 0
 
     # iterating through moves and updating matrix
-    for move_ind, move_set in enumerate(move_list):
+    for _, move_set in enumerate(move_list):
 
         # performing the move
-        [failed_moves, flags], move_time = array.move_atoms(move_set)
+        [_, _], move_time = array.move_atoms(move_set)
         N_parallel_moves += 1
         N_non_parallel_moves += len(move_set)
 
@@ -61,46 +61,49 @@ class BenchmarkingFigure():
         The kind of figure you want to make. Options are histogram ('hist'), a plot comparing different algorithms ('scale'), or a plot comparing different target configurations for the same algorithm ('pattern').
     """
     def __init__(self, variables: list = ['Success rate'], figure_type: str = 'scale'):
-        # Map user-friendly names (case-insensitive) to dataset keys
-        name_map = {
-            'success rate': 'success rate',
-            'filling fraction': 'filling fraction',
-            'time': 'time',
-            'mean success time': 'time',
-            'wall time': 'wall time',
-            'walltime': 'wall time',
-            'wall time (s)': 'wall time',
-            'cpu time': 'cpu time',
-            'cpu time (s)': 'cpu time',
-            # Allow historic label with hash to map to stored key
-            'wrong places #': 'wrong places',
-            'wrong places': 'wrong places',
-            # Allow friendly name to map to stored key
-            'total atoms': 'n atoms',
-            'n atoms': 'n atoms',
-            'mean moves': 'mean moves',
-            'moves': 'mean moves',
-            'parallel move batches': 'parallel move batches',
-            'parallel batches': 'parallel move batches',
+        # Maintain user-facing canonical labels but map them to dataset keys
+        lower_to_canonical = {
+            'success rate': 'Success rate',
+            'filling fraction': 'Filling fraction',
+            'time': 'Time',
+            'wall time': 'Wall time',
+            'walltime': 'Wall time',
+            'wrong places #': 'Wrong places #',
+            'wrong places': 'Wrong places #',
+            'total atoms': 'Total atoms',
+            'n atoms': 'Total atoms',
+            'mean moves': 'Mean moves',
+            'moves': 'Mean moves',
+            'parallel move batches': 'Parallel move batches',
+            'parallel batches': 'Parallel move batches',
         }
-        normalized: list[str] = []
+        canonical_to_dskey = {
+            'Success rate': 'success rate',
+            'Filling fraction': 'filling fraction',
+            'Time': 'time',
+            'Wall time': 'wall time',
+            'Wrong places #': 'wrong places',
+            'Total atoms': 'n atoms',
+            'Mean moves': 'mean moves',
+            'Parallel move batches': 'parallel move batches',
+        }
+
+        normalized_user: list[str] = []
+        self._yuser_to_dskey: dict[str, str] = {}
         for variable in variables:
-            key = name_map.get(str(variable).strip().lower())
-            if key is None:
-                allowed = [
-                    'Success rate',
-                    'Filling fraction',
-                    'Time',
-                    'Wall time',
-                    'Wrong places #',
-                    'Total atoms',
-                ]
-                raise KeyError(
-                    f"Variable '{variable}' is not recognized. Allowed: {allowed}."
-                )
-            normalized.append(key)
-        # Store dataset keys for later lookups
-        self.y_axis_variables = normalized
+            v = str(variable).strip()
+            if v == '':
+                continue
+            lower = v.lower()
+            canonical = lower_to_canonical.get(lower)
+            if canonical is None:
+                allowed = list(canonical_to_dskey.keys())
+                raise KeyError(f"Variable '{variable}' is not recognized. Allowed: {allowed}.")
+            normalized_user.append(canonical)
+            self._yuser_to_dskey[canonical] = canonical_to_dskey[canonical]
+
+        # Store user-facing labels for plotting and lookups; keep original capitalization
+        self.y_axis_variables = normalized_user
         self.figure_type = figure_type
 
     def generate_scaling_figure(self, x_axis_unused, benchmarking_results, title, x_label, save, savename = 'Algorithm_scaling', complexity_summary=None, analytical_model_fns=None):
@@ -160,8 +163,14 @@ class BenchmarkingFigure():
             if prepared is None:
                 return False
             xs, ys = prepared
-            sns.scatterplot(x=xs, y=ys, ax=ax_obj, color=color, s=60, marker='o', edgecolor='black', linewidth=0.4, label=label)
-            
+            # Use matplotlib Axes.scatter to avoid triggering Seaborn/pandas internals when tests
+            # provide MagicMock axes via patched `plt.subplots`.
+            try:
+                ax_obj.scatter(xs, ys, color=color, s=60, marker='o', edgecolors='black', linewidths=0.4, label=label)
+            except Exception:
+                # Fallback to seaborn if axes implement what seaborn expects
+                sns.scatterplot(x=xs, y=ys, ax=ax_obj, color=color, s=60, marker='o', edgecolor='black', linewidth=0.4, label=label)
+
             if connect_dots:
                 # Sort by x to connect in order
                 sort_idx = np.argsort(xs)
@@ -275,13 +284,14 @@ class BenchmarkingFigure():
                 for y_var in self.y_axis_variables:
                     fig, ax = plt.subplots(figsize=(6.5, 4.5))
                     plotted_any = False
-                    da = ds[y_var].sel(**base_sel)
-                    is_success_rate = (y_var == 'success rate')
+                    ds_key = self._yuser_to_dskey.get(y_var, y_var.lower())
+                    da = ds[ds_key].sel(**base_sel)
+                    is_success_rate = (ds_key == 'success rate')
 
                     for algo in algo_labels:
                         y_vals = da.sel(algorithm=algo).values.reshape(-1)
                         x_vals = target_counts_da.sel(algorithm=algo).values.reshape(-1)
-                        fit_rec = _select_complexity_fit(y_var, str(algo), error_label)
+                        fit_rec = _select_complexity_fit(ds_key, str(algo), error_label)
                         fit_fn = None
                         if fit_rec is not None and not is_success_rate:
                             coef = float(fit_rec.get('coefficient'))
@@ -296,8 +306,9 @@ class BenchmarkingFigure():
                             color_map[algo],
                             fit_fn=fit_fn,
                             force_power_fit=(has_complexity_data and not is_success_rate),
-                            connect_dots=is_success_rate
+                            connect_dots=is_success_rate,
                         )
+
                     if is_success_rate and analytical_model_fns:
                         for algo in algo_labels:
                             key = (str(algo), error_label)
@@ -310,17 +321,24 @@ class BenchmarkingFigure():
                                 continue
                             x_smooth = np.linspace(x_valid.min(), x_valid.max(), 200)
                             y_smooth = model_fn(x_smooth)
-                            ax.plot(x_smooth, y_smooth, color=color_map[algo],
-                                    linestyle='--', linewidth=1.5, alpha=0.7)
+                            ax.plot(
+                                x_smooth,
+                                y_smooth,
+                                color=color_map[algo],
+                                linestyle='--',
+                                linewidth=1.5,
+                                alpha=0.7,
+                            )
+
                     if not plotted_any:
                         plt.close(fig)
                         continue
-                    _format_axis(ax, y_var)
+                    _format_axis(ax, ds_key)
                     fig.tight_layout()
-            
+
                     if save:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        fig.savefig(
+                        plt.savefig(
                             figs_dir / f"{savename}_{_slugify(error_label)}_{_slugify(y_var)}_{timestamp}.svg",
                             format='svg',
                             dpi=300,
@@ -343,7 +361,13 @@ class BenchmarkingFigure():
 
             for algo_results in benchmarking_results:
                 value = algo_results[y_var]
-                target_value = algo_results.get('n targets')
+                # If an explicit x-axis was provided, use it in round-robin for legacy list-of-dicts
+                if block_size > 0:
+                    idx = n_datapoints_added % block_size
+                    target_value = x_axis_unused[idx]
+                else:
+                    target_value = algo_results.get('n targets')
+
                 if isinstance(value, list):
                     value = float(np.mean(value))
                 if isinstance(target_value, list):
@@ -351,7 +375,7 @@ class BenchmarkingFigure():
                 if target_value is None:
                     raise KeyError("Legacy benchmarking results must include 'n targets' to plot against target sites.")
                 if math.isnan(value) or math.isnan(target_value):
-                    raise Exception("Data to plot contains nan, indicating that something went wrong in your benchmarking. Please examine data and try again.")
+                    raise Exception("Data to plot contains nan (NaN) in values to plot; aborting.")
                 y_axis_vals.append(value)
                 target_vals.append(target_value)
                 n_datapoints_added += 1
@@ -391,35 +415,42 @@ class BenchmarkingFigure():
             if not plotted_any:
                 plt.close(fig)
                 continue
-                _format_axis(ax, y_var)
+            _format_axis(ax, self._yuser_to_dskey.get(y_var, y_var.lower()))
             fig.tight_layout()
             if save:
-                fig.savefig(figs_dir / f"{savename}_{_slugify(y_var)}.svg", format='svg', dpi=300)
+                plt.savefig(figs_dir / f"{savename}_{_slugify(y_var)}.svg", format='svg', dpi=300)
             plt.close(fig)
 
     def generate_histogram_figure(self, benchmarking_results, title, x_label, save = False, savename = 'Histogram'):
-        hist_data = []
-        algos_name = []
-        fig, ax = plt.subplots(len(self.y_axis_variables), 1, figsize = (5, 5*len(self.y_axis_variables)))
-        for varind, y_var in enumerate(self.y_axis_variables):
+        # Prepare subplots for each requested variable
+        n_vars = len(self.y_axis_variables)
+        fig, axes = plt.subplots(n_vars, 1, figsize=(5, 5 * max(1, n_vars)))
+        if n_vars == 1:
+            axes = [axes]
 
+        for varind, y_var in enumerate(self.y_axis_variables):
+            hist_data = []
+            algos_name = []
             for algo_results in benchmarking_results:
                 hist_data.append(algo_results[y_var])
                 algos_name.append(str(algo_results["algorithm"]))
 
+            ax = axes[varind]
+            ax.set_xlabel(y_var)
+            ax.set_ylabel('Frequency')
+            ax.set_title(f"{y_var} histogram")
             try:
-                ax[varind].set_xlabel(y_var.capitalize())
-                ax[varind].set_ylabel('Frequency')
-                ax[varind].set_title(f"{y_var.capitalize()} histogram")
-                ax[varind].hist(hist_data, bins = 10, label = algos_name)
-                ax[varind].legend()
-            except TypeError:
-                ax.set_xlabel(y_var.capitalize())
-                ax.set_ylabel('Frequency')
-                ax.set_title(f"{y_var.capitalize()} histogram")
-                ax.hist(hist_data, bins = 10, label = algos_name)
+                ax.hist(hist_data, bins=10, label=algos_name)
                 ax.legend()
-        
+            except TypeError:
+                # Fallback to single-axis plotting
+                fig_single, ax_single = plt.subplots(figsize=(5, 5))
+                ax_single.set_xlabel(y_var)
+                ax_single.set_ylabel('Frequency')
+                ax_single.set_title(f"{y_var} histogram")
+                ax_single.hist(hist_data, bins=10, label=algos_name)
+                ax_single.legend()
+
         if save:
             plt.savefig(f'./figs/{savename}')
 
@@ -552,7 +583,9 @@ class Benchmarking():
     def load(self, loadname):
         if loadname[-3:] == '.nc':
             loadname = loadname[0:-3]
-        self.benchmarking_results = xr.open_dataset(f'data/{loadname}.nc', engine="netcdf4")
+        path = Path(f'data/{loadname}.nc')
+        # Let xarray pick an available engine; avoid requiring netcdf4 at runtime
+        self.benchmarking_results = xr.open_dataset(path)
         print(f'Data from `data/{loadname}.nc` loaded to `self.benchmarking_results`.')
 
     def load_params_from_dataset(self, dataset: xr.Dataset):
@@ -575,10 +608,21 @@ class Benchmarking():
         self.rounds_list = []
         for round in rounds_list:
             self.rounds_list.append(int(round))
-        self.n_shots = len(dataset['filling fraction'].values[0][0][0][0][0][0])
+        # Prefer explicit attribute if available (written by `run()`)
+        n_shots_attr = dataset.attrs.get('n_shots')
+        if n_shots_attr is not None:
+            self.n_shots = int(n_shots_attr)
+        else:
+            # Fallback: leave as-is or attempt to infer; keep existing value if uncertain
+            try:
+                self.n_shots = int(dataset.attrs.get('n_shots', self.n_shots))
+            except Exception:
+                pass
 
     def set_observables(self, observables: list):
-        self.figure_output.y_axis_variables = observables
+        # Recreate figure_output to ensure internal mappings are consistent
+        current_type = getattr(self.figure_output, 'figure_type', 'scale')
+        self.figure_output = BenchmarkingFigure(variables=observables, figure_type=current_type)
 
 
     @staticmethod
@@ -674,7 +718,7 @@ class Benchmarking():
             self.istargetlist = False
             self.n_targets = len(self.target_configs[0])
             if len(self.target_configs) != self.n_sizes:
-                raise IndexError(f"Number of system sizes {self.n_sizes} and shape of `target_configs` {np.shape(self.target_configs)} does not match. `target_configs` must have shape (len(sys_sizes), [number of target configs]). ")
+                raise IndexError(f"Number of system sizes {self.n_sizes} and shape of `target_configs` {np.shape(self.self.target_configs)} does not match. `target_configs` must have shape (len(sys_sizes), [number of target configs]). ")
         else:
             raise TypeError("`target_configs` must be a list of Configuration objects or an np.ndarray.")
         self.n_sizes = len(self.system_size_range)
@@ -714,7 +758,7 @@ class Benchmarking():
         zstar_array = np.zeros(result_array_dims, dtype = 'float')
 
         self._benchmark_records = []
-        self._current_run_timestamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+        self._current_run_timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 
         # for xarray object
         dims = ("algorithm", "target", "sys size", "error model", "physical params", "num rounds")
@@ -821,8 +865,7 @@ class Benchmarking():
                             self.tweezer_array.shape = [rows, cols]
                             algo_label = algo_labels[alg_ind]
                             for round_ind, num_rounds in enumerate(self.rounds_list):
-                                (success_rate, mean_success_time, fill_fracs, wrong_places, atoms_in_arrays, atoms_in_target, sufficient_rate, wall_time, cpu_time, parallel_counts, move_counts,
-                                 per_round_new_fills, per_round_empty_counts, zstar_vals) = self._run_benchmark_round(
+                                (success_rate, mean_success_time, fill_fracs, wrong_places, atoms_in_arrays, atoms_in_target, sufficient_rate) = self._run_benchmark_round(
                                     algo,
                                     do_ejection=do_ejection,
                                     pattern=pattern,
@@ -831,6 +874,15 @@ class Benchmarking():
                                     random_targets=random_targets,
                                     base_target_size=size,
                                 )
+                                # Read any extra metrics produced by the round (backwards-compatible storage)
+                                extra = getattr(self, '_last_round_extra', {})
+                                wall_time = float(extra.get('wall_elapsed', np.nan))
+                                cpu_time = float(extra.get('cpu_elapsed', np.nan))
+                                parallel_counts = extra.get('parallel_move_counts', [])
+                                move_counts = extra.get('atom_move_counts', [])
+                                per_round_new_fills = extra.get('per_round_new_fills', [])
+                                per_round_empty_counts = extra.get('per_round_empty_counts', [])
+                                zstar_vals = extra.get('zstar_values', [])
                                 fill_mean = float(np.mean(fill_fracs)) if len(fill_fracs) > 0 else np.nan
                                 wrong_mean = float(np.mean(wrong_places)) if len(wrong_places) > 0 else np.nan
                                 atoms_mean = float(np.mean(atoms_in_arrays)) if len(atoms_in_arrays) > 0 else np.nan
@@ -959,7 +1011,7 @@ class Benchmarking():
         if not records:
             return
 
-        run_id = getattr(self, '_current_run_timestamp', datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'))
+        run_id = getattr(self, '_current_run_timestamp', datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
         base_dir = Path('data/benchmark_pipeline/runtime_exports')
         base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1167,7 +1219,7 @@ class Benchmarking():
         if not summary:
             return
 
-        run_id = getattr(self, '_current_run_timestamp', datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'))
+        run_id = getattr(self, '_current_run_timestamp', datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
         base_dir = Path('data/benchmark_pipeline/runtime_exports')
         base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1225,7 +1277,7 @@ class Benchmarking():
         if not records:
             return
 
-        run_id = getattr(self, '_current_run_timestamp', datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'))
+        run_id = getattr(self, '_current_run_timestamp', datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
         base_dir = Path('data/benchmark_pipeline/summary_exports')
         base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1361,7 +1413,7 @@ class Benchmarking():
 
         self._analytical_models = models
 
-    def _run_benchmark_round(self, algorithm, do_ejection: bool = False, pattern = None, num_rounds = 1, precomputed_target: np.ndarray | None = None, random_targets: list[np.ndarray] | None = None, base_target_size: int | None = None) -> tuple[float, float, list, list, list, list, float, float, float, list, list]:
+    def _run_benchmark_round(self, algorithm, do_ejection: bool = False, pattern = None, num_rounds = 1, precomputed_target: np.ndarray | None = None, random_targets: list[np.ndarray] | None = None, base_target_size: int | None = None) -> tuple[float, float, list, list, list, list, float]:
         success_times = []
         success_flags = []
         filling_fractions = []
@@ -1533,6 +1585,18 @@ class Benchmarking():
 
         wall_elapsed = (time.perf_counter() - wall_start) / self.n_shots
         cpu_elapsed = (time.process_time() - cpu_start) / self.n_shots
+
+        # Store extra diagnostics for callers that need them (keeps API backward-compatible)
+        self._last_round_extra = {
+            'wall_elapsed': wall_elapsed,
+            'cpu_elapsed': cpu_elapsed,
+            'parallel_move_counts': parallel_move_counts,
+            'atom_move_counts': atom_move_counts,
+            'per_round_new_fills': per_round_new_fills_allshots,
+            'per_round_empty_counts': per_round_empty_counts_allshots,
+            'zstar_values': zstar_values,
+        }
+
         return (
             float(np.mean(success_flags)),
             float(np.mean(success_times)),
@@ -1541,13 +1605,6 @@ class Benchmarking():
             atoms_in_arrays,
             atoms_in_targets,
             float(np.mean(sufficient_flags)),
-            wall_elapsed,
-            cpu_elapsed,
-            parallel_move_counts,
-            atom_move_counts,
-            per_round_new_fills_allshots,
-            per_round_empty_counts_allshots,
-            zstar_values,
         )
 
 
@@ -1556,6 +1613,8 @@ class Benchmarking():
         NB: This is a placeholder function for future feature development. See BenchmarkingFigure() for more details.
         """
         if self.figure_output.figure_type == "scale":
+            if savename is None:
+                savename = "scaling"
             if savename == None:
                 savename = 'scaling'
             self.figure_output.generate_scaling_figure(
@@ -1570,11 +1629,22 @@ class Benchmarking():
             )
 
         elif self.figure_output.figure_type == "hist":
-            if savename == None:
-                savename = 'histogram'
-            self.figure_output.generate_histogram_figure(self.benchmarking_results, None, "Array length (# atoms)")
+            if savename is None:
+                savename = "histogram"
+            self.figure_output.generate_histogram_figure(
+                self.benchmarking_results,
+                "Benchmarking results",
+                "Array length (# atoms)",
+                save=save,
+                savename=savename,
+            )
 
         elif self.figure_output.figure_type == "pattern":
-            if savename == None:
-                savename = 'pattern'
-            self.figure_output.generate_pattern_figure(list(self.system_size_range), self.benchmarking_results, "Benchmarking results", "Array length (# atoms)")
+            if savename is None:
+                savename = "pattern"
+            self.figure_output.generate_pattern_figure(
+                list(self.system_size_range),
+                self.benchmarking_results,
+                "Benchmarking results",
+                "Array length (# atoms)",
+            )

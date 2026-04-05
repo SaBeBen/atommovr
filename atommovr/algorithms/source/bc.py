@@ -3,6 +3,10 @@ from atommovr.utils.core import *
 from atommovr.utils.move_utils import *
 from atommovr.utils.imaging.animation import *
 import numpy as np
+import copy
+
+from atommovr.utils.Move import Move
+from atommovr.utils.move_utils import move_atoms
 
 # Balance and Compact
 
@@ -10,8 +14,8 @@ import numpy as np
 def balance_rows(init_config: np.ndarray, target_config: np.ndarray, i: int, j: int):
     if i == j:
         return []
-    l = j - i + 1
-    m = i + (l // 2)
+    difference = j - i + 1
+    m = i + (difference // 2)
     n_req_top = np.sum(target_config[i:m, :])
     n_atoms_top = np.sum(init_config[i:m, :])
     n_req_bot = np.sum(target_config[m : j + 1, :])
@@ -479,21 +483,21 @@ def move_across_rows(
     if dir == 1:
         start_row = m - 1
         end_row = m
-        low_ind_roi = m
-        high_ind_roi = j + 1
+        # low_ind_roi = m
+        # high_ind_roi = j + 1
         low_ind_source = i
         high_ind_source = m
     elif dir == -1:
         start_row = m
         end_row = m - 1
-        low_ind_roi = i
-        high_ind_roi = m
+        # low_ind_roi = i
+        # high_ind_roi = m
         low_ind_source = m
         high_ind_source = j + 1
 
     ## sanity check to make sure we have sufficient atoms
     n_atoms_in_source = np.sum(current_state[low_ind_source:high_ind_source])
-    n_atoms_in_roi = np.sum(current_state[low_ind_roi:high_ind_roi])
+    # n_atoms_in_roi = np.sum(current_state[low_ind_roi:high_ind_roi]) # linting error - not used
     if n_atoms_in_source < n_to_move:
         raise Exception(
             f"Insufficient atoms. Only {n_atoms_in_source} in the source region."
@@ -627,8 +631,8 @@ def get_all_balance_assignments(start, end):
 
 
 def get_next_balance_assignment(i, j):
-    l = j - i + 1
-    m = i + (l // 2)
+    difference = j - i + 1
+    m = i + (difference // 2)
     next_list = []
     if i != j and i < j:
         next_list.append((i, m - 1))

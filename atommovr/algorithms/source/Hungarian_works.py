@@ -31,7 +31,7 @@ def parallel_LBAP_algorithm_works(
     matrix = copy.deepcopy(atom_arrays)
     round_count = 0
 
-    while (complete_flag == False) and (round_count < round_lim):
+    while (not complete_flag) and (round_count < round_lim):
         # print(f"Got here_{round_count}")
         N_independent_moves_path = []
         # 1. Generate the assignments
@@ -116,18 +116,18 @@ def generate_LBAP_assignments(matrix, target_config):
     #     costs.append(sq_cost[row_ind, col_ind])
 
     # Pair up row_ind and col_ind and sort by col_ind
-    paired_indices = sorted(zip(row_ind, col_ind), key=lambda x: x[1])
+    paired_indices = sorted(zip(row_ind, col_ind, strict=True), key=lambda x: x[1])
 
     if paired_indices:
         # Unzip the sorted pairs if paired_indices is not empty
-        sorted_row_ind, sorted_col_ind = zip(*paired_indices)
+        sorted_row_ind, sorted_col_ind = zip(*paired_indices, strict=True)
     else:
         # Assign default values if paired_indices is empty
         sorted_row_ind, sorted_col_ind = [], []
 
     prepared_assignments = [
         (current_positions[i], target_positions[j])
-        for i, j in zip(sorted_row_ind, sorted_col_ind)
+        for i, j in zip(sorted_row_ind, sorted_col_ind, strict=True)
     ]
 
     return prepared_assignments
@@ -192,12 +192,13 @@ def Hungarian_algorithm_works(
     atom_arrays: np.ndarray,
     target_config: np.ndarray,
     do_ejection: bool = False,
-    final_size: list = [],
+    final_size: list[int] | None = None,
 ):
     move_set = []
     matrix = copy.deepcopy(atom_arrays)
-
-    if len(final_size) == 0:
+    if final_size is None:
+        final_size = [0, len(matrix[0]) - 1, 0, len(matrix) - 1]
+    elif len(final_size) == 0:
         final_size = [0, len(matrix[0]) - 1, 0, len(matrix) - 1]
 
     # Define target positions for the center square in a matrix.
@@ -212,17 +213,17 @@ def Hungarian_algorithm_works(
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
     # Pair up row_ind and col_ind and sort by col_ind
-    paired_indices = sorted(zip(row_ind, col_ind), key=lambda x: x[1])
+    paired_indices = sorted(zip(row_ind, col_ind, strict=True), key=lambda x: x[1])
 
     if paired_indices:
         # Unzip the sorted pairs if paired_indices is not empty
-        sorted_row_ind, sorted_col_ind = zip(*paired_indices)
+        sorted_row_ind, sorted_col_ind = zip(*paired_indices, strict=True)
     else:
         # Assign default values if paired_indices is empty
         sorted_row_ind, sorted_col_ind = [], []
     prepared_assignments = [
         (current_positions[i], target_positions[j])
-        for i, j in zip(sorted_row_ind, sorted_col_ind)
+        for i, j in zip(sorted_row_ind, sorted_col_ind, strict=True)
     ]
 
     for start, target in prepared_assignments:
@@ -251,7 +252,7 @@ def parallel_Hungarian_algorithm_works(
     atom_arrays: np.ndarray,
     target_config: np.ndarray,
     do_ejection: bool = False,
-    final_size: list = [],
+    final_size: list[int] | None = None,
     round_lim: int = 15,
 ):
     # Initialize the variables
@@ -260,8 +261,10 @@ def parallel_Hungarian_algorithm_works(
     move_set = []
     matrix = atom_arrays.copy()
     round_count = 0
+    if final_size is None:
+        final_size = []
 
-    while (complete_flag == False) and (round_count < round_lim):
+    while (not complete_flag) and (round_count < round_lim):
         N_independent_moves_path = []
         # 1. Generate the assignments
         prepared_assignments = generate_assignments_fast(
@@ -407,7 +410,7 @@ def generate_assignments_fast(
 
     prepared_assignments = [
         (current_positions[int(i)], target_positions[int(j)])
-        for i, j in zip(row_ind[order], col_ind[order])
+        for i, j in zip(row_ind[order], col_ind[order], strict=True)
     ]
 
     for start, target in prepared_assignments:
@@ -440,18 +443,18 @@ def generate_assignments(matrix, target_config, final_size):
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
     # Pair up row_ind and col_ind and sort by col_ind
-    paired_indices = sorted(zip(row_ind, col_ind), key=lambda x: x[1])
+    paired_indices = sorted(zip(row_ind, col_ind, strict=True), key=lambda x: x[1])
 
     if paired_indices:
         # Unzip the sorted pairs if paired_indices is not empty
-        sorted_row_ind, sorted_col_ind = zip(*paired_indices)
+        sorted_row_ind, sorted_col_ind = zip(*paired_indices, strict=True)
     else:
         # Assign default values if paired_indices is empty
         sorted_row_ind, sorted_col_ind = [], []
 
     prepared_assignments = [
         (current_positions[i], target_positions[j])
-        for i, j in zip(sorted_row_ind, sorted_col_ind)
+        for i, j in zip(sorted_row_ind, sorted_col_ind, strict=True)
     ]
 
     return prepared_assignments
@@ -579,35 +582,6 @@ def generate_decomposed_move_set(grid, path):
         return grid, []
 
     return grid, decomposed_move_set
-
-
-# def _move_atoms_hungarian(
-#     matrix: np.ndarray,
-#     moves: list[Move],
-# ) -> tuple[np.ndarray, list[list]]:
-#     """
-#     Apply a move batch through the Hungarian-local compatibility layer.
-
-#     Why this exists
-#     ---------------
-#     The Hungarian algorithm code historically operates on 2D occupancy matrices,
-#     while the optimized move utility expects 3D single-species matrices. This
-#     wrapper keeps the algorithm code patchable in tests and lets production code
-#     use the optimized move implementation.
-
-#     Parameters
-#     ----------
-#     matrix : np.ndarray
-#         Occupancy matrix, either 2D ``(rows, cols)`` or 3D ``(rows, cols, 1)``.
-#     moves : list[Move]
-#         Move batch to apply.
-
-#     Returns
-#     -------
-#     tuple[np.ndarray, list[list]]
-#         Updated matrix and legacy move metadata.
-#     """
-#     return _move_atoms_compat_fast(matrix, moves)
 
 
 def regroup_parallel_moves_fast(
@@ -1103,35 +1077,36 @@ def flatten_tuple(nested_tuple):
     # Convert the list of tuples into a single tuple
     return tuple(result)
 
-    left_eject, bot_eject, top_eject, right_eject = [], [], [], []
-    len_x = len(matrix[0])
-    len_y = len(matrix)
-    for x in range(len_x):
-        for y in range(len_y):
-            if matrix[x][y] == 1 and target_config[x][y] == 0:
-                if x >= y and x < len_y - y:
-                    left_eject.append((x, y))
-                elif x >= y and x >= len_y - y:
-                    bot_eject.append((x, y))
-                elif x < y and x <= len_y - y:
-                    top_eject.append((x, y))
-                elif x <= y and x >= len_y - y:
-                    right_eject.append((x, y))
-    return left_eject, bot_eject, top_eject, right_eject
+    # left_eject, bot_eject, top_eject, right_eject = [], [], [], []
+    # len_x = len(matrix[0])
+    # len_y = len(matrix)
+    # for x in range(len_x):
+    #     for y in range(len_y):
+    #         if matrix[x][y] == 1 and target_config[x][y] == 0:
+    #             if x >= y and x < len_y - y:
+    #                 left_eject.append((x, y))
+    #             elif x >= y and x >= len_y - y:
+    #                 bot_eject.append((x, y))
+    #             elif x < y and x <= len_y - y:
+    #                 top_eject.append((x, y))
+    #             elif x <= y and x >= len_y - y:
+    #                 right_eject.append((x, y))
+    # return left_eject, bot_eject, top_eject, right_eject
 
 
 def generate_target_config(
     size: list,
     pattern: Configurations = 0,
-    middle_size: list = [],
+    middle_size: list[int] | None = None,
     probability: float = 0.5,
 ) -> np.ndarray:
     """A function for generating common target configurations,
     such as checkerboard, zebra stripes, and middle fill.
     """
     array = np.zeros(size)
-
-    if len(middle_size) == 0:
+    if middle_size is None:
+        middle_size = generate_middle_fifty(size[0])
+    elif len(middle_size) == 0:
         middle_size = generate_middle_fifty(size[0])
 
     if pattern == Configurations.ZEBRA_HORIZONTAL:  # every other row
@@ -1165,38 +1140,6 @@ def generate_target_config(
 
 
 ## helpers/wrappers
-
-# def _move_atoms_compat_fast(
-#     matrix: np.ndarray,
-#     moves: list[Move],
-# ):
-#     """
-#     Apply a move batch using the fast move utility while preserving the legacy
-#     2D matrix convention used by the Hungarian algorithm code.
-
-#     Parameters
-#     ----------
-#     matrix : np.ndarray
-#         Occupancy matrix, either 2D ``(rows, cols)`` or 3D ``(rows, cols, 1)``.
-#     moves : list[Move]
-#         Move batch to apply.
-
-#     Returns
-#     -------
-#     tuple[np.ndarray, list]
-#         Updated matrix and move metadata, with dimensionality matching the input.
-#     """
-#     if matrix.ndim == 2:
-#         promoted = matrix[:, :, None]
-#         promoted_out, meta = move_atoms_fast(promoted, moves)
-#         return promoted_out[:, :, 0], meta
-
-#     if matrix.ndim == 3:
-#         return move_atoms_fast(matrix, moves)
-
-#     raise ValueError(
-#         f"matrix must be 2D or 3D single-species occupancy, got ndim={matrix.ndim}."
-#     )
 
 
 def _as_2d_occupancy(arr: np.ndarray, name: str) -> np.ndarray:

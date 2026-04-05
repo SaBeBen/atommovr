@@ -78,9 +78,15 @@ class ParallelHungarian(Algorithm):
         
         Supported configurations: all. """
     def __repr__(self):
-        return 'Parallel Hungarian'
-    
-    def get_moves(self, atom_array: AtomArray, do_ejection: bool = False, final_size: list = [], round_lim: int = 0):
+        return "Parallel Hungarian"
+
+    def get_moves(
+        self,
+        atom_array: AtomArray,
+        do_ejection: bool = False,
+        final_size: list = [],
+        round_lim: int = 0,
+    ):
         if atom_array.n_species != 1:
             raise ValueError(f"Single-species algorithm cannot process atom array with {atom_array.n_species} species.")
         if round_lim == 0:
@@ -97,9 +103,15 @@ class ParallelLBAP(Algorithm):
         
         Supported configurations: all. """
     def __repr__(self):
-        return 'Parallel LBAP'
-    
-    def get_moves(self, atom_array: AtomArray, do_ejection: bool = False, final_size: list = [], round_lim: int = 0):
+        return "Parallel LBAP"
+
+    def get_moves(
+        self,
+        atom_array: AtomArray,
+        do_ejection: bool = False,
+        final_size: list = [],
+        round_lim: int = 0,
+    ):
         if atom_array.n_species != 1:
             raise ValueError(f"Single-species algorithm cannot process atom array with {atom_array.n_species} species.")
         if round_lim == 0:
