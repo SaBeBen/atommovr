@@ -9,7 +9,6 @@ prof.out
 .coverage
 htmlcov/
 .nox/
-atommovr.egg-info
 
 # Editor junk
 .vscode/
@@ -19,17 +18,18 @@ atommovr.egg-info
 figs/frames/
 figs/*.gif
 figs/*.png
-figs/
 
 # Notebook checkpoints
 .ipynb_checkpoints/
 
 # Local data artifacts
 data/*.pkl
-data/
 
 # .so files
 PPSU2023/libmatching_for_PPSU.so
 PPSU2023/*.o
 PPSU2023/Users/
 
+data/
+figs/
+atommovr.egg-info
