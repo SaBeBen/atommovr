@@ -37,14 +37,14 @@ class TestFindSmallestL:
         target[4, 5] = 1
         target[5, 4] = 1
 
-        l = find_smallest_l(matrix, target)
-        assert l > 0
+        min_length = find_smallest_l(matrix, target)
+        assert min_length > 0
         # Check that the resulting square can contain the atoms
         n = len(matrix)
         center = n / 2
         delta = n % 2
-        left_bound = int(center - l + delta)
-        right_bound = int(center + l)
+        left_bound = int(center - min_length + delta)
+        right_bound = int(center + min_length)
         n_in_square = np.sum(matrix[left_bound:right_bound, left_bound:right_bound])
         assert n_in_square >= np.sum(target)
 
@@ -63,8 +63,8 @@ class TestFindSmallestL:
         target[3, 3] = 1
         target[3, 4] = 1
 
-        l = find_smallest_l(matrix, target)
-        assert l >= 1
+        min_length = find_smallest_l(matrix, target)
+        assert min_length >= 1
 
 
 class TestDefineCurrentAndTargetNaivePar:
@@ -177,7 +177,7 @@ class TestGenerateAssignmentsNaivePar:
         )
 
         # (0, 0) should not be in assignments as source
-        for start, end in assignments:
+        for start, _ in assignments:
             assert start != (0, 0)
 
     def test_handles_empty_targets(self) -> None:
