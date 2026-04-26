@@ -547,7 +547,9 @@ def right_move(
         ):
             for shift in range(stuff, -1, -1):
                 moves_in_scan = []
-                # Ensure we don't access out-of-bounds columns
+                # Skip shifts whose one-step-right destination would leave the grid.
+                # TODO: Audit right-edge termination logic; this guard prevents an IndexError
+                # but does not prove the surrounding right_move boundary logic is correct.
                 if target_col + shift + 1 >= len(matrix[0]):
                     continue
                 for row in range(row_min, row_max + 1):
