@@ -307,25 +307,11 @@ class YbRydbergAODErrorModel(ErrorModel):
         evolution_time = evolution_time
         if n_species == 1:
             new_state, loss_flag = atom_loss(
-                state,
-                evolution_time,
-                self.lifetime,
-                self.rng,
-                self.pickup_fail_rate,
-                self.putdown_fail_rate,
-                self.move_distance_penalty,
-                self.aod_jitter_probability,
+                state, evolution_time, self.lifetime, self.rng
             )
         elif n_species == 2:
             new_state, loss_flag = atom_loss_dual(
-                state,
-                evolution_time,
-                self.lifetime,
-                self.rng,
-                self.pickup_fail_rate,
-                self.putdown_fail_rate,
-                self.move_distance_penalty,
-                self.aod_jitter_probability,
+                state, evolution_time, self.lifetime, self.rng
             )
         else:
             raise ValueError(

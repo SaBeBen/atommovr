@@ -69,7 +69,8 @@ class BenchmarkingFigure:
         The kind of figure you want to make. Options are histogram ('hist'), a plot comparing different algorithms ('scale'), or a plot comparing different target configurations for the same algorithm ('pattern').
     """
 
-    def __init__(self, variables: list = ["Success rate"], figure_type: str = "scale"):
+    def __init__(self, variables: list | None = None, figure_type: str = "scale"):
+        variables = ["Success rate"] if variables is None else variables
         # Maintain user-facing canonical labels but map them to dataset keys
         lower_to_canonical = {
             "success rate": "Success rate",
@@ -380,9 +381,9 @@ class BenchmarkingFigure:
                         if fit_rec is not None and not is_success_rate:
                             coef = float(fit_rec.get("coefficient"))
                             exponent = float(fit_rec.get("exponent"))
-                            fit_fn = lambda arr, c=coef, e=exponent: c * np.power(
-                                arr, e
-                            )
+
+                            def fit_fn(arr, c=coef, e=exponent):
+                                return c * np.power(arr, e)
 
                         plotted_any |= _plot_series(
                             ax,
@@ -650,6 +651,12 @@ class Benchmarking:
         number of atomic species.
     - `check_sufficient_atoms` (bool, default True):
         if True, checks whether initial configurations have enough atoms, and regenerates new ones if not.
+    - `show_progress` (bool, default True):
+        if True, displays a tqdm progress bar over the benchmarking sweeps.
+    - `per_round_logging` (bool, default False):
+        if True, logs per-round state metrics to file.
+    - `calculate_zstar` (bool, default False):
+        if True, computes the Z* bottleneck bound which requires expensive extra grid evaluations.
 
     ## Example Usage
 
@@ -660,19 +667,35 @@ class Benchmarking:
 
     def __init__(
         self,
-        algos: list = [Algorithm()],
-        target_configs: Union[list, np.ndarray] = [Configurations.MIDDLE_FILL],
-        error_models_list: list = [ZeroNoise()],
-        phys_params_list: list = [PhysicalParams()],
-        sys_sizes: list = list(range(10, 16)),
-        rounds_list: list = [1],
-        figure_output: BenchmarkingFigure = BenchmarkingFigure(),
+        algos: list | None = None,
+        target_configs: Union[list, np.ndarray] | None = None,
+        error_models_list: list | None = None,
+        phys_params_list: list | None = None,
+        sys_sizes: list | None = None,
+        rounds_list: list | None = None,
+        figure_output: BenchmarkingFigure | None = None,
         n_shots: int = 100,
         n_species: int = 1,
         check_sufficient_atoms: bool = True,
         show_progress: bool = True,
         per_round_logging: bool = False,
+        calculate_zstar: bool = False,
     ):
+        algos = [Algorithm()] if algos is None else algos
+        target_configs = (
+            [Configurations.MIDDLE_FILL] if target_configs is None else target_configs
+        )
+        error_models_list = (
+            [ZeroNoise()] if error_models_list is None else error_models_list
+        )
+        phys_params_list = (
+            [PhysicalParams()] if phys_params_list is None else phys_params_list
+        )
+        sys_sizes = list(range(10, 16)) if sys_sizes is None else sys_sizes
+        rounds_list = [1] if rounds_list is None else rounds_list
+        figure_output = BenchmarkingFigure() if figure_output is None else figure_output
+        self.calculate_zstar = calculate_zstar
+
         # initializing the sweep modules (minus target configs, see below)
         self.algos, self.n_algos = algos, len(algos)
         self.system_size_range, self.n_sizes = sys_sizes, len(sys_sizes)
@@ -1312,10 +1335,13 @@ class Benchmarking:
                                             zip(
                                                 per_round_new_fills,
                                                 per_round_empty_counts,
+                                                strict=False,
                                             )
                                         ):
                                             for r_idx, (nf, eb) in enumerate(
-                                                zip(fills_list, empty_list)
+                                                zip(
+                                                    fills_list, empty_list, strict=False
+                                                )
                                             ):
                                                 writer.writerow(
                                                     {
@@ -1955,15 +1981,17 @@ class Benchmarking:
             success_flag = 0
 
             # Compute Z* (bottleneck lower bound) before rearrangement
-            try:
-                zstar_val = calculate_Zstar_better(
-                    self.tweezer_array.matrix,
-                    self.tweezer_array.target,
-                    self.tweezer_array.n_species,
-                    metric="grid",
-                )
-            except Exception:
-                zstar_val = np.nan
+            zstar_val = np.nan
+            if getattr(self, "calculate_zstar", False):
+                try:
+                    zstar_val = calculate_Zstar_better(
+                        self.tweezer_array.matrix,
+                        self.tweezer_array.target,
+                        self.tweezer_array.n_species,
+                        metric="grid",
+                    )
+                except Exception:
+                    zstar_val = np.nan
             zstar_values.append(float(zstar_val))
             # per-shot per-round lists
             shot_new_fills: list[int] = []
@@ -2119,7 +2147,7 @@ class Benchmarking:
         if self.figure_output.figure_type == "scale":
             if savename is None:
                 savename = "scaling"
-            if savename == None:
+            if savename is None:
                 savename = "scaling"
             self.figure_output.generate_scaling_figure(
                 list(self.system_size_range),

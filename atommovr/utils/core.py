@@ -561,10 +561,6 @@ def atom_loss(
     move_time: float,
     lifetime: float = 30,
     rng: np.random.Generator | None = None,
-    pickup_fail_rate: float = 0.0,
-    putdown_fail_rate: float = 0.0,
-    move_distance_penalty: float = 0.0,
-    aod_jitter_probability: float = 0.0,
 ) -> Tuple[NDArray, bool]:
     """
     Sample atom loss over a finite evolution time.
@@ -579,14 +575,6 @@ def atom_loss(
         Vacuum-limited lifetime of a single atom in a tweezer.
     rng : np.random.Generator | None, optional
         Random number generator.
-    pickup_fail_rate : float, optional
-        Base probability of failure for pickup operations.
-    putdown_fail_rate : float, optional
-        Base probability of failure for putdown operations.
-    move_distance_penalty : float, optional
-        Penalty for longer move distances.
-    aod_jitter_probability : float, optional
-        Probability of jitter in AOD pointing.
 
 
     Returns
@@ -605,12 +593,6 @@ def atom_loss(
         raise ValueError(f"`lifetime` must be > 0; got {lifetime}.")
 
     p_survive = float(np.exp(-move_time / lifetime))
-    p_survive *= (
-        (1 - pickup_fail_rate)
-        * (1 - putdown_fail_rate)
-        * (1 - move_distance_penalty)
-        * (1 - aod_jitter_probability)
-    )
     rng = _coerce_rng(rng)
 
     # Build a 2D survival mask
@@ -815,7 +797,7 @@ def array_shape_for_geometry(
         if t <= 0:
             raise ValueError
     except Exception:
-        raise ValueError("target_size must be a positive integer.")
+        raise ValueError("target_size must be a positive integer.") from None
 
     # If a plain two-int tuple/list provided -> coerce
     if isinstance(geometry_spec, (list, tuple)) and len(geometry_spec) == 2:
@@ -823,7 +805,7 @@ def array_shape_for_geometry(
             rows = int(geometry_spec[0])
             cols = int(geometry_spec[1])
         except Exception:
-            raise ValueError("Geometry tuple/list must contain two integers.")
+            raise ValueError("Geometry tuple/list must contain two integers.") from None
         rows = max(rows, t)
         cols = max(cols, t)
         return rows, cols

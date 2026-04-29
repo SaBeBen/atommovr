@@ -12,7 +12,6 @@ def ejection(
     init_config: np.ndarray,
     target_config: np.ndarray,
     final_size=None,
-    method: str = "sublattice",
 ) -> tuple[list, np.ndarray]:
     matrix = copy.deepcopy(init_config)
     move_list = []

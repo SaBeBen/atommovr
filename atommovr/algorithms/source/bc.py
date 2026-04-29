@@ -4,8 +4,6 @@ from atommovr.utils.move_utils import Move, move_atoms
 import numpy as np
 import copy
 
-from atommovr.utils.Move import Move
-
 # Balance and Compact
 
 
