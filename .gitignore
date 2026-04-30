@@ -28,8 +28,11 @@ figs/
 data/*.pkl
 data/
 
-# .so files
+# PPSU .so, .o and lib files
 PPSU2023/libmatching_for_PPSU.so
 PPSU2023/*.o
 PPSU2023/Users/
-
+PPSU2023/mnt/
+PPSU2023/*.dll
+PPSU2023/*.exp
+PPSU2023/*.lib
