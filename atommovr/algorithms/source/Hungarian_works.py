@@ -8,7 +8,6 @@ from atommovr.algorithms.Algorithm_class import Algorithm
 from atommovr.utils.core import random_loading, generate_middle_fifty, Configurations
 from atommovr.utils.move_utils import (
     Move,
-    move_atoms,
     move_atoms_noiseless,
     get_move_list_from_AOD_cmds,
     get_AOD_cmds_from_move_list,
@@ -643,6 +642,12 @@ def regroup_parallel_moves_fast(
             )
 
             if not can_parallelize:
+                parallel_moves.pop()
+                continue
+            
+            from atommovr.utils.move_utils import find_destructive_support_mask_from_moves
+            support_mask, _ = find_destructive_support_mask_from_moves(matrix_copy, parallel_moves)
+            if support_mask.any():
                 parallel_moves.pop()
                 continue
 
