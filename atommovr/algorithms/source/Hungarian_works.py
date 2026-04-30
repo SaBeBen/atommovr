@@ -15,6 +15,7 @@ from atommovr.utils.move_utils import (
 from atommovr.algorithms.source.ejection import ejection
 from atommovr.algorithms.source.scaling_lower_bound import make_cost_matrix_square
 from atommovr.algorithms.source.PPSU_weight_matching import bttl_threshold
+from atommovr.utils.move_utils import find_destructive_support_mask_from_moves
 
 
 def parallel_LBAP_algorithm_works(
@@ -644,9 +645,10 @@ def regroup_parallel_moves_fast(
             if not can_parallelize:
                 parallel_moves.pop()
                 continue
-            
-            from atommovr.utils.move_utils import find_destructive_support_mask_from_moves
-            support_mask, _ = find_destructive_support_mask_from_moves(matrix_copy, parallel_moves)
+
+            support_mask, _ = find_destructive_support_mask_from_moves(
+                matrix_copy, parallel_moves
+            )
             if support_mask.any():
                 parallel_moves.pop()
                 continue

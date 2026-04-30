@@ -13,6 +13,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from atommovr.atommovr.utils import ErrorModel
 from atommovr.utils.errormodels import ZeroNoise
 from atommovr.utils.core import (
     generate_random_target_configs,
@@ -667,12 +668,12 @@ class Benchmarking:
 
     def __init__(
         self,
-        algos: list | None = None,
+        algos: list[Algorithm] | None = None,
         target_configs: Union[list, np.ndarray] | None = None,
-        error_models_list: list | None = None,
-        phys_params_list: list | None = None,
-        sys_sizes: list | None = None,
-        rounds_list: list | None = None,
+        error_models_list: list[ErrorModel] | None = None,
+        phys_params_list: list[PhysicalParams] | None = None,
+        sys_sizes: list[int] | None = None,
+        rounds_list: list[int] | None = None,
         figure_output: BenchmarkingFigure | None = None,
         n_shots: int = 100,
         n_species: int = 1,
@@ -681,6 +682,40 @@ class Benchmarking:
         per_round_logging: bool = False,
         calculate_zstar: bool = False,
     ):
+        """Initialize benchmarking sweeps over algorithms, targets, and system sizes.
+
+        Parameters
+        ----------
+        algos : list of Algorithm, optional
+            Algorithms to benchmark.
+        target_configs : list or ndarray, optional
+            Target configurations as ``Configurations`` enums or explicit arrays. If an
+            ndarray, shape must be ``(len(sys_sizes), n_targets)``.
+        error_models_list : list, optional
+            Error models to evaluate.
+        phys_params_list : list, optional
+            Physical parameter sets to sweep.
+        sys_sizes : list, optional
+            Square lattice side lengths to test.
+        rounds_list : list, optional
+            Allowed numbers of rearrangement rounds per run.
+        figure_output : BenchmarkingFigure, optional
+            Plot configuration helper.
+        n_shots : int, optional
+            Number of Monte Carlo shots per configuration.
+        n_species : int, optional
+            Number of atomic species.
+        check_sufficient_atoms : bool, optional
+            If ``True``, regenerate initial states until enough atoms are loaded.
+
+        Raises
+        ------
+        IndexError
+            If explicit ``target_configs`` shapes do not match ``sys_sizes``.
+        TypeError
+            If ``target_configs`` is neither a list nor an ndarray.
+        """
+
         algos = [Algorithm()] if algos is None else algos
         target_configs = (
             [Configurations.MIDDLE_FILL] if target_configs is None else target_configs
