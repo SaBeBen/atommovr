@@ -18,9 +18,13 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Tuple
 
-import cv2
 import numpy as np
 import pandas as pd
+
+try:
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    cv2 = None
 
 from atommovr.utils.imaging.extraction import (
     BlobDetection,
@@ -29,7 +33,7 @@ from atommovr.utils.imaging.extraction import (
     inverse_rotate_centroids,
 )
 from atommovr.utils.imaging.generation import generate_gaussian_image
-from atommovr.tests.test_imaging import (
+from atommovr.utils.imaging.optimization._shared import (
     _angle_error_deg,
     _compute_assignment_metrics,
     _rotate_points_about_center,
@@ -91,7 +95,10 @@ def _generate_samples(
         noise = rng.normal(loc=0.0, scale=0.01, size=img.shape)
         img = np.clip(img + noise, 0.0, 1.0)
         img_u8 = (img * 255).astype(np.uint8)
-        img_bgr = cv2.cvtColor(img_u8, cv2.COLOR_GRAY2BGR)
+        if cv2 is not None:
+            img_bgr = cv2.cvtColor(img_u8, cv2.COLOR_GRAY2BGR)
+        else:
+            img_bgr = np.stack([img_u8, img_u8, img_u8], axis=-1)
         samples.append(
             Sample(
                 image=img_bgr,
@@ -202,8 +209,8 @@ def run_large_array_optimization():
         "filterByInertia": [False],
     }
 
-    keys, values = zip(*param_grid.items())
-    combinations = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
+    keys, values = zip(*param_grid.items(), strict=True)
+    combinations = [dict(zip(keys, combo, strict=True)) for combo in itertools.product(*values)]
     print(f"Evaluating {len(combinations)} parameter combinations...")
 
     results: List[Dict[str, float]] = []

@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from atommovr.utils.imaging.extraction import BlobDetection
-from atommovr.tests.test_imaging import (
+from atommovr.utils.imaging.optimization._shared import (
     _compute_assignment_metrics,
     generate_rot_img,
     setup_blob_params,
@@ -55,7 +55,7 @@ def _prepare_samples(
     samples: List[GridSample] = []
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for seed, grid_size in zip(seeds, grid_sizes):
+    for seed, grid_size in zip(seeds, grid_sizes, strict=True):
         np.random.seed(seed)
         suffix = f"blobopt_seed{seed}_grid{grid_size}"
         points, true_binary = generate_rot_img(
@@ -148,8 +148,8 @@ def run_benchmark():
         "filterByInertia": [False],
     }
 
-    keys, values = zip(*param_grid.items())
-    combinations = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
+    keys, values = zip(*param_grid.items(), strict=True)
+    combinations = [dict(zip(keys, combo, strict=True)) for combo in itertools.product(*values)]
     logger.info("Evaluating %d parameter combinations...", len(combinations))
 
     results: List[Dict[str, float]] = []

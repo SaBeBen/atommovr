@@ -1,5 +1,16 @@
+import itertools
+import logging
+import os
+import time
+from typing import Any, Callable, List, Optional, Sequence, Tuple
+
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pytest
+import seaborn as sns
+from scipy.optimize import linear_sum_assignment
+
 from atommovr.utils.imaging.extraction import (
     BlobDetection,
     fit_grid_and_assign,
@@ -22,27 +33,14 @@ from atommovr.utils.imaging.generation import (
 )
 from atommovr.utils.imaging.geometry import rotate_points_ccw
 
-
-import matplotlib.pyplot as plt
-import logging
-import itertools
-import pytest
-
-# Make OpenCV optional for test collection; skip imaging tests when unavailable.
-cv2 = pytest.importorskip("cv2")
-import os
-import time
-import pandas as pd
-import seaborn as sns
-from scipy.optimize import linear_sum_assignment
-
-from typing import Optional, Tuple, List, Callable, Any, Sequence
-
-module_logger = logging.getLogger(__name__)
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional dependency in CI
+    pytest.skip("cv2 is required for imaging tests", allow_module_level=True)
 
 
 @pytest.fixture(name="logger")
-def logger():
+def logger_fixture():
     """Provide a simple logger fixture for tests that request `logger`.
 
     The original tests annotated the `logger` parameter with a `logging.Logger`
@@ -215,8 +213,8 @@ def test_estimation_and_extraction(logger: logging.Logger) -> None:
     }
 
     # Generate all combinations
-    keys, values = zip(*param_grid.items())
-    param_combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+    keys, values = zip(*param_grid.items(), strict=True)
+    param_combinations = [dict(zip(keys, v, strict=True)) for v in itertools.product(*values)]
 
     best_score = 0
     best_params: Optional[dict] = None
@@ -956,6 +954,8 @@ def visualize_result_techniques(
     -------
         None
     """
+    logger = logging.getLogger(__name__)
+
     # Generate test image
     grid_size = 9
     np.random.seed(42)
@@ -1419,7 +1419,7 @@ def benchmark_time_estimation_techniques(
                                     label="Corrected centroids",
                                 )
                             for (y0, x0), (y1, x1) in zip(
-                                matched_centroids, matched_true
+                                matched_centroids, matched_true, strict=True
                             ):
                                 plt.plot([x0, x1], [y0, y1], c="gray", lw=0.5)
 
@@ -1478,11 +1478,7 @@ def benchmark_time_estimation_techniques(
 
     # Produce a concise estimation timing plot (mean +/- sd)
     try:
-        grouping = (
-            est_df.groupby("Method")["Estimation Time (s)"]
-            .agg(["mean", "std"])
-            .reset_index()
-        )
+        est_df.groupby("Method")["Estimation Time (s)"].agg(["mean", "std"]).reset_index()
         sns.set_theme(style="whitegrid")
         plt.figure(figsize=(10, 6))
         ax = sns.barplot(

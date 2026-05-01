@@ -157,7 +157,7 @@ def generate_gaussian_image(
     img = np.zeros((canvas_h, canvas_w), dtype=float)
 
     for (y_canvas, x_canvas), sigma, brightness in zip(
-        rotated_points, sigmas, brightness_factors
+        rotated_points, sigmas, brightness_factors, strict=True
     ):
         img += float(brightness) * gaussian_2d(
             X, Y, float(x_canvas), float(y_canvas), float(sigma)

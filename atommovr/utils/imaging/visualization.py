@@ -535,7 +535,7 @@ def visualize_batch_moves_on_image(
 
         failure_markers = failures_per_step[idx - 1]
 
-        def _plot_failures(coords: List[tuple[int, int]], color: str):
+        def _plot_failures(ax_plot, coords: List[tuple[int, int]], color: str):
             if not coords:
                 return
             ys = []
@@ -546,16 +546,16 @@ def visualize_batch_moves_on_image(
                     ys.append(y)
                     xs.append(x)
             if xs:
-                ax.scatter(
+                ax_plot.scatter(
                     xs, ys, marker="x", color=color, s=80, linewidths=2.2, zorder=20
                 )
 
-        _plot_failures(failure_markers["pickup"], "gold")
-        _plot_failures(failure_markers["putdown"], "magenta")
-        _plot_failures(failure_markers["noatom"], "gray")
-        _plot_failures(failure_markers["crossed"], "red")
-        _plot_failures(failure_markers["collision"], "black")
-        _plot_failures(failure_markers["eject"], "lime")
+        _plot_failures(ax, failure_markers["pickup"], "gold")
+        _plot_failures(ax, failure_markers["putdown"], "magenta")
+        _plot_failures(ax, failure_markers["noatom"], "gray")
+        _plot_failures(ax, failure_markers["crossed"], "red")
+        _plot_failures(ax, failure_markers["collision"], "black")
+        _plot_failures(ax, failure_markers["eject"], "lime")
 
     plt.tight_layout()
     if save_path is None:

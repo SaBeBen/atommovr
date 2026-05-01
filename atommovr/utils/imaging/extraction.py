@@ -1,16 +1,17 @@
 from __future__ import annotations
-from typing import Tuple, Optional
+
 import os
-import numpy as np
-import cv2
-from PIL import Image
-import seaborn as sns
+from typing import Optional, Tuple
+
 import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 from matplotlib.patches import Polygon
+from PIL import Image
 from sklearn.cluster import KMeans
 
 from .geometry import rotate_points_ccw
-from PIL import Image
+
 try:
     import cv2  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
@@ -73,7 +74,7 @@ def fit_grid_and_assign(
         col_idx = np.clip(col_idx, 0, C - 1)
 
     binary = np.zeros((R, C), dtype=int)
-    for r, c in zip(row_idx, col_idx):
+    for r, c in zip(row_idx, col_idx, strict=True):
         binary[r, c] = 1
     return binary
 
@@ -113,7 +114,7 @@ def rotate_image(image: np.ndarray, angle_deg: float) -> np.ndarray:
         Yr = np.clip(np.round(Yr).astype(int), 0, h - 1)
         return image[Yr, Xr]
 
-    pil_img = Image.fromarray(image.astype('uint8'), mode=pil_mode)
+    pil_img = Image.fromarray(image.astype("uint8"), mode=pil_mode)
     rotated_pil = pil_img.rotate(angle_deg, resample=Image.BILINEAR, expand=False)
     return np.array(rotated_pil)
 
@@ -359,7 +360,7 @@ def estimate_grid_rotation_diffs(centroids: np.ndarray, plot: bool = False) -> f
         os.makedirs("figs/estimation_tech/", exist_ok=True)
         sns.set_theme(style="whitegrid")
         fig, ax = plt.subplots(figsize=(6, 6))
-        sc = ax.scatter(
+        ax.scatter(
             diffs[:, 1],
             diffs[:, 0],
             alpha=0.25,
@@ -368,7 +369,7 @@ def estimate_grid_rotation_diffs(centroids: np.ndarray, plot: bool = False) -> f
             s=20,
             label="Diffs",
         )
-        for idx, center in enumerate(kmeans.cluster_centers_):
+        for _idx, center in enumerate(kmeans.cluster_centers_):
             ax.arrow(
                 0,
                 0,
@@ -693,7 +694,7 @@ class Extractor:
         row_idx = np.clip(row_idx, 0, n_rows - 1)
         col_idx = np.clip(col_idx, 0, n_cols - 1)
         binary_grid = np.zeros(grid_shape, dtype=int)
-        for r, c in zip(row_idx, col_idx):
+        for r, c in zip(row_idx, col_idx, strict=True):
             binary_grid[r, c] = 1
         return binary_grid
 
