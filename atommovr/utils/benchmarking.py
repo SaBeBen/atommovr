@@ -13,7 +13,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from atommovr.atommovr.utils import ErrorModel
+from atommovr.utils import ErrorModel
 from atommovr.utils.errormodels import ZeroNoise
 from atommovr.utils.core import (
     generate_random_target_configs,
