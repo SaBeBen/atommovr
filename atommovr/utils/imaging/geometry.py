@@ -10,8 +10,13 @@ from __future__ import annotations
 
 from typing import Iterable, Tuple
 
-import cv2
 import numpy as np
+
+# Avoid hard dependency on OpenCV at import time; use it when available.
+try:
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    cv2 = None
 
 CoordArray = np.ndarray
 
@@ -52,10 +57,28 @@ def rotate_points_ccw(
         return arr
     h, w = image_shape[:2]
     center = (w / 2.0, h / 2.0)
-    pts_xy1 = np.hstack([arr[:, ::-1], np.ones((arr.shape[0], 1))])
-    M = cv2.getRotationMatrix2D(center, float(angle_deg), 1.0)
-    transformed_xy = (M @ pts_xy1.T).T
-    return transformed_xy[:, ::-1]
+    # Use a numpy-only rotation matrix to avoid importing OpenCV when not needed.
+    # Prefer OpenCV's rotation matrix when available to match image rotation
+    # semantics (avoids off-by-0.5 pixel differences that can change binning).
+    if cv2 is not None:
+        pts_xy1 = np.hstack([arr[:, ::-1], np.ones((arr.shape[0], 1))])
+        M = cv2.getRotationMatrix2D(center, float(angle_deg), 1.0)
+        transformed_xy = (M @ pts_xy1.T).T
+        return transformed_xy[:, ::-1]
+
+    theta = np.deg2rad(float(angle_deg))
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    # Center-based rotation: translate points to origin, rotate, translate back.
+    # Points are in (y, x) order; convert to (x, y) for matrix ops.
+    pts_xy = arr[:, ::-1]
+    # shift to center
+    pts_xy_centered = pts_xy - np.array([[center[0], center[1]]])
+    R = np.array([[cos_t, -sin_t], [sin_t, cos_t]])
+    rotated = (pts_xy_centered @ R.T) + np.array([[center[0], center[1]]])
+    # convert back to (y, x)
+    return rotated[:, ::-1]
 
 
 def rotate_points_cw(

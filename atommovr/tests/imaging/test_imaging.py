@@ -25,8 +25,11 @@ from atommovr.utils.imaging.geometry import rotate_points_ccw
 
 import matplotlib.pyplot as plt
 import logging
-import cv2
 import itertools
+import pytest
+
+# Make OpenCV optional for test collection; skip imaging tests when unavailable.
+cv2 = pytest.importorskip("cv2")
 import os
 import time
 import pandas as pd
@@ -35,7 +38,7 @@ from scipy.optimize import linear_sum_assignment
 
 from typing import Optional, Tuple, List, Callable, Any, Sequence
 
-logger = logging.getLogger(__name__)
+module_logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(name="logger")
@@ -127,7 +130,7 @@ def test_grid_extraction(logger: logging.Logger) -> None:
     grid_sizes = range(5, 10)
     image_shape = (1200, 1200)
 
-    for seed, grid_size in zip(test_seeds, grid_sizes):
+    for seed, grid_size in zip(test_seeds, grid_sizes, strict=True):
         np.random.seed(seed)
         points, true_binary = generate_rot_img(
             image_shape,
@@ -328,7 +331,7 @@ def test_estimation_and_extraction(logger: logging.Logger) -> None:
             local_blob_correct = 0
             local_runs = 0
 
-            for seed, grid_size in zip(test_seeds, grid_sizes):
+            for seed, grid_size in zip(test_seeds, grid_sizes, strict=True):
                 np.random.seed(seed)
                 points, true_binary = generate_rot_img(
                     image_shape,
@@ -463,7 +466,7 @@ def estimation_method_test(
 
     records: List[dict] = []
 
-    for seed, grid_size in zip(test_seeds, grid_sizes):
+    for seed, grid_size in zip(test_seeds, grid_sizes, strict=True):
         for true_angle in true_angles:
             np.random.seed(seed)
             points, _ = generate_rot_img(

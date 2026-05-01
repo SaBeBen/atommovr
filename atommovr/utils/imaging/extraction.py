@@ -10,6 +10,11 @@ from matplotlib.patches import Polygon
 from sklearn.cluster import KMeans
 
 from .geometry import rotate_points_ccw
+from PIL import Image
+try:
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    cv2 = None
 
 
 def _wrap_angle_deg(angle_deg: float) -> float:
@@ -74,11 +79,43 @@ def fit_grid_and_assign(
 
 
 def rotate_image(image: np.ndarray, angle_deg: float) -> np.ndarray:
-    h, w = image.shape[:2]
-    center = (w // 2, h // 2)
-    rot_mat = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
-    rotated = cv2.warpAffine(image, rot_mat, (w, h), flags=cv2.INTER_LINEAR)
-    return rotated
+    # Prefer OpenCV when available for speed; otherwise use PIL fallback.
+    if cv2 is not None:
+        h, w = image.shape[:2]
+        center = (w // 2, h // 2)
+        rot_mat = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
+        rotated = cv2.warpAffine(image, rot_mat, (w, h), flags=cv2.INTER_LINEAR)
+        return rotated
+
+    # PIL fallback: convert to Image, rotate, convert back.
+    pil_mode = None
+    if image.ndim == 2:
+        pil_mode = "L"
+    elif image.shape[2] == 3:
+        pil_mode = "RGB"
+    elif image.shape[2] == 4:
+        pil_mode = "RGBA"
+    else:
+        pil_mode = None
+
+    if pil_mode is None:
+        # Generic fallback: rotate via scipy/numpy affine (simple nearest-neighbor)
+        theta = np.deg2rad(angle_deg)
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        h, w = image.shape[:2]
+        center_x, center_y = w / 2.0, h / 2.0
+        Y, X = np.indices((h, w))
+        Xc = X - center_x
+        Yc = Y - center_y
+        Xr = Xc * cos_t - Yc * sin_t + center_x
+        Yr = Xc * sin_t + Yc * cos_t + center_y
+        Xr = np.clip(np.round(Xr).astype(int), 0, w - 1)
+        Yr = np.clip(np.round(Yr).astype(int), 0, h - 1)
+        return image[Yr, Xr]
+
+    pil_img = Image.fromarray(image.astype('uint8'), mode=pil_mode)
+    rotated_pil = pil_img.rotate(angle_deg, resample=Image.BILINEAR, expand=False)
+    return np.array(rotated_pil)
 
 
 def estimate_grid_rotation_pca(
