@@ -210,7 +210,9 @@ def run_large_array_optimization():
     }
 
     keys, values = zip(*param_grid.items(), strict=True)
-    combinations = [dict(zip(keys, combo, strict=True)) for combo in itertools.product(*values)]
+    combinations = [
+        dict(zip(keys, combo, strict=True)) for combo in itertools.product(*values)
+    ]
     print(f"Evaluating {len(combinations)} parameter combinations...")
 
     results: List[Dict[str, float]] = []

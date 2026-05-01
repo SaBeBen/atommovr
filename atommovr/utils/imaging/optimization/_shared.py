@@ -40,7 +40,9 @@ def _sample_sparse_grid_points(
     for i in range(grid_shape[0]):
         for j in range(grid_shape[1]):
             if rng.random() < load_probability:
-                points.append((start_row + i * row_spacing, start_col + j * col_spacing))
+                points.append(
+                    (start_row + i * row_spacing, start_col + j * col_spacing)
+                )
                 binary[i, j] = 1
     return np.asarray(points, dtype=float), binary, row_spacing, col_spacing
 

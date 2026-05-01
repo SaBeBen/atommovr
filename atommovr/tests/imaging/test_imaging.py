@@ -214,7 +214,9 @@ def test_estimation_and_extraction(logger: logging.Logger) -> None:
 
     # Generate all combinations
     keys, values = zip(*param_grid.items(), strict=True)
-    param_combinations = [dict(zip(keys, v, strict=True)) for v in itertools.product(*values)]
+    param_combinations = [
+        dict(zip(keys, v, strict=True)) for v in itertools.product(*values)
+    ]
 
     best_score = 0
     best_params: Optional[dict] = None
@@ -1478,7 +1480,9 @@ def benchmark_time_estimation_techniques(
 
     # Produce a concise estimation timing plot (mean +/- sd)
     try:
-        est_df.groupby("Method")["Estimation Time (s)"].agg(["mean", "std"]).reset_index()
+        est_df.groupby("Method")["Estimation Time (s)"].agg(
+            ["mean", "std"]
+        ).reset_index()
         sns.set_theme(style="whitegrid")
         plt.figure(figsize=(10, 6))
         ax = sns.barplot(

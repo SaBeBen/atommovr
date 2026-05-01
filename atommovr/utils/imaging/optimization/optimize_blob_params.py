@@ -149,7 +149,9 @@ def run_benchmark():
     }
 
     keys, values = zip(*param_grid.items(), strict=True)
-    combinations = [dict(zip(keys, combo, strict=True)) for combo in itertools.product(*values)]
+    combinations = [
+        dict(zip(keys, combo, strict=True)) for combo in itertools.product(*values)
+    ]
     logger.info("Evaluating %d parameter combinations...", len(combinations))
 
     results: List[Dict[str, float]] = []
